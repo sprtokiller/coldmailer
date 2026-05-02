@@ -22,7 +22,7 @@ const errorMessage = computed(() => {
         </svg>
       </div>
 
-      <h1 class="text-2xl font-semibold text-gray-800 mb-1">ColdMailer</h1>
+      <h1 class="text-2xl font-semibold text-gray-800 mb-1">SCG ColdMailer</h1>
       <p class="text-sm text-gray-400 mb-8">AI-powered outreach pipeline</p>
 
       <div

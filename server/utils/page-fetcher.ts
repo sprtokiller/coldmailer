@@ -14,7 +14,7 @@ export async function fetchPages(urls: string[]): Promise<PageContent[]> {
   if (urls.length === 0) return []
 
   const results: PageContent[] = []
-  const config = new Configuration({ storageClient: new MemoryStorage() })
+  const config = new Configuration({ storageClient: new MemoryStorage({ persistStorage: false }) })
 
   const crawler = new PlaywrightCrawler(
     {

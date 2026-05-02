@@ -1,7 +1,8 @@
 import OpenAI from 'openai'
+import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
 
 // Steps 1, 3, 4 use o4-mini-deep-research (live web search, minutes-long).
-// Step 2 (PARTNER_IDENTIFICATION) runs its own pipeline (SerpAPI + Playwright + free AI).
+// Step 2 (PARTNER_IDENTIFICATION) runs its own pipeline (SerpAPI + Playwright + claude sonnet 4.6).
 // Steps 5-7 use claude-sonnet-4.6 with adaptive reasoning (seconds).
 const DEEP_RESEARCH_STEPS = new Set([
   'MARKET_SCANNING',
@@ -15,7 +16,7 @@ function createClient(): OpenAI {
     apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
     defaultHeaders: {
       'HTTP-Referer': 'https://coldmailer.scg.cz',
-      'X-Title': 'ColdMailer',
+      'X-Title': 'SCG ColdMailer',
     },
   })
 }
@@ -57,7 +58,7 @@ export async function* streamStepAI(input: StepAIInput): AsyncGenerator<string> 
 
   const stream = await client.chat.completions.create(
     params as Parameters<typeof client.chat.completions.create>[0],
-  )
+  ) as AsyncIterable<ChatCompletionChunk>
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content

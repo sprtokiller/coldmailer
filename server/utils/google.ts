@@ -31,18 +31,24 @@ export async function exchangeCode(
   clientSecret: string,
   redirectUri: string,
 ): Promise<TokenResponse> {
-  const res = await $fetch<TokenResponse>('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  const res = await fetchToken<TokenResponse>({
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code',
   })
   return res
+}
+
+async function fetchToken<T>(params: Record<string, string>): Promise<T> {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    body: new URLSearchParams(params),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  })
+  if (!res.ok) throw new Error(`Google token request failed: ${res.status}`)
+  return await res.json() as T
 }
 
 interface GoogleUserInfo {
@@ -63,15 +69,11 @@ export async function refreshAccessToken(
   clientId: string,
   clientSecret: string,
 ): Promise<{ access_token: string; expires_in: number }> {
-  return $fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-    }),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  return fetchToken({
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'refresh_token',
   })
 }
 

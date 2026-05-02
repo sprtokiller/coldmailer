@@ -6,13 +6,22 @@ const { data: run, refresh } = await useFetch(`/api/pipeline/${route.params.id}`
 
 const STEPS = [
   { key: 'MARKET_SCANNING',       label: 'Market Scanning',       model: 'o4-mini-deep-research', description: 'Find relevant high school competitions, events, and channels.' },
-  { key: 'PARTNER_IDENTIFICATION', label: 'Partner Identification', model: 'pipeline', description: 'SerpAPI + Playwright + free AI – iterates each market item to find partners.' },
+  { key: 'PARTNER_IDENTIFICATION', label: 'Partner Identification', model: 'pipeline', description: 'SerpAPI + Playwright + claude sonnet 4.6 – iterates each market item to find partners.' },
   { key: 'PARTNER_PROFILING',     label: 'Partner Profiling',     model: 'o4-mini-deep-research', description: 'Deep-dive research on a specific partner.' },
   { key: 'CONTACT_DISCOVERY',     label: 'Contact Discovery',     model: 'o4-mini-deep-research', description: 'Find the right person to reach out to.' },
   { key: 'VALUE_ALIGNMENT',       label: 'Value Alignment',       model: 'claude-sonnet-4.6', description: 'Rank selling points by relevance to this partner.' },
   { key: 'OUTREACH_PREPARATION',  label: 'Outreach Preparation',  model: 'claude-sonnet-4.6', description: 'Generate a tailored email draft.' },
   { key: 'OUTREACH_EXECUTION',    label: 'Outreach Execution',    model: 'gmail', description: 'Create draft directly in Gmail.' },
 ] as const
+
+type StepKey = typeof STEPS[number]['key']
+type PromptOption = {
+  id: string
+  name: string
+  content: string
+  stepType: string
+  author: { name: string }
+}
 
 const { data: prompts } = await useFetch('/api/library/prompts', { default: () => [] })
 const { data: contextParts } = await useFetch('/api/library/context-parts', { default: () => [] })
@@ -99,6 +108,27 @@ function getStepResult(stepKey: string) {
   return run.value?.steps.findLast((s: { stepType: string }) => s.stepType === stepKey)
 }
 
+function promptsForStep(stepKey: StepKey) {
+  return (prompts.value as PromptOption[]).filter((p) => p.stepType === stepKey)
+}
+
+function stepResultStatus(stepKey: StepKey) {
+  return getStepResult(stepKey)?.status
+}
+
+function stepResultRunnerName(stepKey: StepKey) {
+  return getStepResult(stepKey)?.runner?.name ?? ''
+}
+
+function stepResultPromptName(stepKey: StepKey) {
+  return getStepResult(stepKey)?.systemPrompt?.name
+}
+
+function stepResultOutput(stepKey: StepKey) {
+  const result = getStepResult(stepKey)
+  return JSON.stringify(result?.outputData ?? result?.errorMessage, null, 2)
+}
+
 async function executeStep(stepKey: string) {
   const cfg = getConfig(stepKey)
   let inputData: Record<string, unknown> = {}
@@ -180,11 +210,20 @@ function prevStepOutput(stepKey: string): string {
   return prevStep?.outputData ? JSON.stringify(prevStep.outputData, null, 2) : '{}'
 }
 
+const promptPreviewStep = ref<string | null>(null)
+
+function selectedPrompt(stepKey: string) {
+  const id = getConfig(stepKey).systemPromptId
+  if (!id) return null
+  return (prompts.value as Array<{ id: string; name: string; content: string; author: { name: string } }>)
+    .find(p => p.id === id) ?? null
+}
+
 const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
   'o4-mini-deep-research': { label: 'o4-mini deep research', cls: 'bg-primary/10 text-primary' },
   'claude-sonnet-4.6': { label: 'claude sonnet 4.6', cls: 'bg-success/10 text-success' },
   'gmail': { label: 'Gmail API', cls: 'bg-danger/10 text-danger' },
-  'pipeline': { label: 'SerpAPI + Playwright + Free AI', cls: 'bg-violet-100 text-violet-700' },
+  'pipeline': { label: 'SerpAPI + Playwright + claude sonnet 4.6', cls: 'bg-violet-100 text-violet-700' },
 }
 </script>
 
@@ -193,7 +232,7 @@ const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
     <div class="mb-8">
       <NuxtLink to="/" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">← Pipelines</NuxtLink>
       <h1 class="text-2xl font-semibold text-gray-800 mt-2">{{ run.name }}</h1>
-      <p class="text-sm text-gray-400 mt-1">by {{ run.author.name }} · {{ new Date(run.createdAt).toLocaleDateString() }}</p>
+      <p class="text-sm text-gray-400 mt-1">by {{ run.author.name }} · {{ new Date(run.createdAt).toLocaleDateString('en-US') }}</p>
     </div>
 
     <div class="space-y-3">
@@ -256,19 +295,61 @@ const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
             <!-- System prompt picker -->
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">System Strategy Prompt</label>
-              <select
-                v-model="getConfig(step.key).systemPromptId"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="">Default prompt</option>
-                <option
-                  v-for="p in prompts.filter((p: { stepType: string }) => p.stepType === step.key)"
-                  :key="p.id"
-                  :value="p.id"
+              <div class="flex items-center gap-2">
+                <select
+                  v-model="getConfig(step.key).systemPromptId"
+                  class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 >
-                  {{ p.name }} · {{ p.author.name }}
-                </option>
-              </select>
+                  <option value="">Default prompt</option>
+                  <option
+                  v-for="p in promptsForStep(step.key)"
+                    :key="p.id"
+                    :value="p.id"
+                  >
+                    {{ p.name }} · {{ p.author.name }}
+                  </option>
+                </select>
+
+                <!-- Prompt preview trigger -->
+                <div
+                  v-if="selectedPrompt(step.key)"
+                  class="relative shrink-0"
+                  @mouseenter="promptPreviewStep = step.key"
+                  @mouseleave="promptPreviewStep = null"
+                >
+                  <button
+                    type="button"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors"
+                    tabindex="-1"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+
+                  <!-- Popover -->
+                  <div
+                    v-if="promptPreviewStep === step.key"
+                    class="absolute right-0 top-full mt-1 z-50 w-96 bg-white rounded-xl border border-gray-200 shadow-xl p-4"
+                  >
+                    <div class="flex items-start justify-between mb-3">
+                      <div class="min-w-0">
+                        <p class="font-medium text-gray-800 text-sm truncate">{{ selectedPrompt(step.key)?.name }}</p>
+                        <p class="text-xs text-gray-400 mt-0.5">by {{ selectedPrompt(step.key)?.author?.name }}</p>
+                      </div>
+                      <a
+                        href="/library"
+                        target="_blank"
+                        class="shrink-0 ml-3 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors font-medium whitespace-nowrap"
+                      >
+                        Edit in Library →
+                      </a>
+                    </div>
+                    <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">{{ selectedPrompt(step.key)?.content }}</pre>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Context parts -->
@@ -315,7 +396,7 @@ const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
                 placeholder="<název soutěže> partneři"
                 class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
-              <p class="text-xs text-gray-400 mt-1">Free AI vygeneruje search query pro každou položku v tomto formátu.</p>
+              <p class="text-xs text-gray-400 mt-1">claude sonnet 4.6 vygeneruje search query pro každou položku v tomto formátu.</p>
             </div>
 
             <!-- Input data (hidden for step 1 — it needs no input) -->
@@ -393,12 +474,12 @@ const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
               <div class="flex items-center justify-between mb-2">
                 <p class="text-xs font-medium text-gray-500">
                   Saved result ·
-                  <span :class="getStepResult(step.key).status === 'COMPLETED' ? 'text-success' : 'text-danger'">
-                    {{ getStepResult(step.key).status }}
+                  <span :class="stepResultStatus(step.key) === 'COMPLETED' ? 'text-success' : 'text-danger'">
+                    {{ stepResultStatus(step.key) }}
                   </span>
-                  · by {{ getStepResult(step.key).runner?.name }}
-                  <span v-if="getStepResult(step.key).systemPrompt" class="ml-1 text-gray-400">
-                    · {{ getStepResult(step.key).systemPrompt?.name }}
+                  · by {{ stepResultRunnerName(step.key) }}
+                  <span v-if="stepResultPromptName(step.key)" class="ml-1 text-gray-400">
+                    · {{ stepResultPromptName(step.key) }}
                   </span>
                 </p>
                 <button
@@ -447,7 +528,7 @@ const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
               </template>
 
               <!-- Read-only view -->
-              <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ JSON.stringify(getStepResult(step.key).outputData ?? getStepResult(step.key).errorMessage, null, 2) }}</pre>
+              <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ stepResultOutput(step.key) }}</pre>
             </div>
           </div>
         </div>

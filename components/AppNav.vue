@@ -11,8 +11,8 @@ async function logout() {
   <nav class="bg-white border-b border-gray-100 shadow-sm">
     <div class="container mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <NuxtLink to="/" class="text-lg font-semibold text-primary tracking-tight">
-          ColdMailer
+        <NuxtLink to="/" class="text-lg font-semibold tracking-tight">
+          <span class="text-primary">S</span><span class="text-success">C</span><span class="text-danger">G</span> ColdMailer
         </NuxtLink>
         <template v-if="loggedIn">
           <NuxtLink

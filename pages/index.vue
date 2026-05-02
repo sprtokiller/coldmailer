@@ -71,7 +71,7 @@ function stepCount(steps: { status: string }[]) {
             {{ run.name }}
           </h3>
           <span class="text-xs text-gray-400 whitespace-nowrap ml-2 mt-0.5">
-            {{ new Date(run.createdAt).toLocaleDateString() }}
+            {{ new Date(run.createdAt).toLocaleDateString('en-US') }}
           </span>
         </div>
 

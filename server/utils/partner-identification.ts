@@ -9,7 +9,7 @@ function createClient() {
   return new OpenAI({
     baseURL: 'https://openrouter.ai/api/v1',
     apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
-    defaultHeaders: { 'HTTP-Referer': 'https://coldmailer.scg.cz', 'X-Title': 'ColdMailer' },
+    defaultHeaders: { 'HTTP-Referer': 'https://coldmailer.scg.cz', 'X-Title': 'SCG ColdMailer' },
   })
 }
 
@@ -81,7 +81,7 @@ export async function* runPartnerIdentification(
     yield { type: 'item', item: { index: i + 1, total: items.length, itemName, status: 'processing' } }
 
     try {
-      // a) Search term via free AI
+      // a) Search term via claude sonnet 4.6
       yield { type: 'progress', text: `  ⟳ Generuji search term…\n` }
       let searchTerm = `${itemName} partneři`
       try {

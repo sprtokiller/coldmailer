@@ -2,6 +2,18 @@
 definePageMeta({ middleware: 'auth' })
 
 type Tab = 'prompts' | 'context' | 'selling' | 'drafts'
+type Author = { id: string; name: string; image: string | null }
+type LibraryItem = {
+  id: string
+  name: string
+  content?: string
+  subject?: string
+  stepType?: string
+  author?: Author
+  createdAt: string | Date
+  derivedFromId: string | null
+}
+
 const tab = ref<Tab>('prompts')
 
 const { data: prompts, refresh: refreshPrompts } = await useFetch('/api/library/prompts', { default: () => [] })
@@ -49,7 +61,7 @@ function resetForm() {
   showForm.value = false
 }
 
-function startEdit(item: { id: string; name: string; content?: string; stepType?: string }) {
+function startEdit(item: LibraryItem) {
   editingId.value = item.id
   form.value.name = item.name
   form.value.content = item.content ?? ''
@@ -95,11 +107,31 @@ async function save() {
   }
 }
 
+// ── Filters ──────────────────────────────────────────────────────────────────
+const filterType   = ref('')
+const filterAuthor = ref('')
+
+watch(tab, () => { filterType.value = ''; filterAuthor.value = '' })
+
+const allItems = computed(() => {
+  if (tab.value === 'prompts') return prompts.value as LibraryItem[]
+  if (tab.value === 'context') return contextParts.value as LibraryItem[]
+  if (tab.value === 'selling') return sellingPoints.value as LibraryItem[]
+  return emailDrafts.value as LibraryItem[]
+})
+
 const currentItems = computed(() => {
-  if (tab.value === 'prompts') return prompts.value
-  if (tab.value === 'context') return contextParts.value
-  if (tab.value === 'selling') return sellingPoints.value
-  return emailDrafts.value
+  return allItems.value.filter((item) => {
+    if (filterType.value && item.stepType !== filterType.value) return false
+    const authorName = item.author?.name ?? ''
+    if (filterAuthor.value && authorName !== filterAuthor.value) return false
+    return true
+  })
+})
+
+const authorOptions = computed(() => {
+  const names = allItems.value.map((item) => item.author?.name ?? '').filter(Boolean)
+  return [...new Set(names)] as string[]
 })
 
 const tabs: { key: Tab; label: string }[] = [
@@ -178,8 +210,28 @@ const tabs: { key: Tab; label: string }[] = [
       </form>
     </div>
 
+    <!-- Filter bar -->
+    <div v-if="allItems.length > 0" class="flex flex-wrap gap-2 mb-4">
+      <select
+        v-if="tab === 'prompts'"
+        v-model="filterType"
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
+      >
+        <option value="">All step types</option>
+        <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+      </select>
+      <select
+        v-if="authorOptions.length > 1"
+        v-model="filterAuthor"
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
+      >
+        <option value="">All authors</option>
+        <option v-for="a in authorOptions" :key="a" :value="a">{{ a }}</option>
+      </select>
+    </div>
+
     <div v-if="currentItems.length === 0" class="text-center py-16 text-gray-400 text-sm">
-      Nothing here yet. Create one with the + New button.
+      {{ allItems.length === 0 ? 'Nothing here yet. Create one with the + New button.' : 'No items match the current filters.' }}
     </div>
 
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -208,7 +260,7 @@ const tabs: { key: Tab; label: string }[] = [
         </p>
         <div class="flex items-center gap-2">
           <img v-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" />
-          <span class="text-xs text-gray-400">{{ item.author?.name }} · {{ new Date(item.createdAt).toLocaleDateString() }}</span>
+          <span class="text-xs text-gray-400">{{ item.author?.name }} · {{ new Date(item.createdAt).toLocaleDateString('en-US') }}</span>
         </div>
         <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
           ↗ derived from another document

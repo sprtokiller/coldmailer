@@ -12,7 +12,11 @@
     "postinstall": "nuxt prepare && prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "bun prisma/seed.ts"
   },
   "dependencies": {
     "@crawlee/memory-storage": "^3.16.0",
