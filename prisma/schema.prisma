@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  googleId     String    @unique
+  email        String    @unique
+  name         String
+  image        String?
+  accessToken  String?
+  refreshToken String?
+  tokenExpiry  DateTime?
+  createdAt    DateTime  @default(now())
+
+  systemPrompts SystemPrompt[]
+  contextParts  ContextPart[]
+  sellingPoints SellingPoint[]
+  emailDrafts   EmailDraft[]
+  pipelineRuns  PipelineRun[]
+  stepsRun      PipelineStep[] @relation("StepRunner")
+}
+
+enum StepType {
+  MARKET_SCANNING
+  PARTNER_IDENTIFICATION
+  PARTNER_PROFILING
+  CONTACT_DISCOVERY
+  VALUE_ALIGNMENT
+  OUTREACH_PREPARATION
+  OUTREACH_EXECUTION
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model SystemPrompt {
+  id            String        @id @default(cuid())
+  name          String
+  content       String
+  stepType      StepType
+  authorId      String
+  author        User          @relation(fields: [authorId], references: [id])
+  createdAt     DateTime      @default(now())
+  derivedFromId String?
+  derivedFrom   SystemPrompt? @relation("PromptLineage", fields: [derivedFromId], references: [id])
+  derived       SystemPrompt[] @relation("PromptLineage")
+  steps         PipelineStep[]
+}
+
+model ContextPart {
+  id            String        @id @default(cuid())
+  name          String
+  content       String
+  authorId      String
+  author        User          @relation(fields: [authorId], references: [id])
+  createdAt     DateTime      @default(now())
+  derivedFromId String?
+  derivedFrom   ContextPart?  @relation("ContextLineage", fields: [derivedFromId], references: [id])
+  derived       ContextPart[] @relation("ContextLineage")
+}
+
+model SellingPoint {
+  id            String         @id @default(cuid())
+  name          String
+  content       String
+  authorId      String
+  author        User           @relation(fields: [authorId], references: [id])
+  createdAt     DateTime       @default(now())
+  derivedFromId String?
+  derivedFrom   SellingPoint?  @relation("SellingLineage", fields: [derivedFromId], references: [id])
+  derived       SellingPoint[] @relation("SellingLineage")
+  steps         PipelineStep[]
+}
+
+model EmailDraft {
+  id            String       @id @default(cuid())
+  name          String
+  subject       String
+  body          String
+  authorId      String
+  author        User         @relation(fields: [authorId], references: [id])
+  createdAt     DateTime     @default(now())
+  derivedFromId String?
+  derivedFrom   EmailDraft?  @relation("DraftLineage", fields: [derivedFromId], references: [id])
+  derived       EmailDraft[] @relation("DraftLineage")
+}
+
+model PipelineRun {
+  id        String         @id @default(cuid())
+  name      String
+  authorId  String
+  author    User           @relation(fields: [authorId], references: [id])
+  createdAt DateTime       @default(now())
+  steps     PipelineStep[]
+}
+
+model PipelineStep {
+  id             String        @id @default(cuid())
+  pipelineRunId  String
+  pipelineRun    PipelineRun   @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  stepType       StepType
+  status         StepStatus    @default(PENDING)
+  systemPromptId String?
+  systemPrompt   SystemPrompt? @relation(fields: [systemPromptId], references: [id])
+  contextPartIds String[]
+  sellingPointId String?
+  sellingPoint   SellingPoint? @relation(fields: [sellingPointId], references: [id])
+  inputData      Json?
+  outputData     Json?
+  errorMessage   String?
+  runnerId       String
+  runner         User          @relation("StepRunner", fields: [runnerId], references: [id])
+  createdAt      DateTime      @default(now())
+  competitionPartners CompetitionPartner[]
+  completedAt    DateTime?
+}
+
+model Partner {
+  id          String   @id @default(cuid())
+  name        String
+  website     String?
+  description String?
+  type        String?
+  rawData     Json?
+  createdAt   DateTime @default(now())
+
+  competitionRelations CompetitionPartner[]
+}
+
+model CompetitionPartner {
+  id              String      @id @default(cuid())
+  competitionName String
+  competitionUrl  String?
+  partnerId       String
+  partner         Partner     @relation(fields: [partnerId], references: [id])
+  pipelineStepId  String
+  step            PipelineStep @relation(fields: [pipelineStepId], references: [id])
+  createdAt       DateTime    @default(now())
+}

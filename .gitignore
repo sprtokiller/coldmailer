@@ -1,34 +1,33 @@
-# dependencies (bun install)
-node_modules
+# Nuxt
+.nuxt/
+.output/
+.nitro/
+.cache/
 
-# output
-out
-dist
-*.tgz
+# Build
+dist/
 
-# code coverage
-coverage
-*.lcov
-
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-
-# dotenv environment variable files
+# Env
 .env
-.env.development.local
-.env.test.local
-.env.production.local
 .env.local
 
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
+# Node / Bun
+node_modules/
+bun.lockb
 
-# IntelliJ based IDEs
-.idea
+# Logs
+*.log
 
-# Finder (MacOS) folder config
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Prisma
+prisma/migrations/
+
+# Google OAuth client secret — keep out of git
+client_secret_*.json
