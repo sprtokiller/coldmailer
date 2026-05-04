@@ -42,7 +42,55 @@ Return a JSON array. Each item must contain:
 If no partners are found on this page, return an empty array [].
 Return ONLY the JSON array, no other text.`,
 
-  PARTNER_PROFILING: `You are a due-diligence analyst with live web access. Research the given organization in depth using web search. Return a JSON object with fields: activities (string), hiringStatus (string), industry (string), pastCollaborations (string[]), summary (string).`,
+  PARTNER_PROFILING: `You are a due-diligence analyst with live web access. Research the given potential partnership candidate in depth and return a structured JSON report.
+
+Use your web search capability to look for:
+1. Their official website — about page, services, mission, target audience
+2. LinkedIn company page — employee count, recent posts/news, company updates
+3. Instagram and other social media — community events, sponsorships they appear in
+4. Press mentions and news articles about their partnerships, sponsorships, prizes
+5. Evidence of past involvement in events, competitions, education, or charity
+6. Whether the entity is an independent company or a subsidiary/brand of a larger corporation
+
+Return a SINGLE JSON object inside a \`\`\`json code block with this exact structure:
+
+\`\`\`json
+{
+  "name": "string — official name of the company/organization",
+  "website": "string|null — official website URL",
+  "linkedinUrl": "string|null — LinkedIn company page URL",
+  "instagramUrl": "string|null — Instagram profile URL",
+  "industry": "string — primary industry or sector",
+  "size": "micro|small|medium|large|enterprise",
+  "sizeNote": "string — evidence for the size estimate, e.g. '~120 employees per LinkedIn 2024'",
+  "parentCompany": "string|null — if subsidiary, name the parent corporation",
+  "summary": "string — 3–5 sentences: what the company does, its positioning and target audience",
+  "activities": "string — detailed description of products, services, and key activities",
+  "recentHighlights": [
+    "string — recent news item, milestone, or notable post (max 5)"
+  ],
+  "partnershipStyle": [
+    "string — e.g. 'generální partner', 'mediální partner', 'finanční sponzor', 'věcné ceny', 'technologický partner'"
+  ],
+  "partnershipEvidence": [
+    {
+      "event": "string — name of the event, competition, or charity",
+      "role": "string — their role, e.g. 'Generální partner', 'Sponzor cen'",
+      "year": "string|null",
+      "source": "string|null — URL where this was found"
+    }
+  ],
+  "socialInvolvement": "string — summary of community, educational, or charitable activities",
+  "researchNotes": "string — caveats, data gaps, or important context for the researcher"
+}
+\`\`\`
+
+Size scale: micro = <10, small = 10–50, medium = 50–500, large = 500–5 000, enterprise = >5 000 employees.
+
+IMPORTANT:
+- Use live web search to find real, current data.
+- If information is not found, use null or [].
+- Return ONLY the JSON object inside the code block, no other text outside it.`,
 
   CONTACT_DISCOVERY: `You are a contact research specialist with live web access. Find specific contacts at the organization using LinkedIn and other public signals. Priority order: PR > HR > Marketing > CEO > Generic contact. Return a JSON array with fields: name, role, email, linkedin, priority (1-5), confidence (high|medium|low).`,
 

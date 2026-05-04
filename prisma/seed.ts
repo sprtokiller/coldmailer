@@ -25,10 +25,10 @@ async function main() {
     })
 
     if (existing) {
-      // Keep content in sync with source code.
+      // Keep content and isSystem flag in sync with source code.
       await prisma.systemPrompt.update({
         where: { id: existing.id },
-        data: { content },
+        data: { content, isSystem: true },
       })
       console.log(`  ↻ Updated: ${name}`)
     } else {
@@ -38,6 +38,7 @@ async function main() {
           content,
           stepType: stepType as never,
           authorId: systemUser.id,
+          isSystem: true,
         },
       })
       console.log(`  ✓ Created: ${name}`)

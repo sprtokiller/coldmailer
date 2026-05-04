@@ -5,6 +5,7 @@ import { requireAuth } from '~/server/utils/requireAuth'
 import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
+// STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/server/utils/default-prompts'
 
 interface ExecuteBody {
@@ -13,7 +14,6 @@ interface ExecuteBody {
   contextPartIds?: string[]
   sellingPointId?: string
   inputData?: Record<string, unknown>
-  searchTermExample?: string
 }
 
 
@@ -34,17 +34,25 @@ export default defineEventHandler(async (event) => {
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
 
-  const [contextParts, customPrompt] = await Promise.all([
+  const [contextParts, customPrompt, dbSystemPrompt] = await Promise.all([
     body.contextPartIds?.length
       ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds } } })
       : Promise.resolve([]),
     body.systemPromptId
       ? prisma.systemPrompt.findUnique({ where: { id: body.systemPromptId } })
       : Promise.resolve(null),
+    // Priority lookup: find the isSystem prompt for this step type in DB.
+    prisma.systemPrompt.findFirst({
+      where: { stepType: body.stepType as never, isSystem: true },
+      orderBy: { createdAt: 'desc' },
+    }),
   ])
 
   const systemPromptText =
-    customPrompt?.content ?? STEP_SYSTEM_PROMPTS[body.stepType] ?? 'You are a helpful assistant.'
+    customPrompt?.content ??
+    dbSystemPrompt?.content ??
+    STEP_SYSTEM_PROMPTS[body.stepType] ??
+    'You are a helpful assistant.'
 
   const step = await prisma.pipelineStep.create({
     data: {
@@ -88,7 +96,6 @@ export default defineEventHandler(async (event) => {
           } else if (body.stepType === 'PARTNER_IDENTIFICATION') {
             const gen = runPartnerIdentification({
               inputData: body.inputData ?? {},
-              searchTermExample: body.searchTermExample ?? '<název soutěže> partneři',
               extractPrompt: systemPromptText,
               stepId: step.id,
             })
@@ -101,6 +108,82 @@ export default defineEventHandler(async (event) => {
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date() },
+            })
+          } else if (body.stepType === 'PARTNER_PROFILING') {
+            // inputData: { partners: [{ partnerId?, name, frequency?, itemNames? }] }
+            const inputPartners = (() => {
+              const d = body.inputData
+              if (Array.isArray(d)) return d
+              const p = (d as Record<string, unknown> | undefined)?.partners
+              if (Array.isArray(p)) return p
+              return []
+            })() as Array<{ partnerId?: string; name: string; frequency?: number; itemNames?: string[] }>
+
+            if (inputPartners.length === 0) {
+              throw new Error('Žádní partneři k prozkoumání. Vyberte je z výsledků Kroku 2.')
+            }
+
+            // Enrich each partner with DB details (website, description, type)
+            const partnerIds = inputPartners.filter(p => p.partnerId).map(p => p.partnerId!)
+            const dbPartners = await prisma.partner.findMany({
+              where: { id: { in: partnerIds } },
+              select: { id: true, name: true, website: true, description: true, type: true },
+            })
+            const dbMap = new Map(dbPartners.map(p => [p.id, p]))
+
+            const allProfiles: unknown[] = []
+
+            for (let i = 0; i < inputPartners.length; i++) {
+              const ip = inputPartners[i]
+              const db = ip.partnerId ? dbMap.get(ip.partnerId) : undefined
+
+              write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'processing' } })
+              write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
+
+              const userMsg = [
+                'Research this potential partnership candidate and return the structured JSON defined in the system prompt:',
+                '',
+                `Name: ${ip.name}`,
+                db?.website     ? `Website: ${db.website}` : null,
+                db?.description ? `Known description: ${db.description}` : null,
+                db?.type        ? `Partnership type hint: ${db.type}` : null,
+                ip.frequency    ? `Found in ${ip.frequency} context(s): ${(ip.itemNames ?? []).join(', ')}` : null,
+              ].filter(Boolean).join('\n')
+
+              try {
+                let partnerOutput = ''
+                const gen = streamStepAI({
+                  stepType: body.stepType,
+                  systemPrompt: systemPromptText,
+                  contextParts: contextParts.map(c => `${c.name}:\n${c.content}`),
+                  userMessage: userMsg,
+                })
+                for await (const chunk of gen) {
+                  partnerOutput += chunk
+                  write({ chunk })
+                }
+                const parsed = parseAIOutput(partnerOutput)
+                const profile = {
+                  partnerId: ip.partnerId,
+                  name: ip.name,
+                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
+                    ? parsed
+                    : { raw: parsed }),
+                }
+                allProfiles.push(profile)
+                write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'done', profile } })
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                write({ chunk: `  ❌ ${msg}\n` })
+                allProfiles.push({ partnerId: ip.partnerId, name: ip.name, error: msg })
+                write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'error', error: msg } })
+              }
+            }
+
+            write({ chunk: `\n✅ Hotovo! Prozkoumáno ${inputPartners.length} partnerů.\n` })
+            await prisma.pipelineStep.update({
+              where: { id: step.id },
+              data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date() },
             })
           } else {
             let fullOutput = ''

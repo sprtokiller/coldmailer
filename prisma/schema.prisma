@@ -48,6 +48,7 @@ model SystemPrompt {
   name          String
   content       String
   stepType      StepType
+  isSystem      Boolean       @default(false)
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
   createdAt     DateTime      @default(now())
@@ -121,7 +122,7 @@ model PipelineStep {
   runnerId       String
   runner         User          @relation("StepRunner", fields: [runnerId], references: [id])
   createdAt      DateTime      @default(now())
-  competitionPartners CompetitionPartner[]
+  candidatePartners CandidatePartner[]
   completedAt    DateTime?
 }
 
@@ -134,16 +135,16 @@ model Partner {
   rawData     Json?
   createdAt   DateTime @default(now())
 
-  competitionRelations CompetitionPartner[]
+  candidateRelations CandidatePartner[]
 }
 
-model CompetitionPartner {
-  id              String      @id @default(cuid())
-  competitionName String
-  competitionUrl  String?
-  partnerId       String
-  partner         Partner     @relation(fields: [partnerId], references: [id])
-  pipelineStepId  String
-  step            PipelineStep @relation(fields: [pipelineStepId], references: [id])
-  createdAt       DateTime    @default(now())
+model CandidatePartner {
+  id             String       @id @default(cuid())
+  itemName       String
+  itemUrl        String?
+  partnerId      String
+  partner        Partner      @relation(fields: [partnerId], references: [id])
+  pipelineStepId String
+  step           PipelineStep @relation(fields: [pipelineStepId], references: [id])
+  createdAt      DateTime     @default(now())
 }

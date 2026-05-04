@@ -9,6 +9,7 @@ type LibraryItem = {
   content?: string
   subject?: string
   stepType?: string
+  isSystem?: boolean
   author?: Author
   createdAt: string | Date
   derivedFromId: string | null
@@ -41,6 +42,43 @@ Return a JSON array. Each item must contain exactly these fields:
 - target_group: string — primary audience, e.g. "SŠ", "ZŠ", "SŠ+ZŠ"
 
 Return ONLY the JSON array, no other text or markdown outside the code block.`,
+
+  PARTNER_PROFILING: `You are a due-diligence analyst with live web access. Research the given potential partnership candidate in depth and return a structured JSON report.
+
+Use your web search capability to look for:
+1. Their official website — about page, services, mission, target audience
+2. LinkedIn company page — employee count, recent posts/news, company updates
+3. Instagram and other social media — community events, sponsorships they appear in
+4. Press mentions and news articles about their partnerships, sponsorships, prizes
+5. Evidence of past involvement in events, competitions, education, or charity
+6. Whether the entity is an independent company or a subsidiary/brand of a larger corporation
+
+Return a SINGLE JSON object inside a \`\`\`json code block:
+
+\`\`\`json
+{
+  "name": "string",
+  "website": "string|null",
+  "linkedinUrl": "string|null",
+  "instagramUrl": "string|null",
+  "industry": "string",
+  "size": "micro|small|medium|large|enterprise",
+  "sizeNote": "string — evidence, e.g. '~120 employees per LinkedIn 2024'",
+  "parentCompany": "string|null",
+  "summary": "string — 3–5 sentences about what they do and their positioning",
+  "activities": "string — detailed products/services/activities",
+  "recentHighlights": ["string — recent news or milestone (max 5)"],
+  "partnershipStyle": ["string — e.g. 'generální partner', 'věcné ceny'"],
+  "partnershipEvidence": [
+    { "event": "string", "role": "string", "year": "string|null", "source": "string|null" }
+  ],
+  "socialInvolvement": "string",
+  "researchNotes": "string"
+}
+\`\`\`
+
+Size: micro <10, small 10–50, medium 50–500, large 500–5000, enterprise >5000 employees.
+Return ONLY the JSON object inside the code block.`,
 }
 
 const showForm = ref(false)
@@ -238,14 +276,20 @@ const tabs: { key: Tab; label: string }[] = [
       <div
         v-for="item in currentItems"
         :key="item.id"
-        class="bg-white rounded-xl border border-gray-100 p-5"
+        class="bg-white rounded-xl border p-5 transition-colors"
+        :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
       >
         <div class="flex items-start justify-between mb-2">
           <h3 class="font-medium text-gray-800 text-sm">{{ item.name }}</h3>
           <div class="flex items-center gap-1 ml-2 shrink-0">
+            <!-- System badge -->
+            <span v-if="item.isSystem" class="text-xs text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+              System
+            </span>
             <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap">
               {{ item.stepType.replace(/_/g, ' ') }}
             </span>
+            <!-- Allow editing for regular prompts (own author) and system prompts (any user) -->
             <button
               v-if="tab === 'prompts'"
               class="text-xs text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
@@ -259,8 +303,12 @@ const tabs: { key: Tab; label: string }[] = [
           {{ item.content ?? item.subject }}
         </p>
         <div class="flex items-center gap-2">
-          <img v-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" />
-          <span class="text-xs text-gray-400">{{ item.author?.name }} · {{ new Date(item.createdAt).toLocaleDateString('en-US') }}</span>
+          <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
+          <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" />
+          <span class="text-xs text-gray-400">
+            {{ item.isSystem ? 'System' : item.author?.name }}
+            · {{ new Date(item.createdAt).toLocaleDateString('en-US') }}
+          </span>
         </div>
         <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
           ↗ derived from another document

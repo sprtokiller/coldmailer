@@ -4,6 +4,7 @@ import { fetchPages } from './page-fetcher'
 import { prisma } from './prisma'
 
 const PIPELINE_MODEL = 'anthropic/claude-sonnet-4.6'
+const DEDUP_MODEL    = 'anthropic/claude-3-5-haiku'
 
 function createClient() {
   return new OpenAI({
@@ -52,7 +53,6 @@ export type PartnerIdEvent =
 
 export interface PartnerIdOptions {
   inputData: Record<string, unknown>
-  searchTermExample: string
   extractPrompt: string
   stepId: string
 }
@@ -60,7 +60,7 @@ export interface PartnerIdOptions {
 export async function* runPartnerIdentification(
   opts: PartnerIdOptions,
 ): AsyncGenerator<PartnerIdEvent> {
-  const { inputData, searchTermExample, extractPrompt, stepId } = opts
+  const { inputData, extractPrompt, stepId } = opts
   const client = createClient()
 
   const found = findItemArray(inputData)
@@ -81,22 +81,9 @@ export async function* runPartnerIdentification(
     yield { type: 'item', item: { index: i + 1, total: items.length, itemName, status: 'processing' } }
 
     try {
-      // a) Search term via claude sonnet 4.6
-      yield { type: 'progress', text: `  ⟳ Generuji search term…\n` }
-      let searchTerm = `${itemName} partneři`
-      try {
-        const res = await client.chat.completions.create({
-          model: PIPELINE_MODEL,
-          messages: [
-            { role: 'system', content: `Generate a single Google search query. Example format: "${searchTermExample}". Reply with ONLY the query, no other text.` },
-            { role: 'user', content: JSON.stringify(item) },
-          ],
-          max_tokens: 40,
-        })
-        const raw = res.choices[0]?.message?.content?.trim()
-        if (raw) searchTerm = raw.replace(/^["']|["']$/g, '')
-      } catch {}
-      yield { type: 'progress', text: `  ✓ "${searchTerm}"\n` }
+      // a) Search term — constructed directly, no AI call needed
+      const searchTerm = `${itemName} partneři`
+      yield { type: 'progress', text: `  ✓ search term: "${searchTerm}"\n` }
 
       // b) SerpAPI
       yield { type: 'progress', text: `  ⟳ Hledám v Google…\n` }
@@ -141,11 +128,15 @@ export async function* runPartnerIdentification(
       // f-g) Dedup + save to DB
       let newCount = 0; let existingCount = 0
       const savedPartners: Array<{ partnerId: string; name: string; isNew: boolean }> = []
+      // Per-item set: prevents the same partner being linked multiple times to the
+      // same item when several scraped pages all mention that partner (e.g. APPLIFTING 3×).
+      const linkedPartnerIds = new Set<string>()
 
       for (const fp of foundPartners) {
         if (!fp.name?.trim()) continue
         let partnerId: string; let isNew = true
 
+        // 1. Fast exact match (name or website) — no AI needed
         const exact = existingPartners.find(ep =>
           ep.name.toLowerCase() === fp.name.toLowerCase() ||
           (fp.website && ep.website?.toLowerCase() === fp.website.toLowerCase()),
@@ -153,11 +144,12 @@ export async function* runPartnerIdentification(
         if (exact) {
           partnerId = exact.id; isNew = false
         } else {
+          // 2. AI fuzzy dedup via cheap Haiku model
           try {
             const res = await client.chat.completions.create({
-              model: PIPELINE_MODEL,
+              model: DEDUP_MODEL,
               messages: [
-                { role: 'system', content: 'Check if new partner already exists. Return JSON only: {"exists":false} or {"exists":true,"existingId":"<id>"}' },
+                { role: 'system', content: 'Check if the new partner already exists in the list. Return JSON only: {"exists":false} or {"exists":true,"existingId":"<id>"}' },
                 { role: 'user', content: `New: ${JSON.stringify(fp)}\n\nExisting: ${JSON.stringify(existingPartners.slice(0, 80))}` },
               ],
               max_tokens: 60,
@@ -174,8 +166,13 @@ export async function* runPartnerIdentification(
           }
         }
 
-        await prisma.competitionPartner.create({
-          data: { competitionName: itemName, competitionUrl: String(item.url ?? ''), partnerId, pipelineStepId: stepId },
+        // Skip if this partner was already linked to this item in this pass
+        // (same partner extracted from multiple pages of the same search).
+        if (linkedPartnerIds.has(partnerId)) continue
+        linkedPartnerIds.add(partnerId)
+
+        await prisma.candidatePartner.create({
+          data: { itemName, itemUrl: String(item.url ?? ''), partnerId, pipelineStepId: stepId },
         })
         if (isNew) newCount++; else existingCount++
         savedPartners.push({ partnerId, name: fp.name, isNew })

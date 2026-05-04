@@ -8,7 +8,12 @@ export default defineEventHandler(async (event) => {
 
   const prompt = await prisma.systemPrompt.findUnique({ where: { id } })
   if (!prompt) throw createError({ statusCode: 404, statusMessage: 'Prompt not found' })
-  if (prompt.authorId !== user.id) throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+
+  // isSystem prompts are owned by the system user — any authenticated user may edit them.
+  // Regular prompts may only be edited by their author.
+  if (!prompt.isSystem && prompt.authorId !== user.id) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+  }
 
   return prisma.systemPrompt.update({
     where: { id },
