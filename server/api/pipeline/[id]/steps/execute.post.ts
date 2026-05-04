@@ -6,7 +6,7 @@ import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
-import { STEP_SYSTEM_PROMPTS } from '~/server/utils/default-prompts'
+import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
 interface ExecuteBody {
   stepType: string

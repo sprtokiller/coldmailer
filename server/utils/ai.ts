@@ -1,31 +1,23 @@
 import OpenAI from 'openai'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
-
-// Steps 1, 3, 4 use o4-mini-deep-research (live web search, minutes-long).
-// Step 2 (PARTNER_IDENTIFICATION) runs its own pipeline (SerpAPI + Playwright + claude sonnet 4.6).
-// Steps 5-7 use claude-sonnet-4.6 with adaptive reasoning (seconds).
-const DEEP_RESEARCH_STEPS = new Set([
-  'MARKET_SCANNING',
-  'PARTNER_PROFILING',
-  'CONTACT_DISCOVERY',
-])
+import { OPENROUTER, MODELS, DEEP_RESEARCH_STEPS, STEP_MODEL } from '~/config/pipeline'
 
 function createClient(): OpenAI {
   return new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
+    baseURL: OPENROUTER.baseURL,
     apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
     defaultHeaders: {
-      'HTTP-Referer': 'https://coldmailer.scg.cz',
-      'X-Title': 'SCG ColdMailer',
+      'HTTP-Referer': OPENROUTER.siteUrl,
+      'X-Title':      OPENROUTER.siteTitle,
     },
   })
 }
 
 export function modelForStep(stepType: string): string {
-  return DEEP_RESEARCH_STEPS.has(stepType)
-    ? 'openai/o4-mini-deep-research'
-    : 'anthropic/claude-sonnet-4.6'
+  return STEP_MODEL[stepType] ?? MODELS.CLAUDE_SONNET
 }
+
+export { DEEP_RESEARCH_STEPS }
 
 export interface StepAIInput {
   stepType: string

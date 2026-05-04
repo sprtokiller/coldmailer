@@ -1,3 +1,61 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// Pipeline configuration — single source of truth for models, prompts, UI badges
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── OpenRouter client settings ────────────────────────────────────────────────
+export const OPENROUTER = {
+  baseURL:   'https://openrouter.ai/api/v1',
+  siteUrl:   'https://coldmailer.scg.cz',
+  siteTitle: 'SCG ColdMailer',
+} as const
+
+// ── Model identifiers ─────────────────────────────────────────────────────────
+export const MODELS = {
+  DEEP_RESEARCH: 'openai/o4-mini-deep-research',
+  CLAUDE_SONNET: 'anthropic/claude-sonnet-4-5',
+  CLAUDE_HAIKU:  'anthropic/claude-3-5-haiku',
+  PIPELINE:      'pipeline',  // SerpAPI + Playwright + AI (display only)
+  GMAIL:         'gmail',     // Gmail API          (display only)
+} as const
+
+// ── Step → model mapping ──────────────────────────────────────────────────────
+export const STEP_MODEL: Record<string, string> = {
+  MARKET_SCANNING:        MODELS.DEEP_RESEARCH,
+  PARTNER_IDENTIFICATION: MODELS.PIPELINE,
+  PARTNER_PROFILING:      MODELS.DEEP_RESEARCH,
+  CONTACT_DISCOVERY:      MODELS.DEEP_RESEARCH,
+  VALUE_ALIGNMENT:        MODELS.CLAUDE_SONNET,
+  OUTREACH_PREPARATION:   MODELS.CLAUDE_SONNET,
+  OUTREACH_EXECUTION:     MODELS.GMAIL,
+}
+
+// Steps that use the deep-research model (live web search, long-running).
+// Derived automatically so the set stays in sync with STEP_MODEL above.
+export const DEEP_RESEARCH_STEPS = new Set(
+  Object.entries(STEP_MODEL)
+    .filter(([, model]) => model === MODELS.DEEP_RESEARCH)
+    .map(([step]) => step),
+)
+
+// ── UI badge metadata per model (used in pipeline page) ───────────────────────
+export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
+  [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',    cls: 'bg-primary/10 text-primary'       },
+  [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet (latest)',   cls: 'bg-success/10 text-success'       },
+  [MODELS.GMAIL]:         { label: 'Gmail API',                cls: 'bg-danger/10 text-danger'         },
+  [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
+}
+
+// ── Default system-prompt display names (used by prisma/seed.ts) ──────────────
+export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
+  MARKET_SCANNING:        'Default – Market Scanning',
+  PARTNER_IDENTIFICATION: 'Default – Partner Identification',
+  PARTNER_PROFILING:      'Default – Partner Profiling',
+  CONTACT_DISCOVERY:      'Default – Contact Discovery',
+  VALUE_ALIGNMENT:        'Default – Value Alignment',
+  OUTREACH_PREPARATION:   'Default – Outreach Preparation',
+}
+
+// ── System prompt content ─────────────────────────────────────────────────────
 export const STEP_SYSTEM_PROMPTS: Record<string, string> = {
   MARKET_SCANNING: `You are a market research expert with live web access. Search for high school competitions, events, and channels active in the Czech Republic. Use your web search capability to find real, current examples.
 
@@ -97,13 +155,4 @@ IMPORTANT:
   VALUE_ALIGNMENT: `You are a strategic alignment analyst. Compare the provided selling points with the partner data and rank alignment opportunities by relevance. Return a JSON array with fields: sellingPoint, relevanceScore (0-100), hook (string), reasoning (string).`,
 
   OUTREACH_PREPARATION: `You are an expert cold-email copywriter. Generate a highly tailored outreach email based on the provided template, contact, and alignment hints. Return a JSON object with fields: to (email address), subject (string), body (plain text).`,
-}
-
-export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
-  MARKET_SCANNING: 'Default – Market Scanning',
-  PARTNER_IDENTIFICATION: 'Default – Partner Identification',
-  PARTNER_PROFILING: 'Default – Partner Profiling',
-  CONTACT_DISCOVERY: 'Default – Contact Discovery',
-  VALUE_ALIGNMENT: 'Default – Value Alignment',
-  OUTREACH_PREPARATION: 'Default – Outreach Preparation',
 }

@@ -2,15 +2,16 @@ import OpenAI from 'openai'
 import { serpSearch } from './serpapi'
 import { fetchPages } from './page-fetcher'
 import { prisma } from './prisma'
+import { OPENROUTER, MODELS } from '~/config/pipeline'
 
-const PIPELINE_MODEL = 'anthropic/claude-sonnet-4.6'
-const DEDUP_MODEL    = 'anthropic/claude-3-5-haiku'
+const PIPELINE_MODEL = MODELS.CLAUDE_SONNET
+const DEDUP_MODEL    = MODELS.CLAUDE_HAIKU
 
 function createClient() {
   return new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
+    baseURL: OPENROUTER.baseURL,
     apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
-    defaultHeaders: { 'HTTP-Referer': 'https://coldmailer.scg.cz', 'X-Title': 'SCG ColdMailer' },
+    defaultHeaders: { 'HTTP-Referer': OPENROUTER.siteUrl, 'X-Title': OPENROUTER.siteTitle },
   })
 }
 

@@ -1,18 +1,10 @@
 <script setup lang="ts">
+import { STEP_MODEL, MODEL_BADGE } from '~/config/pipeline'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const { data: run, refresh } = await useFetch(`/api/pipeline/${route.params.id}`)
-
-const STEP_MODEL_MAP: Record<string, string> = {
-  MARKET_SCANNING:       'openai/o4-mini-deep-research',
-  PARTNER_IDENTIFICATION: 'pipeline',
-  PARTNER_PROFILING:     'openai/o4-mini-deep-research',
-  CONTACT_DISCOVERY:     'openai/o4-mini-deep-research',
-  VALUE_ALIGNMENT:       'anthropic/claude-sonnet-4-5',
-  OUTREACH_PREPARATION:  'anthropic/claude-sonnet-4-5',
-  OUTREACH_EXECUTION:    'gmail',
-}
 
 const STEPS = [
   { key: 'MARKET_SCANNING',        label: 'Market Scanning',        description: 'Find relevant high school competitions, events, and channels.' },
@@ -30,6 +22,7 @@ type PromptOption = {
   name: string
   content: string
   stepType: string
+  isSystem: boolean
   author: { name: string }
 }
 
@@ -45,6 +38,76 @@ const editingOutputStep = ref<string | null>(null)
 const editingOutputDraft = ref('')
 const confirmingOutputStep = ref<string | null>(null)
 const savingOutput = ref(false)
+
+// ── AI Import ─────────────────────────────────────────────────────────────────
+const aiImportStep = ref<string | null>(null)
+const aiImportText = ref('')
+const aiImportLoading = ref(false)
+
+function isAiImportStep(stepKey: string) {
+  return ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING'].includes(stepKey)
+}
+
+function toggleAiImport(stepKey: string) {
+  if (aiImportStep.value === stepKey) {
+    aiImportStep.value = null
+  } else {
+    aiImportStep.value = stepKey
+    aiImportText.value = ''
+  }
+}
+
+async function runAiImport(stepKey: string) {
+  if (!aiImportText.value.trim()) return
+  aiImportLoading.value = true
+  try {
+    const res = await fetch(`/api/pipeline/${route.params.id}/steps/import-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stepType: stepKey,
+        systemPromptId: getConfig(stepKey).systemPromptId || undefined,
+        rawInputText: aiImportText.value,
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText)
+      throw new Error(text)
+    }
+    await refresh()
+    aiImportStep.value = null
+    aiImportText.value = ''
+  } catch (e: unknown) {
+    alert(`AI Import: ${e instanceof Error ? e.message : 'Import selhal'}`)
+  } finally {
+    aiImportLoading.value = false
+  }
+}
+
+async function deleteTableRow(stepKey: string, rowIndex: number) {
+  const result = getStepResult(stepKey)
+  if (!result) return
+  const data = asJsonArray(stepKey)
+  if (!data) return
+  const newData = data.filter((_, i) => i !== rowIndex)
+  await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+    method: 'PATCH',
+    body: { outputData: newData },
+  })
+  await refresh()
+}
+
+async function deleteProfilingProfile(stepKey: string, profileIndex: number) {
+  const result = getStepResult(stepKey)
+  if (!result) return
+  const profiles = profilingOutputProfiles(stepKey)
+  const newData = profiles.filter((_, i) => i !== profileIndex)
+  await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+    method: 'PATCH',
+    body: { outputData: newData },
+  })
+  await refresh()
+}
 
 function startEditOutput(stepKey: string) {
   const result = getStepResult(stepKey)
@@ -99,8 +162,14 @@ function getConfig(stepKey: string) {
       .filter((s: { stepType: string; status: string; systemPromptId: string | null }) =>
         s.stepType === stepKey && s.status === 'COMPLETED' && s.systemPromptId)
       .at(-1)
+
+    // Fallback: use the isSystem prompt for this step (so there's never an empty selection).
+    const systemPrompt = (prompts.value as PromptOption[]).find(
+      p => p.stepType === stepKey && p.isSystem,
+    )
+
     stepConfig.value[stepKey] = {
-      systemPromptId: lastSuccessful?.systemPromptId ?? '',
+      systemPromptId: lastSuccessful?.systemPromptId ?? systemPrompt?.id ?? '',
       contextPartIds: [],
       sellingPointId: '',
       inputData: '{}',
@@ -405,15 +474,8 @@ function selectedPrompt(stepKey: string) {
     .find(p => p.id === id) ?? null
 }
 
-const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
-  'openai/o4-mini-deep-research':  { label: 'o4-mini deep research', cls: 'bg-primary/10 text-primary' },
-  'anthropic/claude-sonnet-4-5': { label: 'Claude Sonnet (latest)', cls: 'bg-success/10 text-success' },
-  'gmail':    { label: 'Gmail API', cls: 'bg-danger/10 text-danger' },
-  'pipeline': { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700' },
-}
-
 function modelBadge(stepKey: string) {
-  return MODEL_BADGE[STEP_MODEL_MAP[stepKey] ?? ''] ?? { label: stepKey, cls: 'bg-gray-100 text-gray-500' }
+  return MODEL_BADGE[STEP_MODEL[stepKey] ?? ''] ?? { label: stepKey, cls: 'bg-gray-100 text-gray-500' }
 }
 </script>
 
@@ -490,19 +552,18 @@ function modelBadge(stepKey: string) {
                   v-model="getConfig(step.key).systemPromptId"
                   class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 >
-                  <option value="">Default prompt</option>
                   <option
                   v-for="p in promptsForStep(step.key)"
                     :key="p.id"
                     :value="p.id"
                   >
-                    {{ p.name }} · {{ p.author.name }}
+                    {{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}{{ p.isSystem ? '' : ' · ' + p.author.name }}
                   </option>
                 </select>
 
-                <!-- Prompt preview trigger -->
+                <!-- Prompt preview trigger – always visible when a prompt is selected -->
                 <div
-                  v-if="selectedPrompt(step.key)"
+                  v-if="getConfig(step.key).systemPromptId"
                   class="relative shrink-0"
                   @mouseenter="promptPreviewStep = step.key"
                   @mouseleave="promptPreviewStep = null"
@@ -638,18 +699,62 @@ function modelBadge(stepKey: string) {
               />
             </div>
 
-            <!-- Run button -->
-            <button
-              :disabled="executingStep !== null"
-              class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-              @click="executeStep(step.key)"
-            >
-              <svg v-if="executingStep === step.key" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              {{ executingStep === step.key ? 'Running…' : 'Run Step' }}
-            </button>
+            <!-- Action buttons row -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- Run button -->
+              <button
+                :disabled="executingStep !== null"
+                class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
+                @click="executeStep(step.key)"
+              >
+                <svg v-if="executingStep === step.key" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                {{ executingStep === step.key ? 'Running…' : 'Run Step' }}
+              </button>
+
+              <!-- AI Import button (steps 1–3 only) -->
+              <button
+                v-if="isAiImportStep(step.key)"
+                type="button"
+                class="border border-violet-300 text-violet-600 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-violet-50 disabled:opacity-50 transition-colors flex items-center gap-2"
+                :disabled="aiImportLoading"
+                @click="toggleAiImport(step.key)"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {{ aiImportStep === step.key ? 'Zavřít import' : 'AI Import' }}
+              </button>
+            </div>
+
+            <!-- AI Import panel -->
+            <div v-if="isAiImportStep(step.key) && aiImportStep === step.key" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 space-y-3">
+              <p class="text-xs font-medium text-violet-700">
+                AI Import – vložte nestrukturovaná data z externího nástroje. Claude je automaticky převede do správného formátu a sloučí s existujícími výsledky.
+              </p>
+              <textarea
+                v-model="aiImportText"
+                rows="7"
+                class="w-full border border-violet-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none bg-white"
+                placeholder="Vložte text, CSV, výstup z externího nástroje…"
+              />
+              <div class="flex gap-2">
+                <button
+                  class="bg-violet-600 text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-1.5"
+                  :disabled="aiImportLoading || !aiImportText.trim()"
+                  @click="runAiImport(step.key)"
+                >
+                  <svg v-if="aiImportLoading" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  {{ aiImportLoading ? 'Zpracovávám…' : 'Importovat a sloučit' }}
+                </button>
+                <button type="button" class="text-xs text-gray-400 hover:text-gray-600 px-3" @click="aiImportStep = null">Zrušit</button>
+              </div>
+            </div>
 
             <!-- Live stream output -->
             <div v-if="executingStep === step.key && streamOutputs[step.key]">
@@ -783,17 +888,16 @@ function modelBadge(stepKey: string) {
 
                 <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
                   <!-- Header -->
-                  <div class="grid grid-cols-[1fr_8rem_6rem_1fr_4rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-                    <span>Partner</span><span>Odvětví</span><span>Hiring</span><span>Minulá spolupráce</span><span class="text-center">Detail</span>
+                  <div class="grid grid-cols-[1fr_8rem_6rem_1fr_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+                    <span>Partner</span><span>Odvětví</span><span>Hiring</span><span>Minulá spolupráce</span><span class="text-center">Detail</span><span></span>
                   </div>
                   <!-- Rows -->
                   <template v-for="(profile, pi) in profilingOutputProfiles(step.key)" :key="pi">
                     <div
-                      class="grid grid-cols-[1fr_8rem_6rem_1fr_4rem] px-3 py-2 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
+                      class="grid grid-cols-[1fr_8rem_6rem_1fr_4rem_2rem] px-3 py-2 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60"
                       :class="profile.error ? 'bg-red-50' : ''"
-                      @click="expandedProfileName = expandedProfileName === profile.name ? null : String(profile.name ?? '')"
                     >
-                      <span class="font-medium text-gray-800 truncate" :title="String(profile.name ?? '')">{{ profile.name }}</span>
+                      <span class="font-medium text-gray-800 truncate cursor-pointer" :title="String(profile.name ?? '')" @click="expandedProfileName = expandedProfileName === profile.name ? null : String(profile.name ?? '')">{{ profile.name }}</span>
                       <span class="text-gray-500 truncate text-[11px]" :title="String(profile.industry ?? '')">{{ profile.industry ?? '–' }}</span>
                       <span class="text-[11px] truncate" :title="String(profile.hiringStatus ?? '')">
                         <span v-if="profile.hiringStatus" class="text-gray-600">{{ String(profile.hiringStatus).slice(0, 30) }}{{ String(profile.hiringStatus).length > 30 ? '…' : '' }}</span>
@@ -804,7 +908,8 @@ function modelBadge(stepKey: string) {
                             ? (profile.pastCollaborations as string[]).join(', ')
                             : (profile.error ? '⚠ error' : '–') }}
                       </span>
-                      <span class="text-center text-primary text-[11px]">{{ expandedProfileName === profile.name ? '▲' : '▼' }}</span>
+                      <span class="text-center text-primary text-[11px] cursor-pointer" @click="expandedProfileName = expandedProfileName === profile.name ? null : String(profile.name ?? '')">{{ expandedProfileName === profile.name ? '▲' : '▼' }}</span>
+                      <button type="button" class="text-gray-300 hover:text-danger transition-colors text-center leading-none" title="Smazat" @click.stop="deleteProfilingProfile(step.key, pi)">✕</button>
                     </div>
 
                     <!-- Expanded detail -->
@@ -913,6 +1018,7 @@ function modelBadge(stepKey: string) {
                       <tr>
                         <th v-for="col in tableColumns(asJsonArray(step.key)!)" :key="col"
                           class="text-left px-3 py-1.5 font-medium text-gray-400 border-b border-gray-100 whitespace-nowrap">{{ col }}</th>
+                        <th class="px-2 py-1.5 border-b border-gray-100 w-6"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -920,6 +1026,9 @@ function modelBadge(stepKey: string) {
                         <td v-for="col in tableColumns(asJsonArray(step.key)!)" :key="col"
                           class="px-3 py-1.5 text-gray-600 align-top max-w-xs">
                           <span class="block truncate" :title="String(row[col] ?? '')">{{ typeof row[col] === 'object' ? JSON.stringify(row[col]) : (row[col] ?? '–') }}</span>
+                        </td>
+                        <td class="px-2 py-1.5 align-top text-center">
+                          <button type="button" class="text-gray-300 hover:text-danger transition-colors" title="Smazat řádek" @click="deleteTableRow(step.key, ri)">✕</button>
                         </td>
                       </tr>
                     </tbody>

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { STEP_SYSTEM_PROMPTS, DEFAULT_PROMPT_NAMES } from '../server/utils/default-prompts'
+import { STEP_SYSTEM_PROMPTS, DEFAULT_PROMPT_NAMES } from '../config/pipeline'
 
 const prisma = new PrismaClient()
 
