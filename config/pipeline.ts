@@ -39,9 +39,9 @@ export const DEEP_RESEARCH_STEPS = new Set(
 
 // ── UI badge metadata per model (used in pipeline page) ───────────────────────
 export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
-  [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',    cls: 'bg-primary/10 text-primary'       },
-  [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet (latest)',   cls: 'bg-success/10 text-success'       },
-  [MODELS.GMAIL]:         { label: 'Gmail API',                cls: 'bg-danger/10 text-danger'         },
+  [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',     cls: 'bg-blue-100 text-blue-700'      },
+  [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet (latest)',    cls: 'bg-emerald-100 text-emerald-700' },
+  [MODELS.GMAIL]:         { label: 'Gmail API',                 cls: 'bg-red-100 text-red-700'         },
   [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
 }
 

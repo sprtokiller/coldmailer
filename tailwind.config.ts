@@ -1,7 +1,15 @@
 import type { Config } from 'tailwindcss'
 
 export default {
-  content: [],
+  content: [
+    './config/**/*.ts',
+  ],
+  safelist: [
+    'bg-blue-100', 'text-blue-700',
+    'bg-emerald-100', 'text-emerald-700',
+    'bg-red-100', 'text-red-700',
+    'bg-violet-100', 'text-violet-700',
+  ],
   theme: {
     extend: {
       colors: {
