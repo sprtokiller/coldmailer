@@ -15,11 +15,11 @@ if (!pipeline) {
 <template>
   <div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">System Strategy Prompt</label>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Systémový prompt</label>
       <div class="flex items-center gap-2">
         <select
           v-model="pipeline.getConfig(step.key).systemPromptId"
-          class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          class="flex-1 border border-gray-200 rounded-lg px-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option
             v-for="p in pipeline.promptsForStep(step.key)"
@@ -61,17 +61,28 @@ if (!pipeline) {
                 target="_blank"
                 class="shrink-0 ml-3 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors font-medium whitespace-nowrap"
               >
-                Edit in Library →
+                Upravit v Knihovně →
               </a>
             </div>
             <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">{{ pipeline.selectedPrompt(step.key)?.content }}</pre>
           </div>
         </div>
+
+        <NuxtLink
+          :to="`/library?action=new&stepType=${step.key}`"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+          title="Vytvořit nový prompt"
+          tabindex="-1"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+        </NuxtLink>
       </div>
     </div>
 
     <div class="mt-4">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Context Parts</label>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Kontextové části</label>
       <div v-if="pipeline.contextParts.length" class="space-y-1 max-h-32 overflow-y-auto">
         <label
           v-for="cp in pipeline.contextParts"
@@ -87,16 +98,16 @@ if (!pipeline) {
           {{ cp.name }}
         </label>
       </div>
-      <p v-else class="text-xs text-gray-400">No context parts in library yet.</p>
+      <p v-else class="text-xs text-gray-400">V knihovně zatím nejsou žádné kontextové části.</p>
     </div>
 
     <div v-if="step.key === 'VALUE_ALIGNMENT'" class="mt-4">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Selling Point</label>
+      <label class="block text-xs font-medium text-gray-500 mb-1">Prodejní argument</label>
       <select
         v-model="pipeline.getConfig(step.key).sellingPointId"
         class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
-        <option value="">None</option>
+        <option value="">Žádný</option>
         <option v-for="sp in pipeline.sellingPoints" :key="sp.id" :value="sp.id">
           {{ sp.name }}
         </option>
@@ -162,9 +173,9 @@ if (!pipeline) {
 
     <div v-if="idx > 0 && step.key !== 'PARTNER_PROFILING'" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
-        Input Data (JSON)
+        Vstupní data (JSON)
         <button type="button" class="ml-2 text-primary hover:underline" @click="pipeline.getConfig(step.key).inputData = pipeline.prevStepOutput(step.key)">
-          ← fill from previous step
+          ← načíst z předchozího kroku
         </button>
       </label>
       <textarea
@@ -185,7 +196,7 @@ if (!pipeline) {
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-        {{ pipeline.executingStep === step.key ? 'Running…' : 'Run Step' }}
+        {{ pipeline.executingStep === step.key ? 'Probíhá…' : 'Spustit krok' }}
       </button>
 
       <button
@@ -246,7 +257,7 @@ if (!pipeline) {
     <div v-if="pipeline.executingStep === step.key && pipeline.streamOutputs[step.key]" class="mt-4">
       <p class="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
         <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block" />
-        Live output
+        Živý výstup
       </p>
       <pre class="bg-gray-50 border border-primary/20 rounded-lg p-3 text-xs overflow-x-auto max-h-80 whitespace-pre-wrap">{{ pipeline.streamOutputs[step.key] }}</pre>
     </div>
@@ -275,10 +286,10 @@ if (!pipeline) {
     </div>
 
     <div v-if="step.key === 'PARTNER_IDENTIFICATION' && pipeline.partnerProgress[step.key]?.length" class="mt-2">
-      <p class="text-xs font-medium text-gray-500 mb-2">Progress položek</p>
+      <p class="text-xs font-medium text-gray-500 mb-2">Průběh položek</p>
       <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
         <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Položka</span><span>Search term</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span><span class="text-center">Status</span>
+          <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span><span class="text-center">Stav</span>
         </div>
         <div
           v-for="pi in pipeline.partnerProgress[step.key]"

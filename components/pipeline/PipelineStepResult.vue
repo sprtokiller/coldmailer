@@ -9,17 +9,22 @@ const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipeline
 if (!pipeline) {
   throw new Error('Pipeline run context is missing')
 }
+
+function renderLinks(text: string | null | undefined): string {
+  if (!text) return ''
+  return String(text).replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">$1</a>')
+}
 </script>
 
 <template>
   <div v-if="pipeline.getStepResult(step.key)" class="mt-1">
     <div class="flex items-center justify-between mb-2">
       <p class="text-xs font-medium text-gray-500">
-        Saved result ·
+        Uložený výsledek ·
         <span :class="pipeline.stepResultStatus(step.key) === 'COMPLETED' ? 'text-success' : 'text-danger'">
           {{ pipeline.stepResultStatus(step.key) }}
         </span>
-        · by {{ pipeline.stepResultRunnerName(step.key) }}
+        · od {{ pipeline.stepResultRunnerName(step.key) }}
         <span v-if="pipeline.stepResultPromptName(step.key)" class="ml-1 text-gray-400">
           · {{ pipeline.stepResultPromptName(step.key) }}
         </span>
@@ -29,7 +34,7 @@ if (!pipeline) {
         class="text-xs text-gray-400 hover:text-primary transition-colors ml-3 shrink-0"
         @click="pipeline.startEditOutput(step.key)"
       >
-        Edit output
+        Upravit výstup
       </button>
     </div>
 
@@ -59,10 +64,10 @@ if (!pipeline) {
           class="bg-primary text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
           @click="pipeline.requestSaveOutput(step.key)"
         >
-          Save
+          Uložit
         </button>
         <button class="text-xs text-gray-400 hover:text-gray-600 px-3" @click="pipeline.cancelEditOutput()">
-          Cancel
+          Zrušit
         </button>
       </div>
     </template>
@@ -70,7 +75,7 @@ if (!pipeline) {
     <template v-else-if="step.key === 'PARTNER_PROFILING'">
       <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
         <button
-          v-for="m in [['table', 'Table'], ['raw', 'Raw']]"
+          v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
           :key="m[0]"
           class="px-3 py-1 rounded-lg font-medium transition-all"
           :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
@@ -84,7 +89,7 @@ if (!pipeline) {
 
       <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
         <div class="grid grid-cols-[1fr_8rem_6rem_1fr_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>Partner</span><span>Odvětví</span><span>Hiring</span><span>Minulá spolupráce</span><span class="text-center">Detail</span><span></span>
+          <span>Partner</span><span>Odvětví</span><span>Nábor</span><span>Minulá spolupráce</span><span class="text-center">Detail</span><span></span>
         </div>
         <template v-for="(profile, pi) in pipeline.profilingOutputProfiles(step.key)" :key="pi">
           <div
@@ -121,21 +126,21 @@ if (!pipeline) {
             <div v-if="profile.error" class="text-danger">{{ profile.error }}</div>
             <template v-else>
               <div v-if="profile.summary">
-                <p class="font-medium text-gray-600 mb-0.5">Summary</p>
-                <p class="text-gray-700 leading-relaxed">{{ profile.summary }}</p>
+                <p class="font-medium text-gray-600 mb-0.5">Shrnutí</p>
+                <p class="text-gray-700 leading-relaxed" v-html="renderLinks(profile.summary as string)" />
               </div>
               <div v-if="profile.activities">
                 <p class="font-medium text-gray-600 mb-0.5">Aktivity</p>
-                <p class="text-gray-600 leading-relaxed">{{ profile.activities }}</p>
+                <p class="text-gray-600 leading-relaxed" v-html="renderLinks(profile.activities as string)" />
               </div>
               <div v-if="profile.hiringStatus">
                 <p class="font-medium text-gray-600 mb-0.5">Nábor zaměstnanců</p>
-                <p class="text-gray-600">{{ profile.hiringStatus }}</p>
+                <p class="text-gray-600" v-html="renderLinks(profile.hiringStatus as string)" />
               </div>
               <div v-if="Array.isArray(profile.pastCollaborations) && (profile.pastCollaborations as string[]).length">
                 <p class="font-medium text-gray-600 mb-1">Minulá spolupráce</p>
                 <ul class="space-y-0.5">
-                  <li v-for="c in (profile.pastCollaborations as string[])" :key="c" class="text-gray-600">· {{ c }}</li>
+                  <li v-for="c in (profile.pastCollaborations as string[])" :key="c" class="text-gray-600" v-html="'· ' + renderLinks(c)" />
                 </ul>
               </div>
             </template>
@@ -148,7 +153,7 @@ if (!pipeline) {
     <template v-else-if="step.key === 'PARTNER_IDENTIFICATION'">
       <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
         <button
-          v-for="m in [['item', 'Item-centric'], ['candidates', 'Candidates'], ['raw', 'Raw']]"
+          v-for="m in [['item', 'Podle položek'], ['candidates', 'Kandidáti'], ['raw', 'Raw']]"
           :key="m[0]"
           class="px-3 py-1 rounded-lg font-medium transition-all"
           :class="pipeline.getOutputMode(step.key, 'item') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
@@ -160,7 +165,7 @@ if (!pipeline) {
 
       <div v-if="pipeline.getOutputMode(step.key, 'item') === 'item'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
         <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Položka</span><span>Search term</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span>
+          <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span>
         </div>
         <div
           v-for="(pi, idx) in pipeline.partnerItems(step.key)"

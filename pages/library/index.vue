@@ -99,6 +99,14 @@ function resetForm() {
   showForm.value = false
 }
 
+const route = useRoute()
+onMounted(() => {
+  if (route.query.action === 'new' && typeof route.query.stepType === 'string') {
+    form.value.stepType = route.query.stepType
+    showForm.value = true
+  }
+})
+
 function startEdit(item: LibraryItem) {
   editingId.value = item.id
   form.value.name = item.name
@@ -173,10 +181,10 @@ const authorOptions = computed(() => {
 })
 
 const tabs: { key: Tab; label: string }[] = [
-  { key: 'prompts', label: 'Strategy Prompts' },
-  { key: 'context', label: 'Context Parts' },
-  { key: 'selling', label: 'Selling Points' },
-  { key: 'drafts', label: 'Email Drafts' },
+  { key: 'prompts', label: 'Systémové prompty' },
+  { key: 'context', label: 'Kontextové části' },
+  { key: 'selling', label: 'Prodejní argumenty' },
+  { key: 'drafts', label: 'E-mailové šablony' },
 ]
 </script>
 
@@ -184,14 +192,14 @@ const tabs: { key: Tab; label: string }[] = [
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-semibold text-gray-800">Library</h1>
-        <p class="text-sm text-gray-400 mt-1">Shared strategy prompts, context, selling points, and templates.</p>
+        <h1 class="text-2xl font-semibold text-gray-800">Knihovna</h1>
+        <p class="text-sm text-gray-400 mt-1">Sdílené prompty, kontext, prodejní argumenty a šablony.</p>
       </div>
       <button
         class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
         @click="showForm = !showForm"
       >
-        + New
+        + Nový
       </button>
     </div>
 
@@ -208,15 +216,15 @@ const tabs: { key: Tab; label: string }[] = [
     </div>
 
     <div v-if="showForm" class="bg-white border border-primary/30 rounded-xl p-5 mb-6">
-      <h3 class="font-medium text-gray-800 mb-4">{{ editingId ? 'Edit' : 'New' }} {{ tabs.find(t => t.key === tab)?.label.replace(/s$/, '') }}</h3>
+      <h3 class="font-medium text-gray-800 mb-4">{{ editingId ? 'Upravit' : 'Nový' }} {{ tabs.find(t => t.key === tab)?.label }}</h3>
       <form class="space-y-3" @submit.prevent="save">
         <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1">Name</label>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Název</label>
           <input v-model="form.name" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
 
         <div v-if="tab === 'prompts'">
-          <label class="block text-xs font-medium text-gray-500 mb-1">Step Type</label>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Typ kroku</label>
           <select v-model="form.stepType" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
           </select>
@@ -224,26 +232,26 @@ const tabs: { key: Tab; label: string }[] = [
 
         <template v-if="tab === 'drafts'">
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Subject template</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Šablona předmětu</label>
             <input v-model="form.subject" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Body template</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Šablona těla e-mailu</label>
             <textarea v-model="form.body" rows="6" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
           </div>
         </template>
         <template v-else>
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Content</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Obsah</label>
             <textarea v-model="form.content" rows="5" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
           </div>
         </template>
 
         <div class="flex gap-2 pt-1">
           <button type="submit" :disabled="saving" class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity">
-            {{ saving ? 'Saving…' : 'Save' }}
+            {{ saving ? 'Ukládám…' : 'Uložit' }}
           </button>
-          <button type="button" class="text-sm text-gray-400 hover:text-gray-600 px-3" @click="resetForm">Cancel</button>
+          <button type="button" class="text-sm text-gray-400 hover:text-gray-600 px-3" @click="resetForm">Zrušit</button>
         </div>
       </form>
     </div>
@@ -255,7 +263,7 @@ const tabs: { key: Tab; label: string }[] = [
         v-model="filterType"
         class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
-        <option value="">All step types</option>
+        <option value="">Všechny typy kroků</option>
         <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
       </select>
       <select
@@ -263,13 +271,13 @@ const tabs: { key: Tab; label: string }[] = [
         v-model="filterAuthor"
         class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
-        <option value="">All authors</option>
+        <option value="">Všichni autoři</option>
         <option v-for="a in authorOptions" :key="a" :value="a">{{ a }}</option>
       </select>
     </div>
 
     <div v-if="currentItems.length === 0" class="text-center py-16 text-gray-400 text-sm">
-      {{ allItems.length === 0 ? 'Nothing here yet. Create one with the + New button.' : 'No items match the current filters.' }}
+      {{ allItems.length === 0 ? 'Zatím nic. Vytvořte položku tlačítkem + Nový.' : 'Žádné položky neodpovídají aktuálním filtrům.' }}
     </div>
 
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -279,39 +287,33 @@ const tabs: { key: Tab; label: string }[] = [
         class="bg-white rounded-xl border p-5 transition-colors"
         :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
       >
-        <div class="flex items-start justify-between mb-2">
-          <h3 class="font-medium text-gray-800 text-sm">{{ item.name }}</h3>
-          <div class="flex items-center gap-1 ml-2 shrink-0">
-            <!-- System badge -->
-            <span v-if="item.isSystem" class="text-xs text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
-              System
-            </span>
-            <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-              {{ item.stepType.replace(/_/g, ' ') }}
-            </span>
-            <!-- Allow editing for regular prompts (own author) and system prompts (any user) -->
-            <button
-              v-if="tab === 'prompts'"
-              class="text-xs text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
-              @click="startEdit(item)"
-            >
-              Edit
-            </button>
-          </div>
+        <h3 class="font-medium text-gray-800 text-sm mb-1.5">{{ item.name }}</h3>
+        <div class="flex items-center gap-1.5 flex-wrap mb-2">
+          <span v-if="item.isSystem" class="text-xs text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+            Systémový
+          </span>
+          <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+            {{ item.stepType.replace(/_/g, ' ') }}
+          </span>
+          <span class="inline-flex items-center gap-1 text-xs text-gray-400">
+            <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
+            <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" referrerpolicy="no-referrer" />
+            {{ item.isSystem ? 'Systém' : item.author?.name }}
+            · {{ new Date(item.createdAt).toLocaleDateString('cs-CZ') }}
+          </span>
+          <button
+            v-if="tab === 'prompts'"
+            class="text-xs text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors ml-auto"
+            @click="startEdit(item)"
+          >
+            Upravit
+          </button>
         </div>
-        <p class="text-xs text-gray-500 line-clamp-3 mb-3 font-mono">
+        <p class="text-xs text-gray-500 line-clamp-3 font-mono">
           {{ item.content ?? item.subject }}
         </p>
-        <div class="flex items-center gap-2">
-          <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
-          <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" />
-          <span class="text-xs text-gray-400">
-            {{ item.isSystem ? 'System' : item.author?.name }}
-            · {{ new Date(item.createdAt).toLocaleDateString('en-US') }}
-          </span>
-        </div>
         <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
-          ↗ derived from another document
+          ↗ odvozeno z jiného dokumentu
         </div>
       </div>
     </div>

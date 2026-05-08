@@ -1,13 +1,13 @@
 import { STEP_MODEL, MODEL_BADGE, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
 export const STEPS = [
-  { key: 'MARKET_SCANNING', label: 'Market Scanning', description: 'Find relevant high school competitions, events, and channels.' },
-  { key: 'PARTNER_IDENTIFICATION', label: 'Partner Identification', description: 'SerpAPI + Playwright + AI – iterates each market item to find partners.' },
-  { key: 'PARTNER_PROFILING', label: 'Partner Profiling', description: 'Deep-dive research on a specific partner.' },
-  { key: 'CONTACT_DISCOVERY', label: 'Contact Discovery', description: 'Find the right person to reach out to.' },
-  { key: 'VALUE_ALIGNMENT', label: 'Value Alignment', description: 'Rank selling points by relevance to this partner.' },
-  { key: 'OUTREACH_PREPARATION', label: 'Outreach Preparation', description: 'Generate a tailored email draft.' },
-  { key: 'OUTREACH_EXECUTION', label: 'Outreach Execution', description: 'Create draft directly in Gmail.' },
+  { key: 'MARKET_SCANNING', label: 'Market Scanning', description: 'Najde relevantní kanály (např. středoškolské soutěže a jiné akce).' },
+  { key: 'PARTNER_IDENTIFICATION', label: 'Partner Identification', description: 'SerpAPI + Playwright + AI – prochází každou tržní položku a hledá partnery.' },
+  { key: 'PARTNER_PROFILING', label: 'Partner Profiling', description: 'Hloubkový průzkum konkrétního partnera.' },
+  { key: 'CONTACT_DISCOVERY', label: 'Contact Discovery', description: 'Najde správnou osobu k oslovení.' },
+  { key: 'VALUE_ALIGNMENT', label: 'Value Alignment', description: 'Seřadí prodejní argumenty podle relevance pro partnera.' },
+  { key: 'OUTREACH_PREPARATION', label: 'Outreach Preparation', description: 'Vygeneruje přizpůsobený návrh e-mailu.' },
+  { key: 'OUTREACH_EXECUTION', label: 'Outreach Execution', description: 'Vytvoří návrh přímo v Gmailu.' },
 ] as const
 
 export type StepKey = typeof STEPS[number]['key']
@@ -216,11 +216,21 @@ export async function usePipelineRunPage() {
 
       const systemPrompt = prompts.value.find(p => p.stepType === stepKey && p.isSystem)
 
+      const idx = STEPS.findIndex(s => s.key === stepKey)
+      let inputData = '{}'
+      if (idx > 0) {
+        const prevKey = STEPS[idx - 1].key
+        const prevResult = run.value?.steps.findLast(s => s.stepType === prevKey)
+        if (prevResult?.outputData) {
+          inputData = JSON.stringify(prevResult.outputData, null, 2)
+        }
+      }
+
       stepConfig.value[stepKey] = {
         systemPromptId: lastSuccessful?.systemPromptId ?? systemPrompt?.id ?? '',
         contextPartIds: [],
         sellingPointId: '',
-        inputData: '{}',
+        inputData,
       }
     }
     return stepConfig.value[stepKey]
@@ -580,14 +590,14 @@ export async function usePipelineRunPage() {
       })
     } catch {
       executingStep.value = null
-      alert('Network error — could not reach the server.')
+      alert('Chyba sítě — nelze se připojit k serveru.')
       return
     }
 
     if (!response.ok) {
       executingStep.value = null
       const text = await response.text().catch(() => response.statusText)
-      alert(`Failed to start step: ${text}`)
+      alert(`Nepodařilo se spustit krok: ${text}`)
       return
     }
 

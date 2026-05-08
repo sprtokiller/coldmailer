@@ -27,7 +27,7 @@ async function logout() {
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"
           >
-            Library
+            Knihovna
           </NuxtLink>
         </template>
       </div>
@@ -39,6 +39,7 @@ async function logout() {
           :src="user.image"
           :alt="user.name"
           class="w-8 h-8 rounded-full object-cover ring-2 ring-gray-100"
+          referrerpolicy="no-referrer"
         />
         <div
           v-else
@@ -50,7 +51,7 @@ async function logout() {
           class="text-xs text-gray-400 hover:text-danger transition-colors"
           @click="logout"
         >
-          Sign out
+          Odhlásit se
         </button>
       </div>
     </div>
