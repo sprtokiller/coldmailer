@@ -11,14 +11,84 @@ interface ImportBody {
 
 const SUPPORTED_STEPS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING']
 
-function parseAIOutput(text: string): unknown {
-  const match = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/)
-  const raw = match ? match[1] : text.trim()
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
+function extractFromFence(text: string): string {
+  const openMatch = text.match(/```(?:json)?\s*\n?/)
+  if (!openMatch || openMatch.index === undefined) return text.trim()
+  const contentStart = openMatch.index + openMatch[0].length
+  const afterFence = text.slice(contentStart)
+  // Require the closing fence to be at line start to avoid matching backticks inside strings
+  const closeMatch = afterFence.match(/\n```/)
+  if (closeMatch?.index !== undefined) return afterFence.slice(0, closeMatch.index).trim()
+  return afterFence.trim() // unclosed fence — keep everything after the opening
+}
+
+// Removes deep-research citation annotations like 【7†L76-L79】 that models copy verbatim.
+function stripCitationMarks(text: string): string {
+  return text.replace(/【[^】]*】/g, '')
+}
+
+// Strips trailing non-JSON content and salvages truncated arrays by closing open structures.
+function repairJSON(text: string): string {
+  let inString = false
+  let escape = false
+  let lastCompleteItemEnd = -1
+  let rootIsArray = false
+  const openStack: string[] = []
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (escape) { escape = false; continue }
+    if (inString) {
+      if (ch === '\\') escape = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') { inString = true; continue }
+    if (ch === '[' || ch === '{') {
+      if (openStack.length === 0 && ch === '[') rootIsArray = true
+      openStack.push(ch)
+    } else if (ch === ']' || ch === '}') {
+      openStack.pop()
+      if (rootIsArray && openStack.length === 1 && ch === '}') lastCompleteItemEnd = i + 1
+      // JSON is complete — strip any trailing content (e.g. uncleaned code fence)
+      else if (openStack.length === 0) return text.slice(0, i + 1)
+    }
   }
+
+  if (!rootIsArray) return text
+
+  // Prefer the safe path: return only fully-completed items
+  if (lastCompleteItemEnd > 0) return text.slice(0, lastCompleteItemEnd) + ']'
+
+  // No complete item — try closing the open structure (truncated mid-field)
+  let suffix = inString ? '"' : ''
+  for (let i = openStack.length - 1; i >= 0; i--) suffix += openStack[i] === '[' ? ']' : '}'
+  return text + suffix
+}
+
+// Removes trailing commas before ] or } — a common LLM formatting mistake.
+function stripTrailingCommas(text: string): string {
+  return text.replace(/,(\s*[}\]])/g, '$1')
+}
+
+function parseAIOutput(text: string): { data: unknown; error: null } | { data: null; error: string } {
+  const seen = new Set<string>()
+  const candidates: string[] = []
+  const add = (s: string) => { const t = s.trim(); if (t && !seen.has(t)) { seen.add(t); candidates.push(t) } }
+
+  add(extractFromFence(text))
+  const jsonStart = text.search(/[\[{]/)
+  if (jsonStart >= 0) add(text.slice(jsonStart))
+  add(text)
+
+  const errors: string[] = []
+  for (const raw of candidates) {
+    for (const candidate of [raw, stripTrailingCommas(raw)]) {
+      try { return { data: JSON.parse(candidate), error: null } } catch (e) { errors.push(`direct: ${e}`) }
+      try { return { data: JSON.parse(repairJSON(candidate)), error: null } } catch (e) { errors.push(`repaired: ${e}`) }
+    }
+  }
+  return { data: null, error: errors.join(' | ') }
 }
 
 function mergeScalar(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
@@ -52,6 +122,35 @@ function mergeContacts(
     map.set(k, map.has(k) ? mergeScalar(map.get(k)!, c) : c)
   }
   return [...map.values()]
+}
+
+// Strips legal suffixes, parenthetical qualifiers and punctuation so that
+// "EPAM" matches "EPAM Systems (Czech Republic) s.r.o."
+function normalizeCompanyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')  // remove (Czech Republic) etc.
+    .replace(/\b(s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.\s*s\s*r\.?\s*o\.?|z\.?\s*s\.?|o\.?\s*p\.?\s*s\.?|ltd\.?|inc\.?|llc\.?|gmbh\.?|corp\.?|co\.?|group|holding|systems|services|solutions)\b/g, '')
+    .replace(/[,.\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Returns the existing map key that fuzzy-matches newKey, or null if none found.
+function fuzzyMatchCompany(
+  newKey: string,
+  recordMap: Map<string, Record<string, unknown>>,
+): string | null {
+  const normNew = normalizeCompanyName(newKey)
+  if (!normNew) return null
+  for (const existingKey of recordMap.keys()) {
+    const normExisting = normalizeCompanyName(existingKey)
+    if (!normExisting) continue
+    if (normExisting === normNew) return existingKey
+    // one name is a prefix/substring of the other
+    if (normExisting.startsWith(normNew) || normNew.startsWith(normExisting)) return existingKey
+  }
+  return null
 }
 
 function mergeOutputData(existing: unknown, newData: unknown, stepType: string): unknown {
@@ -108,16 +207,19 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
   for (const item of newItems as Record<string, unknown>[]) {
     const key = String(item[keyField] ?? item.name ?? '').toLowerCase()
     if (!key) continue
-    if (recordMap.has(key)) {
-      const ex = recordMap.get(key)!
+    const matchKey = recordMap.has(key)
+      ? key
+      : (stepType === 'PARTNER_PROFILING' ? fuzzyMatchCompany(key, recordMap) : null)
+    if (matchKey !== null) {
+      const ex = recordMap.get(matchKey)!
       if (stepType === 'PARTNER_PROFILING') {
         const mergedContacts = mergeContacts(
           Array.isArray(ex.contacts) ? ex.contacts as Record<string, unknown>[] : [],
           Array.isArray(item.contacts) ? item.contacts as Record<string, unknown>[] : [],
         )
-        recordMap.set(key, { ...mergeScalar(ex, item), contacts: mergedContacts })
+        recordMap.set(matchKey, { ...mergeScalar(ex, item), contacts: mergedContacts })
       } else {
-        recordMap.set(key, mergeScalar(ex, item))
+        recordMap.set(matchKey, mergeScalar(ex, item))
       }
     } else {
       recordMap.set(key, item)
@@ -170,7 +272,9 @@ PRAVIDLA:
 2. Vrať POUZE platný JSON uvnitř \`\`\`json bloku kódu.
 3. NEZAHRNUJ položky, které již existují v poskytnutých stávajících datech.
 4. VŽDY vrať JSON POLE (i pokud jde o jediný záznam). Je to nutné pro správné sloučení více importů. Pokud schéma výše říká "single object", zabal ho do pole.
-5. VŠECHNA textová pole (popisky, shrnutí, poznámky, označení) piš VÝHRADNĚ V ČEŠTINĚ. Vlastní jména, URL, e-maily a technické identifikátory ponechej v původní podobě.`
+5. VŠECHNA textová pole (popisky, shrnutí, poznámky, označení) piš VÝHRADNĚ V ČEŠTINĚ. Vlastní jména, URL, e-maily a technické identifikátory ponechej v původní podobě.
+6. VŽDY dokonči JSON strukturu — uzavři všechna pole, objekty a řetězce. Pokud by výstup přesahoval limit tokenů, raději SNIŽ počet vrácených položek, ale NIKDY nevracej neúplný JSON. Méně kompletních záznamů je lepší než více neúplných.
+7. Pokud vstupní text obsahuje citační značky ve formátu 【N†LX-LY】 nebo jiné anotace nástrojů deep research, NEZAHRNUJ je do výstupního JSON — zcela je vynech ze všech textových polí (sizeNote, summary, note, activities apod.).`
 
   const existingContext = existingData
     ? `\n\nStávající data (pro deduplikaci — NEOPAKUJ tyto záznamy):\n\`\`\`json\n${JSON.stringify(existingData, null, 2).slice(0, 3000)}\n\`\`\``
@@ -186,17 +290,23 @@ PRAVIDLA:
 
   const response = await client.chat.completions.create({
     model: MODELS.CLAUDE_SONNET,
+    max_tokens: 8192,
     messages: [
       { role: 'system', content: importSystemPrompt },
       { role: 'user', content: userMessage },
     ],
   })
 
+  const finishReason = response.choices[0]?.finish_reason
   const rawOutput = response.choices[0]?.message?.content ?? ''
-  const newData = parseAIOutput(rawOutput)
+  const { data: newData, error: parseError } = parseAIOutput(stripCitationMarks(rawOutput))
 
   if (newData === null) {
-    throw createError({ statusCode: 422, statusMessage: `AI returned invalid JSON. Raw: ${rawOutput.slice(0, 300)}` })
+    console.error('[import-ai] parse failed. finish_reason=%s length=%d parseError=%s\nRAW OUTPUT:\n%s', finishReason, rawOutput.length, parseError, rawOutput)
+    throw createError({
+      statusCode: 422,
+      statusMessage: `AI returned invalid JSON (length=${rawOutput.length}, finish_reason=${finishReason}, error=${parseError?.slice(0, 120)})`,
+    })
   }
 
   const mergedData = mergeOutputData(existingData, newData, body.stepType)

@@ -42,27 +42,27 @@ if (!pipeline) {
 
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
-          <p class="font-medium text-gray-800">{{ step.label }}</p>
+          <span class="font-medium text-gray-800">{{ step.label }}</span>
           <span class="text-xs px-2 py-0.5 rounded-full font-medium" :class="pipeline.modelBadge(step.key).cls">
             {{ pipeline.modelBadge(step.key).label }}
           </span>
         </div>
-        <p class="text-xs text-gray-400 mt-0.5">{{ step.description }}</p>
-        <div v-if="pipeline.getStepResult(step.key)" class="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
-          <p class="text-xs font-medium text-gray-500">
+        <span class="block text-xs text-gray-400 mt-0.5">{{ step.description }}</span>
+        <div v-if="pipeline.getStepResult(step.key) && pipeline.activeStep !== step.key" class="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+          <span class="text-xs font-medium text-gray-500">
             <span v-if="pipeline.stepResultRunnerName(step.key)">{{ pipeline.stepResultRunnerName(step.key) }}</span>
             <span v-if="pipeline.stepResultStatus(step.key)" class="ml-2">
               <span :class="pipeline.stepResultStatus(step.key) === 'COMPLETED' ? 'text-success' : 'text-danger'">
                 {{ pipeline.stepResultStatus(step.key) }}
               </span>
             </span>
-          </p>
-          <button
-            class="text-xs text-gray-400 hover:text-primary transition-colors shrink-0"
+          </span>
+          <span
+            class="text-xs text-gray-400 hover:text-primary transition-colors shrink-0 cursor-pointer"
             @click.stop="pipeline.startEditOutput(step.key)"
           >
             Upravit
-          </button>
+          </span>
         </div>
       </div>
 
