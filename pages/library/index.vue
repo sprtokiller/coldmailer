@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+
 definePageMeta({ middleware: 'auth' })
 
 type Tab = 'prompts' | 'context' | 'selling' | 'drafts'
@@ -27,59 +29,7 @@ const STEP_TYPES = [
   'CONTACT_DISCOVERY', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION',
 ]
 
-const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = {
-  MARKET_SCANNING: `You are a market research expert with live web access. Search for high school competitions, events, and channels active in the Czech Republic.
-
-Return a JSON array. Each item must contain exactly these fields:
-- url: string — homepage of the competition/event/channel
-- name: string — full official name (in the original language)
-- type: string — category, e.g. "programming", "mathematics", "robotics", "science", "language", "business"
-- level: string — one of "local" | "regional" | "national" | "international"
-- status: string — one of "active" | "inactive" | "unknown"
-- frequency: string — e.g. "ročně", "pololetně", "jednorázová"
-- organizer: string — name of the organizing institution
-- description: string — 1–2 sentences describing the competition and what participants do
-- target_group: string — primary audience, e.g. "SŠ", "ZŠ", "SŠ+ZŠ"
-
-Return ONLY the JSON array, no other text or markdown outside the code block.`,
-
-  PARTNER_PROFILING: `You are a due-diligence analyst with live web access. Research the given potential partnership candidate in depth and return a structured JSON report.
-
-Use your web search capability to look for:
-1. Their official website — about page, services, mission, target audience
-2. LinkedIn company page — employee count, recent posts/news, company updates
-3. Instagram and other social media — community events, sponsorships they appear in
-4. Press mentions and news articles about their partnerships, sponsorships, prizes
-5. Evidence of past involvement in events, competitions, education, or charity
-6. Whether the entity is an independent company or a subsidiary/brand of a larger corporation
-
-Return a SINGLE JSON object inside a \`\`\`json code block:
-
-\`\`\`json
-{
-  "name": "string",
-  "website": "string|null",
-  "linkedinUrl": "string|null",
-  "instagramUrl": "string|null",
-  "industry": "string",
-  "size": "micro|small|medium|large|enterprise",
-  "sizeNote": "string — evidence, e.g. '~120 employees per LinkedIn 2024'",
-  "parentCompany": "string|null",
-  "summary": "string — 3–5 sentences about what they do and their positioning",
-  "activities": "string — detailed products/services/activities",
-  "recentHighlights": ["string — recent news or milestone (max 5)"],
-  "partnershipStyle": ["string — e.g. 'generální partner', 'věcné ceny'"],
-  "partnershipEvidence": [
-    { "event": "string", "role": "string", "year": "string|null", "source": "string|null" }
-  ],
-  "socialInvolvement": "string",
-  "researchNotes": "string"
-}
-\`\`\`
-
-Size: micro <10, small 10–50, medium 50–500, large 500–5000, enterprise >5000 employees.
-Return ONLY the JSON object inside the code block.`,
-}
+const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
 const showForm = ref(false)
 const saving = ref(false)
@@ -105,6 +55,13 @@ onMounted(() => {
     form.value.stepType = route.query.stepType
     showForm.value = true
   }
+  if (typeof route.query.editId === 'string') {
+    const item = (prompts.value as LibraryItem[]).find(p => p.id === route.query.editId)
+    if (item) {
+      tab.value = 'prompts'
+      startEdit(item)
+    }
+  }
 })
 
 function startEdit(item: LibraryItem) {
@@ -122,7 +79,7 @@ watch(() => form.value.stepType, (stepType) => {
 })
 
 watch(showForm, (visible) => {
-  if (visible && tab.value === 'prompts') {
+  if (visible && tab.value === 'prompts' && !editingId.value) {
     form.value.content = STEP_CONTENT_TEMPLATES[form.value.stepType] ?? ''
   }
 })

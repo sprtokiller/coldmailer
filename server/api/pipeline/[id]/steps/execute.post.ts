@@ -18,12 +18,12 @@ interface ExecuteBody {
 
 
 const USER_MESSAGE_LABELS: Record<string, string> = {
-  MARKET_SCANNING: 'Research this topic/industry',
-  PARTNER_IDENTIFICATION: 'Identify partners from these markets',
-  PARTNER_PROFILING: 'Profile this organization',
-  CONTACT_DISCOVERY: 'Find contacts at this organization',
-  VALUE_ALIGNMENT: 'Align these selling points with this partner',
-  OUTREACH_PREPARATION: 'Prepare outreach using this data',
+  MARKET_SCANNING:        'Prozkoumej toto téma/odvětví',
+  PARTNER_IDENTIFICATION: 'Identifikuj partnery z těchto trhů',
+  PARTNER_PROFILING:      'Profiluj tuto organizaci',
+  CONTACT_DISCOVERY:      'Najdi kontakty v této organizaci',
+  VALUE_ALIGNMENT:        'Srovnej tyto prodejní argumenty s partnerem',
+  OUTREACH_PREPARATION:   'Připrav oslovení na základě těchto dat',
 }
 
 export default defineEventHandler(async (event) => {
@@ -141,13 +141,13 @@ export default defineEventHandler(async (event) => {
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
               const userMsg = [
-                'Research this potential partnership candidate and return the structured JSON defined in the system prompt:',
+                'Prozkoumej tohoto kandidáta na partnerství a vrať strukturovaný JSON definovaný v systémovém promptu. Veškerá textová pole piš v češtině.',
                 '',
-                `Name: ${ip.name}`,
-                db?.website     ? `Website: ${db.website}` : null,
-                db?.description ? `Known description: ${db.description}` : null,
-                db?.type        ? `Partnership type hint: ${db.type}` : null,
-                ip.frequency    ? `Found in ${ip.frequency} context(s): ${(ip.itemNames ?? []).join(', ')}` : null,
+                `Název: ${ip.name}`,
+                db?.website     ? `Web: ${db.website}` : null,
+                db?.description ? `Popis: ${db.description}` : null,
+                db?.type        ? `Typ partnerství: ${db.type}` : null,
+                ip.frequency    ? `Nalezen v ${ip.frequency} kontextu/kontextech: ${(ip.itemNames ?? []).join(', ')}` : null,
               ].filter(Boolean).join('\n')
 
               try {

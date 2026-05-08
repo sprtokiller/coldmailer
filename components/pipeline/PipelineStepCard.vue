@@ -48,6 +48,22 @@ if (!pipeline) {
           </span>
         </div>
         <p class="text-xs text-gray-400 mt-0.5">{{ step.description }}</p>
+        <div v-if="pipeline.getStepResult(step.key)" class="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+          <p class="text-xs font-medium text-gray-500">
+            <span v-if="pipeline.stepResultRunnerName(step.key)">{{ pipeline.stepResultRunnerName(step.key) }}</span>
+            <span v-if="pipeline.stepResultStatus(step.key)" class="ml-2">
+              <span :class="pipeline.stepResultStatus(step.key) === 'COMPLETED' ? 'text-success' : 'text-danger'">
+                {{ pipeline.stepResultStatus(step.key) }}
+              </span>
+            </span>
+          </p>
+          <button
+            class="text-xs text-gray-400 hover:text-primary transition-colors shrink-0"
+            @click.stop="pipeline.startEditOutput(step.key)"
+          >
+            Upravit
+          </button>
+        </div>
       </div>
 
       <svg

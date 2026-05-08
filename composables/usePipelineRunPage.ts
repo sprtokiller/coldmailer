@@ -3,8 +3,7 @@ import { STEP_MODEL, MODEL_BADGE, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 export const STEPS = [
   { key: 'MARKET_SCANNING', label: 'Market Scanning', description: 'Najde relevantní kanály (např. středoškolské soutěže a jiné akce).' },
   { key: 'PARTNER_IDENTIFICATION', label: 'Partner Identification', description: 'SerpAPI + Playwright + AI – prochází každou tržní položku a hledá partnery.' },
-  { key: 'PARTNER_PROFILING', label: 'Partner Profiling', description: 'Hloubkový průzkum konkrétního partnera.' },
-  { key: 'CONTACT_DISCOVERY', label: 'Contact Discovery', description: 'Najde správnou osobu k oslovení.' },
+  { key: 'PARTNER_PROFILING', label: 'Partner Profiling', description: 'Hloubkový průzkum konkrétního partnera včetně nalezení kontaktních osob.' },
   { key: 'VALUE_ALIGNMENT', label: 'Value Alignment', description: 'Seřadí prodejní argumenty podle relevance pro partnera.' },
   { key: 'OUTREACH_PREPARATION', label: 'Outreach Preparation', description: 'Vygeneruje přizpůsobený návrh e-mailu.' },
   { key: 'OUTREACH_EXECUTION', label: 'Outreach Execution', description: 'Vytvoří návrh přímo v Gmailu.' },
@@ -100,10 +99,21 @@ interface PipelineRunContext {
     error?: string
     profile?: Record<string, unknown>
   }>>
+  contactDiscoveryProgress: Record<string, Array<{
+    index: number
+    total: number
+    name: string
+    status: 'processing' | 'done' | 'error'
+    error?: string
+    contactCount?: number
+  }>>
   step3SelectedIds: Record<string, boolean>
   step3FreqFilter: number
   step3Initialized: boolean
+  step4SelectedIds: Record<string, boolean>
+  step4Initialized: boolean
   expandedProfileName: string | null
+  expandedContactPartnerName: string | null
   promptPreviewStep: string | null
   outputViewMode: Record<string, string>
   copiedPromptKey: string | null
@@ -113,6 +123,7 @@ interface PipelineRunContext {
   toggleAiImport: (stepKey: string) => void
   runAiImport: (stepKey: string) => Promise<void>
   deleteTableRow: (stepKey: string, rowIndex: number) => Promise<void>
+  deleteTableRows: (stepKey: string, rowIndices: number[]) => Promise<void>
   deleteProfilingProfile: (stepKey: string, profileIndex: number) => Promise<void>
   startEditOutput: (stepKey: string) => void
   cancelEditOutput: () => void
@@ -122,10 +133,19 @@ interface PipelineRunContext {
   initStep3Selection: () => void
   step3SelectAll: () => void
   step3DeselectAll: () => void
+  step3SelectUnprocessed: () => void
   step3FilteredCandidates: () => Step3Candidate[]
   step3SelectedCount: () => number
   updateProfilingItem: (stepKey: string, item: { index: number; total: number; name: string; status: 'processing' | 'done' | 'error'; error?: string; profile?: Record<string, unknown> }) => void
   profilingOutputProfiles: (stepKey: string) => Array<Record<string, unknown>>
+  step4Partners: () => Array<{ partnerId?: string; name: string; website?: string; linkedinUrl?: string; industry?: string }>
+  initStep4Selection: () => void
+  step4SelectAll: () => void
+  step4DeselectAll: () => void
+  step4SelectedCount: () => number
+  updateContactDiscoveryItem: (stepKey: string, item: { index: number; total: number; name: string; status: 'processing' | 'done' | 'error'; error?: string; contactCount?: number }) => void
+  contactDiscoveryOutputPartners: (stepKey: string) => Array<Record<string, unknown>>
+  deleteContactPartner: (stepKey: string, partnerIndex: number) => Promise<void>
   updatePartnerItem: (stepKey: string, item: { index: number; total: number; itemName: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; status: 'processing' | 'done' | 'error'; error?: string }) => void
   getStepResult: (stepKey: string) => RunStepResult | undefined
   promptsForStep: (stepKey: StepKey) => PromptOption[]
@@ -146,6 +166,7 @@ interface PipelineRunContext {
   buildFullPrompt: (stepKey: string, userMessage: string) => string
   step1CopyPrompt: (stepKey: string) => string
   step3PartnerCopyPrompt: (stepKey: string, partner: Step3Candidate) => string
+  step4CopyPrompt: (stepKey: string) => string
   copyDeepResearchPrompt: (key: string, text: string) => Promise<void>
 }
 
@@ -199,10 +220,22 @@ export async function usePipelineRunPage() {
     profile?: Record<string, unknown>
   }>>>({})
 
+  const contactDiscoveryProgress = ref<Record<string, Array<{
+    index: number
+    total: number
+    name: string
+    status: 'processing' | 'done' | 'error'
+    error?: string
+    contactCount?: number
+  }>>>({})
+
   const step3SelectedIds = ref<Record<string, boolean>>({})
   const step3FreqFilter = ref(1)
   const step3Initialized = ref(false)
+  const step4SelectedIds = ref<Record<string, boolean>>({})
+  const step4Initialized = ref(false)
   const expandedProfileName = ref<string | null>(null)
+  const expandedContactPartnerName = ref<string | null>(null)
   const promptPreviewStep = ref<string | null>(null)
   const outputViewMode = ref<Record<string, string>>({})
   const copiedPromptKey = ref<string | null>(null)
@@ -250,7 +283,10 @@ export async function usePipelineRunPage() {
   }
 
   function getStepResult(stepKey: string) {
-    return run.value?.steps.findLast((s) => s.stepType === stepKey)
+    return (
+      run.value?.steps.findLast((s) => s.stepType === stepKey && s.status === 'COMPLETED')
+      ?? run.value?.steps.findLast((s) => s.stepType === stepKey)
+    )
   }
 
   function promptsForStep(stepKey: StepKey) {
@@ -274,6 +310,31 @@ export async function usePipelineRunPage() {
     return JSON.stringify(result?.outputData ?? result?.errorMessage, null, 2)
   }
 
+  function updateContactDiscoveryItem(stepKey: string, item: (typeof contactDiscoveryProgress.value)[string][number]) {
+    if (!contactDiscoveryProgress.value[stepKey]) contactDiscoveryProgress.value[stepKey] = []
+    const idx = contactDiscoveryProgress.value[stepKey].findIndex(i => i.index === item.index)
+    if (idx >= 0) contactDiscoveryProgress.value[stepKey][idx] = item
+    else contactDiscoveryProgress.value[stepKey].push(item)
+  }
+
+  function contactDiscoveryOutputPartners(stepKey: string): Array<Record<string, unknown>> {
+    const data = getStepResult(stepKey)?.outputData
+    if (!Array.isArray(data)) return []
+    return data as Array<Record<string, unknown>>
+  }
+
+  async function deleteContactPartner(stepKey: string, partnerIndex: number) {
+    const result = getStepResult(stepKey)
+    if (!result) return
+    const partners = contactDiscoveryOutputPartners(stepKey)
+    const newData = partners.filter((_, i) => i !== partnerIndex)
+    await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+      method: 'PATCH',
+      body: { outputData: newData },
+    })
+    await refresh()
+  }
+
   function updatePartnerItem(stepKey: string, item: (typeof partnerProgress.value)[string][number]) {
     if (!partnerProgress.value[stepKey]) partnerProgress.value[stepKey] = []
     const idx = partnerProgress.value[stepKey].findIndex(i => i.index === item.index)
@@ -292,6 +353,44 @@ export async function usePipelineRunPage() {
     const data = getStepResult(stepKey)?.outputData
     if (!Array.isArray(data)) return []
     return data as Array<Record<string, unknown>>
+  }
+
+  function step4Partners(): Array<{ partnerId?: string; name: string; website?: string; linkedinUrl?: string; industry?: string }> {
+    const data = getStepResult('PARTNER_PROFILING')?.outputData
+    if (!Array.isArray(data)) return []
+    return (data as Record<string, unknown>[])
+      .filter(p => p.name && !p.error)
+      .map(p => ({
+        partnerId: p.partnerId as string | undefined,
+        name: String(p.name),
+        website: p.website as string | undefined,
+        linkedinUrl: p.linkedinUrl as string | undefined,
+        industry: p.industry as string | undefined,
+      }))
+  }
+
+  function initStep4Selection() {
+    if (step4Initialized.value) return
+    const selected: Record<string, boolean> = {}
+    for (const p of step4Partners()) selected[p.name] = true
+    step4SelectedIds.value = selected
+    step4Initialized.value = true
+  }
+
+  function step4SelectAll() {
+    const selected = { ...step4SelectedIds.value }
+    for (const p of step4Partners()) selected[p.name] = true
+    step4SelectedIds.value = selected
+  }
+
+  function step4DeselectAll() {
+    const selected = { ...step4SelectedIds.value }
+    for (const p of step4Partners()) selected[p.name] = false
+    step4SelectedIds.value = selected
+  }
+
+  function step4SelectedCount() {
+    return step4Partners().filter(p => step4SelectedIds.value[p.name]).length
   }
 
   watch(activeStep, (val) => {
@@ -335,6 +434,20 @@ export async function usePipelineRunPage() {
   function step3DeselectAll() {
     const selected = { ...step3SelectedIds.value }
     for (const candidate of step3Candidates()) selected[candidate.partnerId] = false
+    step3SelectedIds.value = selected
+  }
+
+  function step3SelectUnprocessed() {
+    const done = new Set(
+      profilingOutputProfiles('PARTNER_PROFILING').map(p =>
+        String(p.partnerId ?? p.name ?? '').toLowerCase(),
+      ),
+    )
+    const selected = { ...step3SelectedIds.value }
+    for (const candidate of step3FilteredCandidates()) {
+      const isProcessed = done.has(candidate.partnerId.toLowerCase()) || done.has(candidate.name.toLowerCase())
+      selected[candidate.partnerId] = !isProcessed
+    }
     step3SelectedIds.value = selected
   }
 
@@ -415,6 +528,23 @@ export async function usePipelineRunPage() {
     return buildFullPrompt(stepKey, lines.join('\n'))
   }
 
+  function step4CopyPrompt(stepKey: string): string {
+    const selected = step4Partners().filter(p => step4SelectedIds.value[p.name])
+    const partnerLines = selected.map((p, i) => {
+      const parts = [`${i + 1}. ${p.name}`]
+      if (p.website) parts.push(`   Website: ${p.website}`)
+      if (p.linkedinUrl) parts.push(`   LinkedIn: ${p.linkedinUrl}`)
+      return parts.join('\n')
+    })
+    const userMsg = [
+      'Find contacts at these organizations for cold outreach regarding educational partnerships and sponsorships.',
+      'For each organization, return structured JSON with contacts as defined in the system prompt:',
+      '',
+      ...partnerLines,
+    ].join('\n')
+    return buildFullPrompt(stepKey, userMsg)
+  }
+
   async function copyDeepResearchPrompt(key: string, text: string) {
     try {
       await navigator.clipboard.writeText(text)
@@ -465,6 +595,21 @@ export async function usePipelineRunPage() {
     const table = resolveTable(stepKey)
     if (!table) return
     const newRows = table.rows.filter((_, i) => i !== rowIndex)
+    const newData = table.wrapKey ? { ...(result.outputData as Record<string, unknown>), [table.wrapKey]: newRows } : newRows
+    await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+      method: 'PATCH',
+      body: { outputData: newData },
+    })
+    await refresh()
+  }
+
+  async function deleteTableRows(stepKey: string, rowIndices: number[]) {
+    const result = getStepResult(stepKey)
+    if (!result) return
+    const table = resolveTable(stepKey)
+    if (!table) return
+    const indexSet = new Set(rowIndices)
+    const newRows = table.rows.filter((_, i) => !indexSet.has(i))
     const newData = table.wrapKey ? { ...(result.outputData as Record<string, unknown>), [table.wrapKey]: newRows } : newRows
     await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
       method: 'PATCH',
@@ -574,6 +719,7 @@ export async function usePipelineRunPage() {
     streamOutputs.value[stepKey] = ''
     partnerProgress.value[stepKey] = []
     profilingProgress.value[stepKey] = []
+    contactDiscoveryProgress.value[stepKey] = []
 
     let response: Response
     try {
@@ -627,6 +773,9 @@ export async function usePipelineRunPage() {
             if (data.profilingItem) {
               updateProfilingItem(stepKey, data.profilingItem)
             }
+            if (data.contactDiscoveryItem) {
+              updateContactDiscoveryItem(stepKey, data.contactDiscoveryItem)
+            }
             if (data.error) {
               alert(`Step failed: ${data.error}`)
             }
@@ -671,10 +820,14 @@ export async function usePipelineRunPage() {
     aiImportLoading,
     partnerProgress,
     profilingProgress,
+    contactDiscoveryProgress,
     step3SelectedIds,
     step3FreqFilter,
     step3Initialized,
+    step4SelectedIds,
+    step4Initialized,
     expandedProfileName,
+    expandedContactPartnerName,
     promptPreviewStep,
     outputViewMode,
     copiedPromptKey,
@@ -684,6 +837,7 @@ export async function usePipelineRunPage() {
     toggleAiImport,
     runAiImport,
     deleteTableRow,
+    deleteTableRows,
     deleteProfilingProfile,
     startEditOutput,
     cancelEditOutput,
@@ -693,10 +847,19 @@ export async function usePipelineRunPage() {
     initStep3Selection,
     step3SelectAll,
     step3DeselectAll,
+    step3SelectUnprocessed,
     step3FilteredCandidates,
     step3SelectedCount,
     updateProfilingItem,
     profilingOutputProfiles,
+    step4Partners,
+    initStep4Selection,
+    step4SelectAll,
+    step4DeselectAll,
+    step4SelectedCount,
+    updateContactDiscoveryItem,
+    contactDiscoveryOutputPartners,
+    deleteContactPartner,
     updatePartnerItem,
     getStepResult,
     promptsForStep,
@@ -717,6 +880,7 @@ export async function usePipelineRunPage() {
     buildFullPrompt,
     step1CopyPrompt,
     step3PartnerCopyPrompt,
+    step4CopyPrompt,
     copyDeepResearchPrompt,
   }) as PipelineRunContext
 

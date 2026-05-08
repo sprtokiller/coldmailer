@@ -21,6 +21,39 @@ function parseAIOutput(text: string): unknown {
   }
 }
 
+function mergeScalar(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...existing }
+  for (const [k, v] of Object.entries(incoming)) {
+    if (v !== null && v !== undefined && v !== '') result[k] = v
+  }
+  return result
+}
+
+function contactKey(c: Record<string, unknown>): string {
+  const email = String(c.email ?? '').toLowerCase().trim()
+  if (email) return email
+  const name = [c.firstName, c.lastName].filter(Boolean).join(' ').toLowerCase().trim()
+    || String(c.name ?? '').toLowerCase().trim()
+  return name
+}
+
+function mergeContacts(
+  existing: Record<string, unknown>[],
+  incoming: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const map = new Map<string, Record<string, unknown>>()
+  for (const c of existing) {
+    const k = contactKey(c)
+    if (k) map.set(k, c)
+  }
+  for (const c of incoming) {
+    const k = contactKey(c)
+    if (!k) continue
+    map.set(k, map.has(k) ? mergeScalar(map.get(k)!, c) : c)
+  }
+  return [...map.values()]
+}
+
 function mergeOutputData(existing: unknown, newData: unknown, stepType: string): unknown {
   if (stepType === 'PARTNER_IDENTIFICATION') {
     const existingItems = (existing as { items?: unknown[] } | null)?.items ?? []
@@ -30,24 +63,34 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
       const d = newData as Record<string, unknown>
       return Array.isArray(d.items) ? d.items : []
     })()
-    const existingNames = new Set(
-      existingItems.map((i: unknown) =>
-        String((i as Record<string, unknown>).itemName ?? '').toLowerCase(),
-      ),
-    )
-    const toAdd = newItems.filter(
-      (i: unknown) =>
-        !existingNames.has(
-          String((i as Record<string, unknown>).itemName ?? '').toLowerCase(),
-        ),
-    )
-    return { ...(existing as object ?? {}), items: [...existingItems, ...toAdd] }
+
+    const itemMap = new Map<string, Record<string, unknown>>()
+    for (const item of existingItems) {
+      const key = String((item as Record<string, unknown>).itemName ?? '').toLowerCase()
+      if (key) itemMap.set(key, item as Record<string, unknown>)
+    }
+    for (const item of newItems as Record<string, unknown>[]) {
+      const key = String(item.itemName ?? '').toLowerCase()
+      if (!key) continue
+      if (itemMap.has(key)) {
+        const ex = itemMap.get(key)!
+        const mergedPartners = [
+          ...((ex.partners as Record<string, unknown>[] | undefined) ?? []),
+          ...((item.partners as Record<string, unknown>[] | undefined) ?? []),
+        ].reduce<Record<string, unknown>[]>((acc, p) => {
+          const pk = String(p.partnerId ?? p.name ?? '').toLowerCase()
+          if (!pk || acc.some(a => String(a.partnerId ?? a.name ?? '').toLowerCase() === pk)) return acc
+          return [...acc, p]
+        }, [])
+        itemMap.set(key, { ...ex, ...item, partners: mergedPartners })
+      } else {
+        itemMap.set(key, item)
+      }
+    }
+    return { ...(existing as object ?? {}), items: [...itemMap.values()] }
   }
 
-  // For MARKET_SCANNING and PARTNER_PROFILING:
-  // The PARTNER_PROFILING schema instructs the AI to return a SINGLE JSON object,
-  // so newData may be a plain object rather than an array. Normalise to array so
-  // that profilingOutputProfiles() (which requires Array.isArray) can render it.
+  // MARKET_SCANNING and PARTNER_PROFILING — normalise newData to array
   const newItems: unknown[] = Array.isArray(newData)
     ? newData
     : (typeof newData === 'object' && newData !== null ? [newData] : [])
@@ -56,17 +99,31 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
 
   const existingArr = Array.isArray(existing) ? existing : []
   const keyField = stepType === 'PARTNER_PROFILING' ? 'name' : 'url'
-  const existingKeys = new Set(
-    existingArr.map((i: unknown) =>
-      String((i as Record<string, unknown>)[keyField] ?? (i as Record<string, unknown>).name ?? '').toLowerCase(),
-    ),
-  )
-  const toAdd = newItems.filter((i: unknown) => {
-    const item = i as Record<string, unknown>
+
+  const recordMap = new Map<string, Record<string, unknown>>()
+  for (const item of existingArr as Record<string, unknown>[]) {
     const key = String(item[keyField] ?? item.name ?? '').toLowerCase()
-    return key && !existingKeys.has(key)
-  })
-  return [...existingArr, ...toAdd]
+    if (key) recordMap.set(key, item)
+  }
+  for (const item of newItems as Record<string, unknown>[]) {
+    const key = String(item[keyField] ?? item.name ?? '').toLowerCase()
+    if (!key) continue
+    if (recordMap.has(key)) {
+      const ex = recordMap.get(key)!
+      if (stepType === 'PARTNER_PROFILING') {
+        const mergedContacts = mergeContacts(
+          Array.isArray(ex.contacts) ? ex.contacts as Record<string, unknown>[] : [],
+          Array.isArray(item.contacts) ? item.contacts as Record<string, unknown>[] : [],
+        )
+        recordMap.set(key, { ...mergeScalar(ex, item), contacts: mergedContacts })
+      } else {
+        recordMap.set(key, mergeScalar(ex, item))
+      }
+    } else {
+      recordMap.set(key, item)
+    }
+  }
+  return [...recordMap.values()]
 }
 
 export default defineEventHandler(async (event) => {
@@ -101,24 +158,25 @@ export default defineEventHandler(async (event) => {
   const schemaPrompt = customPrompt?.content ?? dbSystemPrompt?.content ?? STEP_SYSTEM_PROMPTS[body.stepType] ?? ''
   const existingData = existingStep?.outputData ?? null
 
-  const importSystemPrompt = `You are a data transformation assistant. Convert unstructured text into structured JSON matching the schema below.
+  const importSystemPrompt = `Jsi asistent pro transformaci dat. Převeď nestrukturovaný text do strukturovaného JSON dle níže definovaného schématu.
 
-Schema definition (from system prompt):
+Definice schématu (ze systémového promptu):
 ---
 ${schemaPrompt}
 ---
 
-RULES:
-1. Transform ONLY the raw input text into the exact JSON format described above.
-2. Return ONLY valid JSON inside a \`\`\`json code block.
-3. Do NOT include items already present in the existing data provided for context.
-4. ALWAYS return a JSON ARRAY (even if there is only one record). This is required so that multiple imports can be merged correctly. If the schema above says "single object", wrap it in an array anyway.`
+PRAVIDLA:
+1. Transformuj POUZE dodaný text do přesného JSON formátu popsaného výše.
+2. Vrať POUZE platný JSON uvnitř \`\`\`json bloku kódu.
+3. NEZAHRNUJ položky, které již existují v poskytnutých stávajících datech.
+4. VŽDY vrať JSON POLE (i pokud jde o jediný záznam). Je to nutné pro správné sloučení více importů. Pokud schéma výše říká "single object", zabal ho do pole.
+5. VŠECHNA textová pole (popisky, shrnutí, poznámky, označení) piš VÝHRADNĚ V ČEŠTINĚ. Vlastní jména, URL, e-maily a technické identifikátory ponechej v původní podobě.`
 
   const existingContext = existingData
-    ? `\n\nExisting data (for deduplication — do NOT repeat these):\n\`\`\`json\n${JSON.stringify(existingData, null, 2).slice(0, 3000)}\n\`\`\``
+    ? `\n\nStávající data (pro deduplikaci — NEOPAKUJ tyto záznamy):\n\`\`\`json\n${JSON.stringify(existingData, null, 2).slice(0, 3000)}\n\`\`\``
     : ''
 
-  const userMessage = `Transform this raw text into the required JSON format:\n---\n${body.rawInputText}\n---${existingContext}`
+  const userMessage = `Transformuj tento nestrukturovaný text do požadovaného JSON formátu:\n---\n${body.rawInputText}\n---${existingContext}`
 
   const client = new OpenAI({
     baseURL: OPENROUTER.baseURL,

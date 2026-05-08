@@ -49,22 +49,33 @@ if (!pipeline) {
 
           <div
             v-if="pipeline.promptPreviewStep === step.key"
-            class="absolute right-0 top-full mt-1 z-50 w-96 bg-white rounded-xl border border-gray-200 shadow-xl p-4"
+            class="absolute right-0 top-full z-50 pt-1 w-96"
           >
+          <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-4">
             <div class="flex items-start justify-between mb-3">
               <div class="min-w-0">
                 <p class="font-medium text-gray-800 text-sm truncate">{{ pipeline.selectedPrompt(step.key)?.name }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">by {{ pipeline.selectedPrompt(step.key)?.author?.name }}</p>
               </div>
               <a
-                href="/library"
+                :href="`/library?editId=${pipeline.getConfig(step.key).systemPromptId}`"
                 target="_blank"
                 class="shrink-0 ml-3 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors font-medium whitespace-nowrap"
               >
                 Upravit v Knihovně →
               </a>
             </div>
-            <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">{{ pipeline.selectedPrompt(step.key)?.content }}</pre>
+            <div class="relative group/pre">
+              <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">{{ pipeline.selectedPrompt(step.key)?.content }}</pre>
+              <button
+                type="button"
+                class="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors opacity-0 group-hover/pre:opacity-100"
+                @click.stop="pipeline.copyDeepResearchPrompt('prompt_preview_' + step.key, pipeline.selectedPrompt(step.key)?.content ?? '')"
+              >
+                {{ pipeline.copiedPromptKey === 'prompt_preview_' + step.key ? 'Zkopírováno!' : 'Kopírovat' }}
+              </button>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -136,6 +147,7 @@ if (!pipeline) {
               />
             </label>
             <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step3SelectAll()">Vše</button>
+            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step3SelectUnprocessed()">Nevypracované</button>
             <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step3DeselectAll()">Žádné</button>
           </div>
         </div>
