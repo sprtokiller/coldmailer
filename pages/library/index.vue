@@ -72,9 +72,12 @@ function startEdit(item: LibraryItem) {
   showForm.value = true
 }
 
-watch(() => form.value.stepType, (stepType) => {
-  if (!form.value.content.trim()) {
-    form.value.content = STEP_CONTENT_TEMPLATES[stepType] ?? ''
+watch(() => form.value.stepType, (newType, oldType) => {
+  if (editingId.value) return
+  const prevTemplate = (STEP_CONTENT_TEMPLATES[oldType] ?? '').trim()
+  const current = form.value.content.trim()
+  if (!current || current === prevTemplate) {
+    form.value.content = STEP_CONTENT_TEMPLATES[newType] ?? ''
   }
 })
 
@@ -132,12 +135,21 @@ const allItems = computed(() => {
 })
 
 const currentItems = computed(() => {
-  return allItems.value.filter((item) => {
-    if (filterType.value && item.stepType !== filterType.value) return false
-    const authorName = item.author?.name ?? ''
-    if (filterAuthor.value && authorName !== filterAuthor.value) return false
-    return true
-  })
+  return allItems.value
+    .filter((item) => {
+      if (filterType.value && item.stepType !== filterType.value) return false
+      const authorName = item.author?.name ?? ''
+      if (filterAuthor.value && authorName !== filterAuthor.value) return false
+      return true
+    })
+    .sort((a, b) => {
+      const stepA = STEP_TYPES.indexOf(a.stepType ?? '')
+      const stepB = STEP_TYPES.indexOf(b.stepType ?? '')
+      const stepOrder = (stepA === -1 ? Infinity : stepA) - (stepB === -1 ? Infinity : stepB)
+      if (stepOrder !== 0) return stepOrder
+      if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1
+      return (a.name ?? '').localeCompare(b.name ?? '', 'cs')
+    })
 })
 
 const authorOptions = computed(() => {

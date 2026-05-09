@@ -423,7 +423,41 @@ async function confirmSaveToLibrary() {
       </template>
     </div>
 
-    <div v-if="idx > 0 && step.key !== 'PARTNER_PROFILING'" class="mt-4">
+    <div v-if="step.key === 'PARTNER_IDENTIFICATION'" class="mt-4">
+      <div v-if="pipeline.step2Items().length === 0" class="text-xs text-gray-400 py-2">
+        Nejprve spusťte Krok 1 (Market Scanning), abyste získali položky ke zpracování.
+      </div>
+      <template v-else>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-medium text-gray-500">
+            Položky z Kroku 1
+            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step2SelectedCount() }} / {{ pipeline.step2Items().length }} vybráno)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step2SelectAll()">Vše</button>
+            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step2DeselectAll()">Žádné</button>
+          </div>
+        </div>
+        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
+          <label
+            v-for="item in pipeline.step2Items()"
+            :key="item.index"
+            class="flex items-center gap-3 px-3 py-2 border-t border-gray-50 cursor-pointer hover:bg-gray-50/60 first:border-t-0"
+            :class="pipeline.step2SelectedItems[String(item.index)] ? '' : 'opacity-50'"
+          >
+            <input
+              type="checkbox"
+              :checked="pipeline.step2SelectedItems[String(item.index)]"
+              class="accent-primary shrink-0"
+              @change="pipeline.step2SelectedItems[String(item.index)] = ($event.target as HTMLInputElement).checked"
+            />
+            <span class="font-medium text-gray-700 truncate" :title="item.name">{{ item.name }}</span>
+          </label>
+        </div>
+      </template>
+    </div>
+
+    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
         Vstupní data (JSON)
         <button type="button" class="ml-2 text-primary hover:underline" @click="pipeline.getConfig(step.key).inputData = pipeline.prevStepOutput(step.key)">

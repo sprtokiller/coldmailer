@@ -172,6 +172,16 @@ async function deleteSelectedRows() {
           <div v-if="pipeline.expandedProfileName === String(profile.name ?? '')" class="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/50 space-y-3 text-xs">
             <div v-if="profile.error" class="text-danger">{{ profile.error }}</div>
             <template v-else>
+              <!-- Company meta: links + size + parent -->
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                <a v-if="profile.website" :href="String(profile.website)" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">Web ↗</a>
+                <a v-if="profile.linkedinUrl" :href="String(profile.linkedinUrl)" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">LinkedIn ↗</a>
+                <a v-if="profile.instagramUrl" :href="String(profile.instagramUrl)" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">Instagram ↗</a>
+                <span v-if="profile.size" class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono" :title="String(profile.sizeNote ?? '')">{{ profile.size }}</span>
+                <span v-if="profile.sizeNote" class="text-gray-400 italic">{{ profile.sizeNote }}</span>
+                <span v-if="profile.parentCompany" class="text-gray-500">Mateřská firma: <span class="font-medium text-gray-700">{{ profile.parentCompany }}</span></span>
+              </div>
+
               <div v-if="profile.summary">
                 <p class="font-medium text-gray-600 mb-0.5">Shrnutí</p>
                 <p class="text-gray-700 leading-relaxed" v-html="renderLinks(profile.summary as string)" />
@@ -180,6 +190,21 @@ async function deleteSelectedRows() {
                 <p class="font-medium text-gray-600 mb-0.5">Aktivity</p>
                 <p class="text-gray-600 leading-relaxed" v-html="renderLinks(profile.activities as string)" />
               </div>
+
+              <div v-if="Array.isArray(profile.recentHighlights) && (profile.recentHighlights as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-0.5">Nedávné novinky</p>
+                <ul class="space-y-0.5">
+                  <li v-for="h in (profile.recentHighlights as string[])" :key="h" class="text-gray-600">· {{ h }}</li>
+                </ul>
+              </div>
+
+              <div v-if="Array.isArray(profile.partnershipStyle) && (profile.partnershipStyle as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-1">Styl spolupráce</p>
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="s in (profile.partnershipStyle as string[])" :key="s" class="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-medium">{{ s }}</span>
+                </div>
+              </div>
+
               <div v-if="Array.isArray(profile.partnershipEvidence) && (profile.partnershipEvidence as unknown[]).length">
                 <p class="font-medium text-gray-600 mb-1">Minulá spolupráce</p>
                 <ul class="space-y-0.5">
@@ -190,42 +215,64 @@ async function deleteSelectedRows() {
                 </ul>
               </div>
 
+              <div v-if="profile.socialInvolvement">
+                <p class="font-medium text-gray-600 mb-0.5">Společenská angažovanost</p>
+                <p class="text-gray-600 leading-relaxed">{{ profile.socialInvolvement }}</p>
+              </div>
+
               <div v-if="Array.isArray(profile.contacts) && (profile.contacts as unknown[]).length">
                 <p class="font-medium text-gray-600 mb-1.5">Kontakty</p>
                 <div class="space-y-1">
                   <div class="grid grid-cols-[1.5rem_3rem_1fr_1fr_1fr_2.5rem_2rem_2rem] gap-1.5 px-2 py-1 font-medium text-gray-400 text-[10px]">
                     <span class="text-center">Pr.</span><span>Typ</span><span>Jméno</span><span>Role</span><span>E-mail</span><span class="text-center">Conf.</span><span class="text-center">LinkedIn</span><span class="text-center">Zdroj</span>
                   </div>
-                  <div
+                  <template
                     v-for="(contact, ci) in (profile.contacts as Record<string, unknown>[]).slice().sort((a, b) => Number(a.priority ?? 9) - Number(b.priority ?? 9))"
                     :key="ci"
-                    class="grid grid-cols-[1.5rem_3rem_1fr_1fr_1fr_2.5rem_2rem_2rem] gap-1.5 px-2 py-1.5 rounded-lg border items-center"
-                    :class="ci === 0 ? 'bg-success/5 border-success/30' : 'bg-white border-gray-100'"
                   >
-                    <span
-                      class="text-center font-bold text-[11px]"
-                      :class="contact.priority === 1 ? 'text-success' : contact.priority === 2 ? 'text-blue-600' : contact.priority === 3 ? 'text-violet-600' : contact.priority === 4 ? 'text-amber-600' : 'text-gray-400'"
-                    >{{ contact.priority }}</span>
-                    <span class="text-[10px] text-gray-500 truncate" :title="String(contact.type ?? '')">{{ contact.type ?? '–' }}</span>
-                    <span class="font-medium text-gray-800 truncate text-[11px]">
-                      {{ [contact.firstName, contact.lastName].filter(Boolean).join(' ') || String(contact.name ?? '–') }}
-                      <span v-if="ci === 0" class="ml-1 text-[9px] bg-success/15 text-success px-1 py-0.5 rounded font-semibold">★ nejlepší</span>
-                    </span>
-                    <span class="text-gray-500 truncate text-[11px]" :title="String(contact.role ?? '')">{{ contact.role ?? '–' }}</span>
-                    <a v-if="contact.email" :href="`mailto:${contact.email}`" class="text-primary underline hover:opacity-80 truncate text-[11px]">{{ contact.email }}</a>
-                    <span v-else class="text-gray-400 text-[11px]">–</span>
-                    <span
-                      class="text-center text-[10px] font-medium"
-                      :class="contact.confidence === 'High' ? 'text-success' : contact.confidence === 'Medium' ? 'text-amber-500' : 'text-gray-400'"
-                    >{{ contact.confidence ?? '–' }}</span>
-                    <a v-if="contact.linkedin" :href="String(contact.linkedin)" target="_blank" rel="noopener noreferrer" class="text-center text-primary hover:opacity-80 text-[11px]" title="LinkedIn profil">↗</a>
-                    <span v-else class="text-center text-gray-300 text-[11px]">–</span>
-                    <a v-if="contact.source" :href="String(contact.source)" target="_blank" rel="noopener noreferrer" class="text-center text-blue-400 hover:opacity-80 text-[11px]" :title="String(contact.source)">↗</a>
-                    <span v-else class="text-center text-gray-300 text-[11px]">–</span>
-                  </div>
+                    <div
+                      class="grid grid-cols-[1.5rem_3rem_1fr_1fr_1fr_2.5rem_2rem_2rem] gap-1.5 px-2 py-1.5 rounded-t-lg border items-center"
+                      :class="[ci === 0 ? 'bg-success/5 border-success/30' : 'bg-white border-gray-100', (contact.note || contact.alternativeContact || contact.sourceDate) ? 'border-b-0 rounded-b-none' : 'rounded-lg']"
+                    >
+                      <span
+                        class="text-center font-bold text-[11px]"
+                        :class="contact.priority === 1 ? 'text-success' : contact.priority === 2 ? 'text-blue-600' : contact.priority === 3 ? 'text-violet-600' : contact.priority === 4 ? 'text-amber-600' : 'text-gray-400'"
+                      >{{ contact.priority }}</span>
+                      <span class="text-[10px] text-gray-500 truncate" :title="String(contact.type ?? '')">{{ contact.type ?? '–' }}</span>
+                      <span class="font-medium text-gray-800 truncate text-[11px]">
+                        {{ [contact.firstName, contact.lastName].filter(Boolean).join(' ') || String(contact.name ?? '–') }}
+                        <span v-if="ci === 0" class="ml-1 text-[9px] bg-success/15 text-success px-1 py-0.5 rounded font-semibold">★ nejlepší</span>
+                      </span>
+                      <span class="text-gray-500 truncate text-[11px]" :title="String(contact.role ?? '')">{{ contact.role ?? '–' }}</span>
+                      <a v-if="contact.email" :href="`mailto:${contact.email}`" class="text-primary underline hover:opacity-80 truncate text-[11px]">{{ contact.email }}</a>
+                      <span v-else class="text-gray-400 text-[11px]">–</span>
+                      <span
+                        class="text-center text-[10px] font-medium"
+                        :class="contact.confidence === 'High' ? 'text-success' : contact.confidence === 'Medium' ? 'text-amber-500' : 'text-gray-400'"
+                      >{{ contact.confidence ?? '–' }}</span>
+                      <a v-if="contact.linkedin" :href="String(contact.linkedin)" target="_blank" rel="noopener noreferrer" class="text-center text-primary hover:opacity-80 text-[11px]" title="LinkedIn profil">↗</a>
+                      <span v-else class="text-center text-gray-300 text-[11px]">–</span>
+                      <a v-if="contact.source" :href="String(contact.source)" target="_blank" rel="noopener noreferrer" class="text-center text-blue-400 hover:opacity-80 text-[11px]" :title="String(contact.source)" :title2="contact.sourceDate ? String(contact.sourceDate) : undefined">↗</a>
+                      <span v-else class="text-center text-gray-300 text-[11px]">–</span>
+                    </div>
+                    <div
+                      v-if="contact.note || contact.alternativeContact || contact.sourceDate"
+                      class="px-2 pb-1.5 pt-1 rounded-b-lg border border-t-0 text-[10px] text-gray-500 space-y-0.5"
+                      :class="ci === 0 ? 'bg-success/5 border-success/30' : 'bg-white border-gray-100'"
+                    >
+                      <p v-if="contact.alternativeContact"><span class="font-medium text-gray-600">Alt. kontakt:</span> {{ contact.alternativeContact }}</p>
+                      <p v-if="contact.sourceDate"><span class="font-medium text-gray-600">Datum zdroje:</span> {{ contact.sourceDate }}</p>
+                      <p v-if="contact.note" class="italic text-gray-400">{{ contact.note }}</p>
+                    </div>
+                  </template>
                 </div>
               </div>
               <div v-else class="text-gray-400 text-[11px]">Žádné kontakty nenalezeny.</div>
+
+              <div v-if="profile.researchNotes" class="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2">
+                <p class="font-medium text-amber-700 mb-0.5">Poznámky výzkumníka</p>
+                <p class="text-amber-800 leading-relaxed">{{ profile.researchNotes }}</p>
+              </div>
             </template>
           </div>
         </template>

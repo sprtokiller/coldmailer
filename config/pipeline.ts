@@ -197,7 +197,87 @@ DŮLEŽITÉ:
 - Seřaď contacts podle priority vzestupně a potom podle confidence od High po Low.
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.`,
 
-  VALUE_ALIGNMENT: `Jsi analytik strategického souladu. Porovnej poskytnuté prodejní argumenty s daty o partnerovi a seřaď příležitosti pro soulad podle relevance. Vrať JSON pole s poli: sellingPoint, relevanceScore (0–100), hook (string), reasoning (string).`,
+  VALUE_ALIGNMENT: `
+  Jsi expert na partnerský business development a hodnocení strategické shody mezi organizacemi.
+
+Dostaneš tři vstupy:
+1. Kontext naší organizace a soutěže
+2. Strukturovaný profil potenciálního partnera (výstup z due diligence fáze)
+3. Seznam prodejních argumentů, které můžeme partnerovi nabídnout
+
+Tvým úkolem je provést hloubkovou analýzu hodnot a zájmů partnera a zjistit, které z našich argumentů mají pro tohoto konkrétního partnera největší rezonanci. Nepiš e-mail ani outreach zprávu – to přijde v dalším kroku. Soustřeď se výhradně na analýzu a alignment.
+
+Při hodnocení ber v potaz:
+- Skutečné priority a zájmy partnera na základě jeho profilových dat, ne jen jeho odvětví
+- Důkazy o předchozím partnerství, sponzorství nebo komunitních aktivitách
+- Typ kontaktní osoby, která bude e-mail číst, a jak se její agenda liší od ostatních
+- Geografický, kulturní nebo regulatorní kontext, který může ovlivnit relevanci argumentů
+- Timing – existuje aktuální důvod, proč by partner mohl být otevřenější právě teď?
+
+Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
+
+{
+  "partnerSnapshot": "string – 2–3 věty: kdo je tento partner a na čem mu skutečně záleží podle dostupných dat, ne jen popis odvětví",
+
+  "argumentAlignment": [
+    {
+      "argumentId": "string – ID nebo krátký štítek argumentu přesně podle vstupního seznamu",
+      "argumentLabel": "string – název argumentu",
+      "relevance": "Vysoká|Střední|Nízká|Nevhodné",
+      "reasoning": "string – proč tento argument pro daného partnera funguje nebo nefunguje, s odkazem na konkrétní data z profilu",
+      "redFlags": "string|null – důvod, proč by argument mohl být kontraproduktivní nebo nevhodný"
+    }
+  ],
+
+  "top3Arguments": [
+    {
+      "rank": 1,
+      "argumentId": "string",
+      "whyItFits": "string – konkrétní důkaz z profilu partnera, proč tento argument rezonuje",
+      "howToFrame": "string – doporučený úhel pohledu a jazyk, jak argument formulovat pro tohoto partnera",
+      "whatToAvoid": "string – co neříkat nebo jak argument nezformulovat"
+    }
+  ],
+
+  "argumentsToDrop": [
+    {
+      "argumentId": "string",
+      "reason": "string – proč tento argument u tohoto partnera vynechat nebo odložit na later"
+    }
+  ],
+
+  "hookHypothesis": "string – 1–2 věty dokončující tuto větu: 'Jediný nejpřesvědčivější důvod, proč by [název partnera] měl na náš outreach reagovat právě teď, je...' Musí být konkrétní, aktuální a zaměřený na partnera – ne na nás.",
+
+  "recommendedContact": {
+    "primary": {
+      "name": "string|null",
+      "role": "string",
+      "reasoning": "string – proč je tato osoba nejlepší první kontakt pro tento konkrétní typ oslovení"
+    },
+    "alternatives": [
+      {
+        "name": "string|null",
+        "role": "string",
+        "tradeoff": "string – kdy a proč zvážit tuto osobu místo primárního kontaktu"
+      }
+    ]
+  },
+
+  "flagsAndRisks": [
+    "string – konkrétní nesoulad, citlivost nebo věc k ověření před odesláním outreache"
+  ],
+
+  "overallFitScore": "Vysoký|Střední|Nízký",
+  "overallFitReasoning": "string – 2–3 věty shrnující celkovou míru shody a hlavní důvod pro nebo proti oslovení tohoto partnera"
+}
+
+DŮLEŽITÉ:
+- Každý argument hodnoť na základě dat z profilu partnera, ne obecných předpokladů.
+- Pokud v profilu chybí data potřebná pro hodnocení, explicitně to uveď v poli reasoning nebo flagsAndRisks – nedomýšlej si.
+- hookHypothesis musí být specifická pro tohoto partnera a tento moment – ne generická fráze.
+- Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v top3 (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
+- Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
+`,
 
   OUTREACH_PREPARATION: `Jsi expert na psaní cold e-mailů. Vytvoř vysoce přizpůsobený oslovovací e-mail na základě poskytnuté šablony, kontaktu a náznakůsouladu. Vrať JSON objekt s poli: to (e-mailová adresa), subject (string), body (prostý text).`,
 }

@@ -289,7 +289,7 @@ PRAVIDLA:
   })
 
   const response = await client.chat.completions.create({
-    model: MODELS.CLAUDE_SONNET,
+    model: MODELS.CLAUDE_HAIKU,
     max_tokens: 8192,
     messages: [
       { role: 'system', content: importSystemPrompt },

@@ -81,6 +81,8 @@ interface PipelineRunContext {
   aiImportStep: string | null
   aiImportText: string
   aiImportLoading: boolean
+  step2SelectedItems: Record<string, boolean>
+  step2Initialized: boolean
   partnerProgress: Record<string, Array<{
     index: number
     total: number
@@ -124,6 +126,11 @@ interface PipelineRunContext {
   cancelEditOutput: () => void
   requestSaveOutput: (stepKey: string) => void
   confirmSaveOutput: (stepKey: string) => Promise<void>
+  step2Items: () => Array<{ index: number; name: string; raw: Record<string, unknown> }>
+  initStep2Selection: () => void
+  step2SelectAll: () => void
+  step2DeselectAll: () => void
+  step2SelectedCount: () => number
   step3Candidates: () => Step3Candidate[]
   initStep3Selection: () => void
   step3SelectAll: () => void
@@ -212,6 +219,8 @@ export async function usePipelineRunPage() {
     profile?: Record<string, unknown>
   }>>>({})
 
+  const step2SelectedItems = ref<Record<string, boolean>>({})
+  const step2Initialized = ref(false)
   const step3SelectedIds = ref<Record<string, boolean>>({})
   const step3FreqFilter = ref(1)
   const step3Initialized = ref(false)
@@ -366,7 +375,51 @@ export async function usePipelineRunPage() {
     return step4Partners().filter(p => step4SelectedIds.value[p.name]).length
   }
 
+  function step2Items(): Array<{ index: number; name: string; raw: Record<string, unknown> }> {
+    const data = getStepResult('MARKET_SCANNING')?.outputData
+    if (!data) return []
+    let arr: Record<string, unknown>[]
+    if (Array.isArray(data)) {
+      arr = data as Record<string, unknown>[]
+    } else if (data && typeof data === 'object') {
+      const arrays = Object.values(data as Record<string, unknown>).filter(Array.isArray) as unknown[][]
+      arr = arrays.length === 1 ? arrays[0] as Record<string, unknown>[] : []
+    } else {
+      arr = []
+    }
+    return arr.map((item, i) => ({
+      index: i,
+      name: String(item.name ?? item.title ?? item.url ?? `Položka ${i + 1}`),
+      raw: item,
+    }))
+  }
+
+  function initStep2Selection() {
+    if (step2Initialized.value) return
+    const selected: Record<string, boolean> = {}
+    for (const item of step2Items()) selected[String(item.index)] = true
+    step2SelectedItems.value = selected
+    step2Initialized.value = true
+  }
+
+  function step2SelectAll() {
+    const selected = { ...step2SelectedItems.value }
+    for (const item of step2Items()) selected[String(item.index)] = true
+    step2SelectedItems.value = selected
+  }
+
+  function step2DeselectAll() {
+    const selected = { ...step2SelectedItems.value }
+    for (const item of step2Items()) selected[String(item.index)] = false
+    step2SelectedItems.value = selected
+  }
+
+  function step2SelectedCount() {
+    return step2Items().filter(item => step2SelectedItems.value[String(item.index)]).length
+  }
+
   watch(activeStep, (val) => {
+    if (val === 'PARTNER_IDENTIFICATION') initStep2Selection()
     if (val === 'PARTNER_PROFILING') initStep3Selection()
   })
 
@@ -501,10 +554,10 @@ export async function usePipelineRunPage() {
 
   function step3PartnerCopyPrompt(stepKey: string, partner: Step3Candidate): string {
     const lines = [
-      'Research this potential partnership candidate and return the structured JSON defined in the system prompt:',
+      'Proveď průzkum tohoto potenciálního partnera a vrať strukturovaný JSON definovaný v systémovém promptu:',
       '',
-      `Name: ${partner.name}`,
-      `Found in ${partner.frequency} context(s): ${partner.itemNames.join(', ')}`,
+      `Jméno: ${partner.name}`,
+      `Nalezen v ${partner.frequency} kontextu(ch): ${partner.itemNames.join(', ')}`,
     ]
     return buildFullPrompt(stepKey, lines.join('\n'))
   }
@@ -518,8 +571,8 @@ export async function usePipelineRunPage() {
       return parts.join('\n')
     })
     const userMsg = [
-      'Find contacts at these organizations for cold outreach regarding educational partnerships and sponsorships.',
-      'For each organization, return structured JSON with contacts as defined in the system prompt:',
+      'Najdi kontakty v těchto organizacích pro cold outreach ohledně vzdělávacích partnerství a sponzorství.',
+      'Pro každou organizaci vrať strukturovaný JSON s kontakty definované v systémovém promptu:',
       '',
       ...partnerLines,
     ].join('\n')
@@ -709,7 +762,16 @@ export async function usePipelineRunPage() {
     const cfg = getConfig(stepKey)
     let inputData: Record<string, unknown> = {}
 
-    if (stepKey === 'PARTNER_PROFILING') {
+    if (stepKey === 'PARTNER_IDENTIFICATION') {
+      const selectedItems = step2Items()
+        .filter(item => step2SelectedItems.value[String(item.index)])
+        .map(item => item.raw)
+      if (selectedItems.length === 0) {
+        alert('Vyberte alespoň jednu položku ke zpracování.')
+        return
+      }
+      inputData = { items: selectedItems }
+    } else if (stepKey === 'PARTNER_PROFILING') {
       const selected = step3FilteredCandidates().filter(candidate => step3SelectedIds.value[candidate.partnerId])
       if (selected.length === 0) {
         alert('Vyberte alespoň jednoho partnera k prozkoumání.')
@@ -785,6 +847,7 @@ export async function usePipelineRunPage() {
               alert(`Step failed: ${data.error}`)
             }
             if (data.done) {
+              if (stepKey === 'MARKET_SCANNING') step2Initialized.value = false
               await refresh()
             }
           } catch {
@@ -823,6 +886,8 @@ export async function usePipelineRunPage() {
     aiImportStep,
     aiImportText,
     aiImportLoading,
+    step2SelectedItems,
+    step2Initialized,
     partnerProgress,
     profilingProgress,
     step3SelectedIds,
@@ -849,6 +914,11 @@ export async function usePipelineRunPage() {
     cancelEditOutput,
     requestSaveOutput,
     confirmSaveOutput,
+    step2Items,
+    initStep2Selection,
+    step2SelectAll,
+    step2DeselectAll,
+    step2SelectedCount,
     step3Candidates,
     initStep3Selection,
     step3SelectAll,

@@ -12,7 +12,9 @@
       "Bash(bun --eval 'import { PrismaClient } from '\\\\''@prisma/client'\\\\''; const p = new PrismaClient\\(\\); const r = await p.systemPrompt.deleteMany\\({ where: { name: { startsWith: '\\\\''Default – '\\\\'' } } }\\); console.log\\('\\\\''Smazáno:'\\\\'', r.count\\); await p.$disconnect\\(\\);')",
       "Bash(bun scripts/export-prompts.ts)",
       "Bash(bun prisma/seed.ts)",
-      "Bash(bun prisma *)"
+      "Bash(bun prisma *)",
+      "Bash(npx nuxi *)",
+      "Bash(bun x *)"
     ]
   }
 }
