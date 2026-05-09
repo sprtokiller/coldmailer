@@ -22,7 +22,7 @@ const USER_MESSAGE_LABELS: Record<string, string> = {
   MARKET_SCANNING:        'Prozkoumej toto téma/odvětví',
   PARTNER_IDENTIFICATION: 'Identifikuj partnery z těchto trhů',
   PARTNER_PROFILING:      'Profiluj tuto organizaci',
-  CONTACT_DISCOVERY:      'Najdi kontakty v této organizaci',
+
   VALUE_ALIGNMENT:        'Srovnej tyto prodejní argumenty s partnerem',
   OUTREACH_PREPARATION:   'Připrav oslovení na základě těchto dat',
 }

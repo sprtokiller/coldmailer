@@ -39,19 +39,6 @@
     }
   },
   {
-    "id": "cmows2mwm000811umezu4pc3n",
-    "name": "Výchozí – Contact Discovery",
-    "stepType": "CONTACT_DISCOVERY",
-    "content": "Jsi specialista na vyhledávání kontaktů s přímým přístupem k internetu. Najdi konkrétní kontakty v organizaci pomocí LinkedInu a dalších veřejných zdrojů. Prioritní pořadí: PR > HR > Marketing > CEO > Obecný kontakt. Vrať JSON pole s poli: name, role, email, linkedin, priority (1–5), confidence (high|medium|low).",
-    "isSystem": true,
-    "createdAt": "2026-05-08T10:34:16.055Z",
-    "author": {
-      "id": "cmopska4e0000e6s61ht1pejc",
-      "email": "system@coldmailer.internal",
-      "name": "System"
-    }
-  },
-  {
     "id": "cmows2mwp000a11umx64s293x",
     "name": "Výchozí – Value Alignment",
     "stepType": "VALUE_ALIGNMENT",

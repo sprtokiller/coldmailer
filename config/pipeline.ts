@@ -23,7 +23,7 @@ export const STEP_MODEL: Record<string, string> = {
   MARKET_SCANNING:        MODELS.DEEP_RESEARCH,
   PARTNER_IDENTIFICATION: MODELS.PIPELINE,
   PARTNER_PROFILING:      MODELS.DEEP_RESEARCH,
-  CONTACT_DISCOVERY:      MODELS.DEEP_RESEARCH,
+
   VALUE_ALIGNMENT:        MODELS.CLAUDE_SONNET,
   OUTREACH_PREPARATION:   MODELS.CLAUDE_SONNET,
   OUTREACH_EXECUTION:     MODELS.GMAIL,
@@ -50,7 +50,7 @@ export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
   MARKET_SCANNING:        'Výchozí',
   PARTNER_IDENTIFICATION: 'Výchozí',
   PARTNER_PROFILING:      'Výchozí',
-  CONTACT_DISCOVERY:      'Výchozí',
+
   VALUE_ALIGNMENT:        'Výchozí',
   OUTREACH_PREPARATION:   'Výchozí',
 }
@@ -196,8 +196,6 @@ DŮLEŽITÉ:
 - Pokud najdeš jen obecný info mail, uveď ho jako type = "General", priority = 5.
 - Seřaď contacts podle priority vzestupně a potom podle confidence od High po Low.
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.`,
-
-  CONTACT_DISCOVERY: `Jsi specialista na vyhledávání kontaktů s přímým přístupem k internetu. Najdi konkrétní kontakty v organizaci pomocí LinkedInu a dalších veřejných zdrojů. Prioritní pořadí: PR > HR > Marketing > CEO > Obecný kontakt. Vrať JSON pole s poli: name, role, email, linkedin, priority (1–5), confidence (high|medium|low).`,
 
   VALUE_ALIGNMENT: `Jsi analytik strategického souladu. Porovnej poskytnuté prodejní argumenty s daty o partnerovi a seřaď příležitosti pro soulad podle relevance. Vrať JSON pole s poli: sellingPoint, relevanceScore (0–100), hook (string), reasoning (string).`,
 

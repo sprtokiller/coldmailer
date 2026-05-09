@@ -100,21 +100,12 @@ interface PipelineRunContext {
     error?: string
     profile?: Record<string, unknown>
   }>>
-  contactDiscoveryProgress: Record<string, Array<{
-    index: number
-    total: number
-    name: string
-    status: 'processing' | 'done' | 'error'
-    error?: string
-    contactCount?: number
-  }>>
   step3SelectedIds: Record<string, boolean>
   step3FreqFilter: number
   step3Initialized: boolean
   step4SelectedIds: Record<string, boolean>
   step4Initialized: boolean
   expandedProfileName: string | null
-  expandedContactPartnerName: string | null
   promptPreviewStep: string | null
   outputViewMode: Record<string, string>
   copiedPromptKey: string | null
@@ -145,9 +136,6 @@ interface PipelineRunContext {
   step4SelectAll: () => void
   step4DeselectAll: () => void
   step4SelectedCount: () => number
-  updateContactDiscoveryItem: (stepKey: string, item: { index: number; total: number; name: string; status: 'processing' | 'done' | 'error'; error?: string; contactCount?: number }) => void
-  contactDiscoveryOutputPartners: (stepKey: string) => Array<Record<string, unknown>>
-  deleteContactPartner: (stepKey: string, partnerIndex: number) => Promise<void>
   updatePartnerItem: (stepKey: string, item: { index: number; total: number; itemName: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; status: 'processing' | 'done' | 'error'; error?: string }) => void
   getStepResult: (stepKey: string) => RunStepResult | undefined
   promptsForStep: (stepKey: StepKey) => PromptOption[]
@@ -222,22 +210,12 @@ export async function usePipelineRunPage() {
     profile?: Record<string, unknown>
   }>>>({})
 
-  const contactDiscoveryProgress = ref<Record<string, Array<{
-    index: number
-    total: number
-    name: string
-    status: 'processing' | 'done' | 'error'
-    error?: string
-    contactCount?: number
-  }>>>({})
-
   const step3SelectedIds = ref<Record<string, boolean>>({})
   const step3FreqFilter = ref(1)
   const step3Initialized = ref(false)
   const step4SelectedIds = ref<Record<string, boolean>>({})
   const step4Initialized = ref(false)
   const expandedProfileName = ref<string | null>(null)
-  const expandedContactPartnerName = ref<string | null>(null)
   const promptPreviewStep = ref<string | null>(null)
   const outputViewMode = ref<Record<string, string>>({})
   const copiedPromptKey = ref<string | null>(null)
@@ -326,31 +304,6 @@ export async function usePipelineRunPage() {
   function stepResultOutput(stepKey: string) {
     const result = getStepResult(stepKey)
     return JSON.stringify(result?.outputData ?? result?.errorMessage, null, 2)
-  }
-
-  function updateContactDiscoveryItem(stepKey: string, item: (typeof contactDiscoveryProgress.value)[string][number]) {
-    if (!contactDiscoveryProgress.value[stepKey]) contactDiscoveryProgress.value[stepKey] = []
-    const idx = contactDiscoveryProgress.value[stepKey].findIndex(i => i.index === item.index)
-    if (idx >= 0) contactDiscoveryProgress.value[stepKey][idx] = item
-    else contactDiscoveryProgress.value[stepKey].push(item)
-  }
-
-  function contactDiscoveryOutputPartners(stepKey: string): Array<Record<string, unknown>> {
-    const data = getStepResult(stepKey)?.outputData
-    if (!Array.isArray(data)) return []
-    return data as Array<Record<string, unknown>>
-  }
-
-  async function deleteContactPartner(stepKey: string, partnerIndex: number) {
-    const result = getStepResult(stepKey)
-    if (!result) return
-    const partners = contactDiscoveryOutputPartners(stepKey)
-    const newData = partners.filter((_, i) => i !== partnerIndex)
-    await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
-      method: 'PATCH',
-      body: { outputData: newData },
-    })
-    await refresh()
   }
 
   function updatePartnerItem(stepKey: string, item: (typeof partnerProgress.value)[string][number]) {
@@ -747,8 +700,6 @@ export async function usePipelineRunPage() {
     streamOutputs.value[stepKey] = ''
     partnerProgress.value[stepKey] = []
     profilingProgress.value[stepKey] = []
-    contactDiscoveryProgress.value[stepKey] = []
-
     let response: Response
     try {
       response = await fetch(`/api/pipeline/${route.params.id}/steps/execute`, {
@@ -802,9 +753,6 @@ export async function usePipelineRunPage() {
             if (data.profilingItem) {
               updateProfilingItem(stepKey, data.profilingItem)
             }
-            if (data.contactDiscoveryItem) {
-              updateContactDiscoveryItem(stepKey, data.contactDiscoveryItem)
-            }
             if (data.error) {
               alert(`Step failed: ${data.error}`)
             }
@@ -849,14 +797,12 @@ export async function usePipelineRunPage() {
     aiImportLoading,
     partnerProgress,
     profilingProgress,
-    contactDiscoveryProgress,
     step3SelectedIds,
     step3FreqFilter,
     step3Initialized,
     step4SelectedIds,
     step4Initialized,
     expandedProfileName,
-    expandedContactPartnerName,
     promptPreviewStep,
     outputViewMode,
     copiedPromptKey,
@@ -887,9 +833,6 @@ export async function usePipelineRunPage() {
     step4SelectAll,
     step4DeselectAll,
     step4SelectedCount,
-    updateContactDiscoveryItem,
-    contactDiscoveryOutputPartners,
-    deleteContactPartner,
     updatePartnerItem,
     getStepResult,
     promptsForStep,
