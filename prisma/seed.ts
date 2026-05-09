@@ -1,10 +1,20 @@
 import { PrismaClient } from '@prisma/client'
-import { STEP_SYSTEM_PROMPTS, DEFAULT_PROMPT_NAMES } from '../config/pipeline'
+import { DEFAULT_PROMPT_NAMES } from '../config/pipeline'
+import { readFileSync, readdirSync } from 'fs'
+import { join, basename, extname } from 'path'
 
 const prisma = new PrismaClient()
 
+const PROMPTS_DIR = join(import.meta.dir, 'system-prompts')
+
+function loadPromptsFromDisk(): Record<string, string> {
+  const files = readdirSync(PROMPTS_DIR).filter(f => extname(f) === '.txt')
+  return Object.fromEntries(
+    files.map(f => [basename(f, '.txt'), readFileSync(join(PROMPTS_DIR, f), 'utf-8').trim()])
+  )
+}
+
 async function main() {
-  // Upsert a system user that owns the default prompts.
   const systemUser = await prisma.user.upsert({
     where: { googleId: 'system' },
     update: {},
@@ -17,8 +27,10 @@ async function main() {
 
   console.log(`System user: ${systemUser.id}`)
 
-  // Seed one default prompt per step type — idempotent via stepType + isSystem + authorId.
-  for (const [stepType, content] of Object.entries(STEP_SYSTEM_PROMPTS)) {
+  const prompts = loadPromptsFromDisk()
+  console.log(`Loaded ${Object.keys(prompts).length} prompts from prisma/system-prompts/`)
+
+  for (const [stepType, content] of Object.entries(prompts)) {
     const name = DEFAULT_PROMPT_NAMES[stepType] ?? 'Výchozí'
     const existing = await prisma.systemPrompt.findFirst({
       where: { stepType: stepType as never, isSystem: true, authorId: systemUser.id },

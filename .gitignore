@@ -32,3 +32,6 @@ prisma/migrations/
 
 # Google OAuth client secret — keep out of git
 client_secret_*.json
+
+# DB backups — keep directory, ignore dumps
+backups/*.sql

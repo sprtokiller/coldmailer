@@ -1,8 +1,9 @@
 <script setup lang="ts">
-const { user, loggedIn } = useUserSession()
+const { user, loggedIn, clear } = useUserSession()
 
 async function logout() {
   await $fetch('/api/auth/logout', { method: 'POST' })
+  await clear()
   await navigateTo('/login')
 }
 </script>

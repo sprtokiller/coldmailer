@@ -24,7 +24,8 @@ const selectedContextParts = computed(() =>
 const filteredContextParts = computed(() =>
   pipeline.contextParts.filter(cp =>
     !pipeline.getConfig(props.step.key).contextPartIds.includes(cp.id) &&
-    cp.name.toLowerCase().includes(contextSearch.value.toLowerCase()),
+    cp.name.toLowerCase().includes(contextSearch.value.toLowerCase()) &&
+    cp.stepKeys.includes(props.step.key),
   ),
 )
 
@@ -214,7 +215,7 @@ async function confirmSaveToLibrary() {
         <input
           v-model="contextSearch"
           type="text"
-          :placeholder="pipeline.contextParts.length ? 'Vyhledat a přidat z knihovny…' : 'Knihovna je prázdná'"
+          :placeholder="filteredContextParts.length || contextSearch ? 'Vyhledat a přidat z knihovny…' : 'Žádné části pro tento krok'"
           :disabled="!pipeline.contextParts.length"
           class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-gray-400"
           @focus="showContextDropdown = true"
@@ -265,7 +266,7 @@ async function confirmSaveToLibrary() {
         <textarea
           v-model="pipeline.getConfig(step.key).manualContext"
           rows="3"
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
           placeholder="Zadejte vlastní kontext specifický pro tento krok…"
         />
       </div>
@@ -467,7 +468,7 @@ async function confirmSaveToLibrary() {
       <textarea
         v-model="pipeline.getConfig(step.key).inputData"
         rows="4"
-        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
         placeholder="{}"
       />
     </div>

@@ -14,7 +14,10 @@
       "Bash(bun prisma/seed.ts)",
       "Bash(bun prisma *)",
       "Bash(npx nuxi *)",
-      "Bash(bun x *)"
+      "Bash(bun x *)",
+      "Bash(docker exec *)",
+      "PowerShell($timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'; docker exec coldmailer-db-1 pg_dump -U coldmailer coldmailer | Out-File \"c:\\\\Users\\\\sprto\\\\Documents\\\\Temp\\\\coldmailer\\\\backups\\\\backup_$timestamp.sql\" -Encoding utf8; Write-Host \"Backup: backup_$timestamp.sql\")",
+      "Bash(bunx prisma *)"
     ]
   }
 }

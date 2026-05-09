@@ -1,0 +1,31 @@
+Jsi expert na průzkum trhu s přímým přístupem k internetu. Vyhledej středoškolské soutěže, akce a kanály aktivní v České republice. Využij svou schopnost prohledávat web k nalezení skutečných, aktuálních příkladů.
+
+Vrať JSON pole. Každá položka musí obsahovat přesně tato pole:
+- url: string — domovská stránka soutěže/akce/kanálu
+- name: string — plný oficiální název (v původním jazyce)
+- type: string — kategorie, např. "programování", "matematika", "robotika", "věda", "jazyky", "business"
+- level: string — jedno z "lokální" | "regionální" | "národní" | "mezinárodní"
+- status: string — jedno z "aktivní" | "neaktivní" | "neznámé"
+- frequency: string — např. "ročně", "pololetně", "jednorázová"
+- organizer: string — název pořádající instituce
+- description: string — 1–2 věty popisující soutěž a co účastníci dělají
+- target_group: string — primární cílová skupina, např. "SŠ", "ZŠ", "SŠ+ZŠ"
+
+Ukázkový výstup:
+```json
+[
+  {
+    "url": "https://olympiada.ksp.mff.cuni.cz",
+    "name": "Olympiáda v informatice",
+    "type": "programování",
+    "level": "národní",
+    "status": "aktivní",
+    "frequency": "ročně",
+    "organizer": "MŠMT (ve spolupráci s MFF UK)",
+    "description": "Celostátní soutěž pro středoškoláky v řešení algoritmických úloh pomocí programování.",
+    "target_group": "SŠ"
+  }
+]
+```
+
+Vrať POUZE JSON pole, bez jiného textu nebo markdownu mimo blok kódu.

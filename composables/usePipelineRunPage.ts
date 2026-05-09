@@ -69,7 +69,7 @@ interface PipelineRunContext {
   refresh: () => Promise<void>
   steps: readonly StepDefinition[]
   prompts: PromptOption[]
-  contextParts: Array<{ id: string; name: string; content: string }>
+  contextParts: Array<{ id: string; name: string; content: string; stepKeys: string[] }>
   sellingPoints: Array<{ id: string; name: string }>
   activeStep: string | null
   executingStep: string | null
@@ -176,7 +176,7 @@ export async function usePipelineRunPage() {
   const [runResult, promptsResult, contextPartsResult, sellingPointsResult] = await Promise.all([
     useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`),
     useFetch<PromptOption[]>('/api/library/prompts', { default: () => [] }),
-    useFetch<Array<{ id: string; name: string; content: string }>>('/api/library/context-parts', { default: () => [] }),
+    useFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { default: () => [] }),
     useFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { default: () => [] }),
   ])
   const { data: run, refresh } = runResult
@@ -263,12 +263,12 @@ export async function usePipelineRunPage() {
 
   async function saveContextPartToLibrary(stepKey: string, name: string) {
     const cfg = getConfig(stepKey)
-    const created = await $fetch<{ id: string; name: string; content: string }>('/api/library/context-parts', {
+    const created = await $fetch<{ id: string; name: string; content: string; stepKeys: string[] }>('/api/library/context-parts', {
       method: 'POST',
-      body: { name, content: cfg.manualContext },
+      body: { name, content: cfg.manualContext, stepKeys: [stepKey] },
     })
     if (contextParts.value && !contextParts.value.find(cp => cp.id === created.id)) {
-      contextParts.value.push({ id: created.id, name: created.name, content: created.content })
+      contextParts.value.push({ id: created.id, name: created.name, content: created.content, stepKeys: created.stepKeys })
     }
     if (!cfg.contextPartIds.includes(created.id)) {
       cfg.contextPartIds.push(created.id)
@@ -532,18 +532,32 @@ export async function usePipelineRunPage() {
     return MODEL_BADGE[STEP_MODEL[stepKey] ?? ''] ?? { label: stepKey, cls: 'bg-gray-100 text-gray-500' }
   }
 
+  const PLACEHOLDER_CONTEXT = '<[[CONTEXT]]>'
+  const PLACEHOLDER_DATA = '<[[DATA]]>'
+
   function buildFullPrompt(stepKey: string, userMessage: string): string {
     const cfg = getConfig(stepKey)
     const systemPrompt = selectedPrompt(stepKey)
     const systemContent = systemPrompt?.content ?? STEP_SYSTEM_PROMPTS[stepKey] ?? ''
 
     const selectedCtxParts = contextParts.value.filter(cp => cfg.contextPartIds.includes(cp.id))
-    const parts: string[] = [systemContent]
+    const contextBlock = selectedCtxParts.length
+      ? selectedCtxParts.map(cp => `## ${cp.name}\n${cp.content}`).join('\n\n')
+      : ''
 
-    if (selectedCtxParts.length) {
-      parts.push(selectedCtxParts.map(cp => `## ${cp.name}\n${cp.content}`).join('\n\n'))
+    const hasContextPh = systemContent.includes(PLACEHOLDER_CONTEXT)
+    const hasDataPh = systemContent.includes(PLACEHOLDER_DATA)
+
+    if (hasContextPh || hasDataPh) {
+      let result = systemContent
+      if (hasContextPh) result = result.replace(PLACEHOLDER_CONTEXT, contextBlock)
+      if (hasDataPh) result = result.replace(PLACEHOLDER_DATA, userMessage)
+      if (!hasDataPh) result = result + '\n\n---\n\n' + userMessage
+      return result
     }
 
+    const parts: string[] = [systemContent]
+    if (contextBlock) parts.push(contextBlock)
     parts.push(userMessage)
     return parts.join('\n\n---\n\n')
   }

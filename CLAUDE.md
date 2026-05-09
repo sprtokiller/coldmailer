@@ -11,8 +11,8 @@ bun run build        # production build
 bun run preview      # preview production build
 
 # Database
-bun run db:push      # push schema to DB without migration
-bun run db:migrate   # create and apply a migration
+bun run db:push      # push schema to DB without migration — USE THIS for schema changes
+bun run db:migrate   # create and apply a migration — WARNING: can prompt to reset DB and wipe all data if schema drift detected; never instruct user to run this without explicit confirmation
 bun run db:seed      # seed system prompts (bun prisma/seed.ts)
 bun run db:studio    # open Prisma Studio
 ```

@@ -62,6 +62,7 @@ model ContextPart {
   id            String        @id @default(cuid())
   name          String
   content       String
+  stepKeys      String[]      @default([])
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
   createdAt     DateTime      @default(now())

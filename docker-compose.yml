@@ -15,6 +15,24 @@ services:
       timeout: 5s
       retries: 5
 
+  db-backup:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: coldmailer
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c "while true; do
+        pg_dump -h db -U coldmailer coldmailer > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+        && echo \"Backup done: $$(date)\"
+        && find /backups -name '*.sql' -mtime +7 -delete;
+        sleep 86400;
+      done"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   app:
     build: .
     ports:

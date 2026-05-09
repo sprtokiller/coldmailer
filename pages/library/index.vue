@@ -11,6 +11,7 @@ type LibraryItem = {
   content?: string
   subject?: string
   stepType?: string
+  stepKeys?: string[]
   isSystem?: boolean
   author?: Author
   createdAt: string | Date
@@ -29,8 +30,42 @@ const STEP_TYPES = [
   'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION',
 ]
 
+const PROMPT_STEP_TYPES = STEP_TYPES.filter(s => s !== 'OUTREACH_EXECUTION')
+
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
+// ── Placeholder validation ────────────────────────────────────────────────────
+const VALID_PLACEHOLDERS = ['<[[CONTEXT]]>', '<[[DATA]]>']
+const PLACEHOLDER_RE = /<\[\[[A-Z_]+\]\]>/g
+
+const contentPlaceholders = computed(() => {
+  if (tab.value !== 'prompts' && tab.value !== 'context') return []
+  return [...(form.value.content.matchAll(PLACEHOLDER_RE))].map(m => m[0])
+})
+
+const invalidPlaceholders = computed(() =>
+  [...new Set(contentPlaceholders.value.filter(p => !VALID_PLACEHOLDERS.includes(p)))],
+)
+
+const duplicatePlaceholders = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const p of contentPlaceholders.value) counts[p] = (counts[p] ?? 0) + 1
+  return Object.keys(counts).filter(p => counts[p] > 1)
+})
+
+const placeholderError = computed<string | null>(() => {
+  if (invalidPlaceholders.value.length)
+    return `Neznámý placeholder: ${invalidPlaceholders.value.join(', ')}`
+  if (duplicatePlaceholders.value.length)
+    return `Placeholder smí být použit nejvýše jednou: ${duplicatePlaceholders.value.join(', ')}`
+  return null
+})
+
+const validFoundPlaceholders = computed(() =>
+  VALID_PLACEHOLDERS.filter(p => contentPlaceholders.value.includes(p)),
+)
+
+// ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false)
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -39,12 +74,13 @@ const form = ref({
   name: '',
   content: '',
   stepType: 'MARKET_SCANNING',
+  stepKeys: ['VALUE_ALIGNMENT'] as string[],
   subject: '',
   body: '',
 })
 
 function resetForm() {
-  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', subject: '', body: '' }
+  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT'], subject: '', body: '' }
   editingId.value = null
   showForm.value = false
 }
@@ -69,6 +105,7 @@ function startEdit(item: LibraryItem) {
   form.value.name = item.name
   form.value.content = item.content ?? ''
   form.value.stepType = item.stepType ?? 'MARKET_SCANNING'
+  form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
   showForm.value = true
 }
 
@@ -87,7 +124,17 @@ watch(showForm, (visible) => {
   }
 })
 
+function toggleStepKey(key: string) {
+  const idx = form.value.stepKeys.indexOf(key)
+  if (idx >= 0) {
+    if (form.value.stepKeys.length > 1) form.value.stepKeys.splice(idx, 1)
+  } else {
+    form.value.stepKeys.push(key)
+  }
+}
+
 async function save() {
+  if (placeholderError.value) return
   saving.value = true
   try {
     if (tab.value === 'prompts') {
@@ -99,9 +146,9 @@ async function save() {
       await refreshPrompts()
     } else if (tab.value === 'context') {
       if (editingId.value) {
-        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content } })
+        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys } })
       } else {
-        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys } })
       }
       await refreshContext()
     } else if (tab.value === 'selling') {
@@ -203,8 +250,27 @@ const tabs: { key: Tab; label: string }[] = [
         <div v-if="tab === 'prompts'">
           <label class="block text-xs font-medium text-gray-500 mb-1">Typ kroku</label>
           <select v-model="form.stepType" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+            <option v-for="s in PROMPT_STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
           </select>
+        </div>
+
+        <div v-if="tab === 'context'">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Přiřazené kroky</label>
+          <div class="flex flex-wrap gap-x-4 gap-y-1.5 mt-1">
+            <label
+              v-for="s in STEP_TYPES"
+              :key="s"
+              class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                :checked="form.stepKeys.includes(s)"
+                class="accent-primary"
+                @change="toggleStepKey(s)"
+              />
+              {{ s.replace(/_/g, ' ') }}
+            </label>
+          </div>
         </div>
 
         <template v-if="tab === 'drafts'">
@@ -214,18 +280,57 @@ const tabs: { key: Tab; label: string }[] = [
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Šablona těla e-mailu</label>
-            <textarea v-model="form.body" rows="6" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
+            <textarea v-model="form.body" rows="6" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y" />
           </div>
         </template>
         <template v-else>
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Obsah</label>
-            <textarea v-model="form.content" rows="5" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
+            <textarea
+              v-model="form.content"
+              rows="5"
+              required
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
+              :class="placeholderError ? 'border-red-300 focus:ring-red-200' : ''"
+            />
+            <!-- Placeholder feedback -->
+            <div v-if="contentPlaceholders.length || placeholderError" class="mt-1.5 flex flex-wrap items-center gap-2">
+              <span
+                v-for="p in validFoundPlaceholders"
+                :key="p"
+                class="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+              >
+                <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                {{ p }}
+              </span>
+              <span
+                v-for="p in invalidPlaceholders"
+                :key="p"
+                class="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200"
+                :title="'Neznámý placeholder — platné jsou: ' + VALID_PLACEHOLDERS.join(', ')"
+              >
+                <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                {{ p }}
+              </span>
+              <span
+                v-for="p in duplicatePlaceholders"
+                :key="'dup_' + p"
+                class="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+              >
+                <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01" /></svg>
+                {{ p }} ×2+
+              </span>
+            </div>
+            <p v-if="placeholderError" class="mt-1 text-xs text-red-600">{{ placeholderError }}</p>
           </div>
         </template>
 
         <div class="flex gap-2 pt-1">
-          <button type="submit" :disabled="saving" class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity">
+          <button
+            type="submit"
+            :disabled="saving || !!placeholderError"
+            class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
             {{ saving ? 'Ukládám…' : 'Uložit' }}
           </button>
           <button type="button" class="text-sm text-gray-400 hover:text-gray-600 px-3" @click="resetForm">Zrušit</button>
@@ -241,7 +346,7 @@ const tabs: { key: Tab; label: string }[] = [
         class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
         <option value="">Všechny typy kroků</option>
-        <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+        <option v-for="s in PROMPT_STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
       </select>
       <select
         v-if="authorOptions.length > 1"
@@ -268,11 +373,18 @@ const tabs: { key: Tab; label: string }[] = [
         ]"
         @click="tab !== 'drafts' && startEdit(item)"
       >
-        <div class="flex items-center gap-2 min-w-0" :class="item.stepType ? 'mb-1.5' : 'mb-2'">
+        <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
           <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
           <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
             {{ item.stepType.replace(/_/g, ' ') }}
           </span>
+        </div>
+        <div v-if="tab === 'context' && item.stepKeys?.length" class="flex flex-wrap gap-1 mb-2">
+          <span
+            v-for="sk in item.stepKeys"
+            :key="sk"
+            class="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-100 whitespace-nowrap"
+          >{{ sk.replace(/_/g, ' ') }}</span>
         </div>
 
         <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
