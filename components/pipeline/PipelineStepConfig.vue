@@ -45,6 +45,14 @@ function onSearchBlur() {
   setTimeout(() => { showContextDropdown.value = false }, 150)
 }
 
+// ── Step execution with local validation ─────────────────────────────────────
+const submitAttempted = ref(false)
+
+function handleExecute() {
+  submitAttempted.value = true
+  pipeline.executeStep(props.step.key)
+}
+
 // ── Save-to-library modal ─────────────────────────────────────────────────────
 const saveModalOpen = ref(false)
 const saveModalName = ref('')
@@ -354,16 +362,84 @@ async function confirmSaveToLibrary() {
     </Teleport>
 
     <div v-if="step.key === 'VALUE_ALIGNMENT'" class="mt-4">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Prodejní argument</label>
+      <label class="block text-xs font-medium text-gray-500 mb-1">
+        Prodejní argument
+        <span class="text-danger ml-1">*</span>
+      </label>
       <select
         v-model="pipeline.getConfig(step.key).sellingPointId"
-        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-colors"
+        :class="submitAttempted && !pipeline.getConfig(step.key).sellingPointId
+          ? 'border-danger/50 focus:ring-danger/30 bg-danger/5'
+          : 'border-gray-200 focus:ring-primary/30'"
       >
-        <option value="">Žádný</option>
+        <option value="">— vyberte argument —</option>
         <option v-for="sp in pipeline.sellingPoints" :key="sp.id" :value="sp.id">
           {{ sp.name }}
         </option>
       </select>
+      <p
+        class="mt-1 text-xs text-danger"
+        :class="{ invisible: !(submitAttempted && !pipeline.getConfig(step.key).sellingPointId) }"
+      >
+        Prodejní argument je povinný – bez něj AI nezná vaše argumenty a analýza shody nedává smysl.
+      </p>
+    </div>
+
+    <div v-if="step.key === 'VALUE_ALIGNMENT'" class="mt-4">
+      <div v-if="pipeline.step4Partners().length === 0" class="text-xs text-gray-400 py-2">
+        Nejprve spusťte Krok 3 (Partner Profiling), abyste získali kandidáty.
+      </div>
+      <template v-else>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-medium text-gray-500">
+            Partneři z Kroku 3
+            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step4SelectedCount() }} / {{ pipeline.step4Partners().length }} vybráno)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step4SelectAll()">Vše</button>
+            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step4SelectUnprocessed()">Neanalyzované</button>
+            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step4DeselectAll()">Žádné</button>
+          </div>
+        </div>
+        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
+          <div class="grid grid-cols-[1.5rem_1fr_6rem_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+            <span></span><span>Partner</span><span>Odvětví</span><span>Web</span><span></span>
+          </div>
+          <label
+            v-for="p in pipeline.step4Partners()"
+            :key="p.name"
+            class="grid grid-cols-[1.5rem_1fr_6rem_4rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
+            :class="pipeline.step4SelectedIds[p.name] ? '' : 'opacity-50'"
+          >
+            <input type="checkbox" v-model="pipeline.step4SelectedIds[p.name]" class="accent-primary" />
+            <span class="font-medium text-gray-700 truncate" :title="p.name">{{ p.name }}</span>
+            <span class="text-gray-400 truncate text-[10px]" :title="String(p.industry ?? '')">{{ p.industry ?? '–' }}</span>
+            <a
+              v-if="p.website"
+              :href="p.website"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary text-[10px] hover:underline truncate"
+              @click.stop
+            >Web ↗</a>
+            <span v-else class="text-gray-300 text-[10px]">–</span>
+            <button
+              type="button"
+              class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
+              :title="pipeline.copiedPromptKey === step.key + '_' + p.name ? 'Zkopírováno!' : 'Kopírovat prompt pro ' + p.name"
+              @click.stop.prevent="pipeline.copyDeepResearchPrompt(step.key + '_' + p.name, pipeline.step4PartnerCopyPrompt(step.key, p.name))"
+            >
+              <svg v-if="pipeline.copiedPromptKey !== step.key + '_' + p.name" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <svg v-else class="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </label>
+        </div>
+      </template>
     </div>
 
     <div v-if="step.key === 'PARTNER_PROFILING'" class="mt-4">
@@ -458,7 +534,7 @@ async function confirmSaveToLibrary() {
       </template>
     </div>
 
-    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION'].includes(step.key)" class="mt-4">
+    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
         Vstupní data (JSON)
         <button type="button" class="ml-2 text-primary hover:underline" @click="pipeline.getConfig(step.key).inputData = pipeline.prevStepOutput(step.key)">
@@ -477,7 +553,7 @@ async function confirmSaveToLibrary() {
       <button
         :disabled="pipeline.executingStep !== null"
         class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-        @click="pipeline.executeStep(step.key)"
+        @click="handleExecute"
       >
         <svg v-if="pipeline.executingStep === step.key" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -567,6 +643,29 @@ async function confirmSaveToLibrary() {
             <span v-if="pi.status === 'processing'" class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span v-else-if="pi.status === 'done'" class="text-success">✓</span>
             <span v-else class="text-danger text-[10px]" :title="pi.error">✗ {{ pi.error?.slice(0, 30) }}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="step.key === 'VALUE_ALIGNMENT' && pipeline.alignmentProgress[step.key]?.length" class="mt-2">
+      <p class="text-xs font-medium text-gray-500 mb-2">Průběh analýzy</p>
+      <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
+        <div class="grid grid-cols-[2rem_1fr_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+          <span>#</span><span>Partner</span><span class="text-center">Status</span>
+        </div>
+        <div
+          v-for="ai in pipeline.alignmentProgress[step.key]"
+          :key="ai.index"
+          class="grid grid-cols-[2rem_1fr_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
+          :class="ai.status === 'error' ? 'bg-red-50' : ai.status === 'done' ? 'bg-white' : 'bg-blue-50/40'"
+        >
+          <span class="text-gray-400">{{ ai.index }}</span>
+          <span class="truncate font-medium text-gray-700" :title="ai.name">{{ ai.name }}</span>
+          <span class="text-center">
+            <span v-if="ai.status === 'processing'" class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span v-else-if="ai.status === 'done'" class="text-success">✓</span>
+            <span v-else class="text-danger text-[10px]" :title="ai.error">✗ {{ ai.error?.slice(0, 30) }}</span>
           </span>
         </div>
       </div>

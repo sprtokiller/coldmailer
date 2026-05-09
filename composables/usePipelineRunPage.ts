@@ -102,6 +102,14 @@ interface PipelineRunContext {
     error?: string
     profile?: Record<string, unknown>
   }>>
+  alignmentProgress: Record<string, Array<{
+    index: number
+    total: number
+    name: string
+    status: 'processing' | 'done' | 'error'
+    error?: string
+    alignment?: Record<string, unknown>
+  }>>
   step3SelectedIds: Record<string, boolean>
   step3FreqFilter: number
   step3Initialized: boolean
@@ -144,8 +152,12 @@ interface PipelineRunContext {
   initStep4Selection: () => void
   step4SelectAll: () => void
   step4DeselectAll: () => void
+  step4SelectUnprocessed: () => void
   step4SelectedCount: () => number
   updatePartnerItem: (stepKey: string, item: { index: number; total: number; itemName: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; status: 'processing' | 'done' | 'error'; error?: string }) => void
+  updateAlignmentItem: (stepKey: string, item: { index: number; total: number; name: string; status: 'processing' | 'done' | 'error'; error?: string; alignment?: Record<string, unknown> }) => void
+  alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>
+  step4PartnerCopyPrompt: (stepKey: string, partnerName: string) => string
   getStepResult: (stepKey: string) => RunStepResult | undefined
   promptsForStep: (stepKey: StepKey) => PromptOption[]
   stepResultStatus: (stepKey: StepKey) => string | undefined
@@ -219,6 +231,15 @@ export async function usePipelineRunPage() {
     profile?: Record<string, unknown>
   }>>>({})
 
+  const alignmentProgress = ref<Record<string, Array<{
+    index: number
+    total: number
+    name: string
+    status: 'processing' | 'done' | 'error'
+    error?: string
+    alignment?: Record<string, unknown>
+  }>>>({})
+
   const step2SelectedItems = ref<Record<string, boolean>>({})
   const step2Initialized = ref(false)
   const step3SelectedIds = ref<Record<string, boolean>>({})
@@ -277,7 +298,7 @@ export async function usePipelineRunPage() {
   }
 
   function isAiImportStep(stepKey: string) {
-    return ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING'].includes(stepKey)
+    return ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT'].includes(stepKey)
   }
 
   function toggleAiImport(stepKey: string) {
@@ -331,6 +352,19 @@ export async function usePipelineRunPage() {
     else profilingProgress.value[stepKey].push(item)
   }
 
+  function updateAlignmentItem(stepKey: string, item: (typeof alignmentProgress.value)[string][number]) {
+    if (!alignmentProgress.value[stepKey]) alignmentProgress.value[stepKey] = []
+    const idx = alignmentProgress.value[stepKey].findIndex(i => i.index === item.index)
+    if (idx >= 0) alignmentProgress.value[stepKey][idx] = item
+    else alignmentProgress.value[stepKey].push(item)
+  }
+
+  function alignmentOutputAlignments(stepKey: string): Array<Record<string, unknown>> {
+    const data = getStepResult(stepKey)?.outputData
+    if (!Array.isArray(data)) return []
+    return data as Array<Record<string, unknown>>
+  }
+
   function profilingOutputProfiles(stepKey: string): Array<Record<string, unknown>> {
     const data = getStepResult(stepKey)?.outputData
     if (!Array.isArray(data)) return []
@@ -353,8 +387,16 @@ export async function usePipelineRunPage() {
 
   function initStep4Selection() {
     if (step4Initialized.value) return
+    const done = new Set(
+      alignmentOutputAlignments('VALUE_ALIGNMENT').map(a =>
+        String(a.partnerId ?? a.name ?? '').toLowerCase(),
+      ),
+    )
     const selected: Record<string, boolean> = {}
-    for (const p of step4Partners()) selected[p.name] = true
+    for (const p of step4Partners()) {
+      const isProcessed = done.has(String(p.partnerId ?? '').toLowerCase()) || done.has(p.name.toLowerCase())
+      selected[p.name] = !isProcessed
+    }
     step4SelectedIds.value = selected
     step4Initialized.value = true
   }
@@ -368,6 +410,20 @@ export async function usePipelineRunPage() {
   function step4DeselectAll() {
     const selected = { ...step4SelectedIds.value }
     for (const p of step4Partners()) selected[p.name] = false
+    step4SelectedIds.value = selected
+  }
+
+  function step4SelectUnprocessed() {
+    const done = new Set(
+      alignmentOutputAlignments('VALUE_ALIGNMENT').map(a =>
+        String(a.partnerId ?? a.name ?? '').toLowerCase(),
+      ),
+    )
+    const selected = { ...step4SelectedIds.value }
+    for (const p of step4Partners()) {
+      const isProcessed = done.has(String(p.partnerId ?? '').toLowerCase()) || done.has(p.name.toLowerCase())
+      selected[p.name] = !isProcessed
+    }
     step4SelectedIds.value = selected
   }
 
@@ -421,6 +477,7 @@ export async function usePipelineRunPage() {
   watch(activeStep, (val) => {
     if (val === 'PARTNER_IDENTIFICATION') initStep2Selection()
     if (val === 'PARTNER_PROFILING') initStep3Selection()
+    if (val === 'VALUE_ALIGNMENT') initStep4Selection()
   })
 
   function step3Candidates(): Step3Candidate[] {
@@ -577,18 +634,27 @@ export async function usePipelineRunPage() {
   }
 
   function step4CopyPrompt(stepKey: string): string {
-    const selected = step4Partners().filter(p => step4SelectedIds.value[p.name])
-    const partnerLines = selected.map((p, i) => {
-      const parts = [`${i + 1}. ${p.name}`]
-      if (p.website) parts.push(`   Website: ${p.website}`)
-      if (p.linkedinUrl) parts.push(`   LinkedIn: ${p.linkedinUrl}`)
-      return parts.join('\n')
-    })
+    const selected = profilingOutputProfiles('PARTNER_PROFILING')
+      .filter(p => step4SelectedIds.value[String(p.name ?? '')])
+    if (selected.length === 0) return buildFullPrompt(stepKey, 'Žádní partneři nevybráni.')
+    const userMsg = selected.map(p => [
+      `Analyzuj soulad pro partnera: ${p.name}`,
+      '```json',
+      JSON.stringify(p, null, 2),
+      '```',
+    ].join('\n')).join('\n\n')
+    return buildFullPrompt(stepKey, userMsg)
+  }
+
+  function step4PartnerCopyPrompt(stepKey: string, partnerName: string): string {
+    const profile = profilingOutputProfiles('PARTNER_PROFILING').find(p => String(p.name) === partnerName)
     const userMsg = [
-      'Najdi kontakty v těchto organizacích pro cold outreach ohledně vzdělávacích partnerství a sponzorství.',
-      'Pro každou organizaci vrať strukturovaný JSON s kontakty definované v systémovém promptu:',
+      'Analyzuj soulad mezi tímto partnerem a našimi prodejními argumenty. Vrať strukturovaný JSON dle systémového promptu.',
       '',
-      ...partnerLines,
+      'Profil partnera:',
+      '```json',
+      JSON.stringify(profile ?? { name: partnerName }, null, 2),
+      '```',
     ].join('\n')
     return buildFullPrompt(stepKey, userMsg)
   }
@@ -792,6 +858,16 @@ export async function usePipelineRunPage() {
         return
       }
       inputData = { partners: allSelected }
+    } else if (stepKey === 'VALUE_ALIGNMENT') {
+      const cfg = getConfig(stepKey)
+      if (!cfg.sellingPointId) return
+      const allProfiles = profilingOutputProfiles('PARTNER_PROFILING')
+      const selected = allProfiles.filter(p => step4SelectedIds.value[String(p.name ?? '')])
+      if (selected.length === 0) {
+        alert('Vyberte alespoň jednoho partnera k analýze.')
+        return
+      }
+      inputData = { partners: selected }
     } else {
       try {
         inputData = JSON.parse(cfg.inputData || '{}')
@@ -804,6 +880,7 @@ export async function usePipelineRunPage() {
     streamOutputs.value[stepKey] = ''
     partnerProgress.value[stepKey] = []
     profilingProgress.value[stepKey] = []
+    alignmentProgress.value[stepKey] = []
     let response: Response
     try {
       response = await fetch(`/api/pipeline/${route.params.id}/steps/execute`, {
@@ -857,11 +934,15 @@ export async function usePipelineRunPage() {
             if (data.profilingItem) {
               updateProfilingItem(stepKey, data.profilingItem)
             }
+            if (data.alignmentItem) {
+              updateAlignmentItem(stepKey, data.alignmentItem)
+            }
             if (data.error) {
               alert(`Step failed: ${data.error}`)
             }
             if (data.done) {
               if (stepKey === 'MARKET_SCANNING') step2Initialized.value = false
+              if (stepKey === 'PARTNER_PROFILING') step4Initialized.value = false
               await refresh()
             }
           } catch {
@@ -904,6 +985,7 @@ export async function usePipelineRunPage() {
     step2Initialized,
     partnerProgress,
     profilingProgress,
+    alignmentProgress,
     step3SelectedIds,
     step3FreqFilter,
     step3Initialized,
@@ -946,8 +1028,12 @@ export async function usePipelineRunPage() {
     initStep4Selection,
     step4SelectAll,
     step4DeselectAll,
+    step4SelectUnprocessed,
     step4SelectedCount,
     updatePartnerItem,
+    updateAlignmentItem,
+    alignmentOutputAlignments,
+    step4PartnerCopyPrompt,
     getStepResult,
     promptsForStep,
     stepResultStatus,

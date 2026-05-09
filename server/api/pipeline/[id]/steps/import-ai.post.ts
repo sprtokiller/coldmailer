@@ -9,7 +9,7 @@ interface ImportBody {
   rawInputText: string
 }
 
-const SUPPORTED_STEPS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING']
+const SUPPORTED_STEPS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT']
 
 function extractFromFence(text: string): string {
   const openMatch = text.match(/```(?:json)?\s*\n?/)
@@ -197,7 +197,7 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
   if (newItems.length === 0) return existing ?? []
 
   const existingArr = Array.isArray(existing) ? existing : []
-  const keyField = stepType === 'PARTNER_PROFILING' ? 'name' : 'url'
+  const keyField = (stepType === 'PARTNER_PROFILING' || stepType === 'VALUE_ALIGNMENT') ? 'name' : 'url'
 
   const recordMap = new Map<string, Record<string, unknown>>()
   for (const item of existingArr as Record<string, unknown>[]) {
@@ -209,7 +209,7 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
     if (!key) continue
     const matchKey = recordMap.has(key)
       ? key
-      : (stepType === 'PARTNER_PROFILING' ? fuzzyMatchCompany(key, recordMap) : null)
+      : ((stepType === 'PARTNER_PROFILING' || stepType === 'VALUE_ALIGNMENT') ? fuzzyMatchCompany(key, recordMap) : null)
     if (matchKey !== null) {
       const ex = recordMap.get(matchKey)!
       if (stepType === 'PARTNER_PROFILING') {

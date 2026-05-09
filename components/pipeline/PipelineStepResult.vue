@@ -276,6 +276,141 @@ async function deleteSelectedRows() {
       </div>
     </template>
 
+    <template v-else-if="step.key === 'VALUE_ALIGNMENT'">
+      <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
+        <button
+          v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
+          :key="m[0]"
+          class="px-3 py-1 rounded-lg font-medium transition-all"
+          :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          @click="pipeline.setOutputMode(step.key, m[0])"
+        >
+          {{ m[1] }}
+        </button>
+      </div>
+
+      <pre v-if="pipeline.getOutputMode(step.key, 'table') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
+
+      <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
+        <div class="grid grid-cols-[1fr_7rem_3rem_1fr_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+          <span>Partner</span><span>Celková shoda</span><span class="text-center">Top arg.</span><span>Hook hypotéza</span><span></span>
+        </div>
+        <template v-for="(alignment, ai) in pipeline.alignmentOutputAlignments(step.key)" :key="ai">
+          <div
+            class="grid grid-cols-[1fr_7rem_3rem_1fr_2rem] px-3 py-2 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60 cursor-pointer"
+            :class="alignment.error ? 'bg-red-50' : ''"
+            @click="pipeline.expandedProfileName = pipeline.expandedProfileName === alignment.name ? null : String(alignment.name ?? '')"
+          >
+            <span class="font-medium text-gray-800 truncate" :title="String(alignment.name ?? '')">{{ alignment.name }}</span>
+            <span
+              class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full w-fit"
+              :class="alignment.overallFitScore === 'Vysoký' ? 'text-success bg-success/10' : alignment.overallFitScore === 'Střední' ? 'text-amber-600 bg-amber-50' : alignment.overallFitScore === 'Nízký' ? 'text-gray-400 bg-gray-100' : 'text-gray-300'"
+            >{{ alignment.overallFitScore ?? '–' }}</span>
+            <span
+              class="text-center font-semibold text-[11px]"
+              :class="Array.isArray(alignment.top3Arguments) && (alignment.top3Arguments as unknown[]).length ? 'text-success' : 'text-gray-400'"
+            >{{ Array.isArray(alignment.top3Arguments) ? (alignment.top3Arguments as unknown[]).length : (alignment.error ? '⚠' : '–') }}</span>
+            <span class="text-[11px] truncate text-gray-500" :title="String(alignment.hookHypothesis ?? '')">
+              {{ String(alignment.hookHypothesis ?? '').slice(0, 60) }}{{ String(alignment.hookHypothesis ?? '').length > 60 ? '…' : '' }}
+            </span>
+            <PipelineHoldDeleteButton @delete.stop="pipeline.deleteProfilingProfile(step.key, ai)" />
+          </div>
+
+          <div v-if="pipeline.expandedProfileName === String(alignment.name ?? '')" class="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/50 space-y-3 text-xs">
+            <div v-if="alignment.error" class="text-danger">{{ alignment.error }}</div>
+            <template v-else>
+              <div v-if="alignment.partnerSnapshot">
+                <p class="font-medium text-gray-600 mb-0.5">Profil partnera</p>
+                <p class="text-gray-700 leading-relaxed">{{ alignment.partnerSnapshot }}</p>
+              </div>
+
+              <div v-if="alignment.overallFitReasoning">
+                <p class="font-medium text-gray-600 mb-0.5">Zdůvodnění celkové shody</p>
+                <p class="text-gray-600 leading-relaxed">{{ alignment.overallFitReasoning }}</p>
+              </div>
+
+              <div v-if="alignment.hookHypothesis">
+                <p class="font-medium text-gray-600 mb-0.5">Hook hypotéza</p>
+                <p class="text-gray-700 leading-relaxed italic">"{{ alignment.hookHypothesis }}"</p>
+              </div>
+
+              <div v-if="Array.isArray(alignment.top3Arguments) && (alignment.top3Arguments as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-1.5">Top 3 argumenty</p>
+                <div class="space-y-2">
+                  <div
+                    v-for="arg in (alignment.top3Arguments as Record<string, unknown>[])"
+                    :key="String(arg.rank ?? '')"
+                    class="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 space-y-1"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-primary text-[11px]">#{{ arg.rank }}</span>
+                      <span class="font-medium text-gray-800 text-[11px]">{{ arg.argumentId }}</span>
+                    </div>
+                    <p v-if="arg.whyItFits" class="text-gray-700"><span class="font-medium text-gray-500">Proč funguje:</span> {{ arg.whyItFits }}</p>
+                    <p v-if="arg.howToFrame" class="text-gray-600"><span class="font-medium text-gray-500">Jak formulovat:</span> {{ arg.howToFrame }}</p>
+                    <p v-if="arg.whatToAvoid" class="text-amber-700 text-[10px]"><span class="font-medium">Vyhnout se:</span> {{ arg.whatToAvoid }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="Array.isArray(alignment.argumentAlignment) && (alignment.argumentAlignment as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-1.5">Hodnocení všech argumentů</p>
+                <div class="rounded-lg border border-gray-100 overflow-hidden">
+                  <div class="grid grid-cols-[1fr_5rem_1fr_1fr] bg-gray-50 px-3 py-1 font-medium text-gray-400 gap-2 text-[10px]">
+                    <span>Argument</span><span class="text-center">Relevance</span><span>Zdůvodnění</span><span>Rizika</span>
+                  </div>
+                  <div
+                    v-for="a in (alignment.argumentAlignment as Record<string, unknown>[])"
+                    :key="String(a.argumentId ?? '')"
+                    class="grid grid-cols-[1fr_5rem_1fr_1fr] px-3 py-1.5 gap-2 border-t border-gray-50 items-start"
+                  >
+                    <span class="font-medium text-gray-700 text-[10px]">{{ a.argumentLabel ?? a.argumentId }}</span>
+                    <span
+                      class="text-center text-[10px] font-semibold"
+                      :class="a.relevance === 'Vysoká' ? 'text-success' : a.relevance === 'Střední' ? 'text-amber-500' : a.relevance === 'Nevhodné' ? 'text-danger' : 'text-gray-400'"
+                    >{{ a.relevance ?? '–' }}</span>
+                    <span class="text-gray-500 text-[10px] leading-relaxed">{{ a.reasoning }}</span>
+                    <span v-if="a.redFlags" class="text-amber-600 text-[10px] leading-relaxed">{{ a.redFlags }}</span>
+                    <span v-else class="text-gray-300 text-[10px]">–</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="alignment.recommendedContact && typeof alignment.recommendedContact === 'object'">
+                <p class="font-medium text-gray-600 mb-1">Doporučený kontakt</p>
+                <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded font-semibold">Primární</span>
+                    <span class="font-medium text-gray-800 text-[11px]">{{ (alignment.recommendedContact as Record<string, unknown>).primary && ((alignment.recommendedContact as Record<string, Record<string, unknown>>).primary.name ?? ((alignment.recommendedContact as Record<string, Record<string, unknown>>).primary.role)) }}</span>
+                  </div>
+                  <p class="text-gray-500 text-[10px]">{{ ((alignment.recommendedContact as Record<string, Record<string, unknown>>).primary?.reasoning) }}</p>
+                </div>
+              </div>
+
+              <div v-if="Array.isArray(alignment.argumentsToDrop) && (alignment.argumentsToDrop as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-1">Argumenty k vynechání</p>
+                <ul class="space-y-0.5">
+                  <li v-for="d in (alignment.argumentsToDrop as Record<string, unknown>[])" :key="String(d.argumentId ?? '')" class="text-[10px] text-gray-500">
+                    · <span class="font-medium">{{ d.argumentId }}</span> — {{ d.reason }}
+                  </li>
+                </ul>
+              </div>
+
+              <div v-if="Array.isArray(alignment.flagsAndRisks) && (alignment.flagsAndRisks as unknown[]).length">
+                <p class="font-medium text-gray-600 mb-1">Rizika a upozornění</p>
+                <ul class="space-y-0.5">
+                  <li v-for="f in (alignment.flagsAndRisks as string[])" :key="f" class="text-[10px] text-amber-700">
+                    · {{ f }}
+                  </li>
+                </ul>
+              </div>
+            </template>
+          </div>
+        </template>
+        <div v-if="!pipeline.alignmentOutputAlignments(step.key).length" class="px-3 py-3 text-gray-400 text-center">Žádné analýzy.</div>
+      </div>
+    </template>
+
     <template v-else-if="step.key === 'PARTNER_IDENTIFICATION'">
       <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
         <button

@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
 
-  const [contextParts, customPrompt, dbSystemPrompt] = await Promise.all([
+  const [contextParts, customPrompt, dbSystemPrompt, sellingPoint] = await Promise.all([
     body.contextPartIds?.length
       ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds } } })
       : Promise.resolve([]),
@@ -47,6 +47,9 @@ export default defineEventHandler(async (event) => {
       where: { stepType: body.stepType as never, isSystem: true },
       orderBy: { createdAt: 'desc' },
     }),
+    body.sellingPointId
+      ? prisma.sellingPoint.findUnique({ where: { id: body.sellingPointId } })
+      : Promise.resolve(null),
   ])
 
   const systemPromptText =
@@ -57,6 +60,7 @@ export default defineEventHandler(async (event) => {
 
   const allContextParts = [
     ...contextParts.map(c => `${c.name}:\n${c.content}`),
+    ...(sellingPoint ? [`Prodejní argumenty (${sellingPoint.name}):\n${sellingPoint.content}`] : []),
     ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
   ]
 
@@ -190,6 +194,72 @@ export default defineEventHandler(async (event) => {
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date() },
+            })
+          } else if (body.stepType === 'VALUE_ALIGNMENT') {
+            // inputData: { partners: [<full profile objects from PARTNER_PROFILING>] }
+            const inputPartners = (() => {
+              const d = body.inputData
+              if (Array.isArray(d)) return d
+              const p = (d as Record<string, unknown> | undefined)?.partners
+              if (Array.isArray(p)) return p
+              return []
+            })() as Array<Record<string, unknown>>
+
+            if (inputPartners.length === 0) {
+              throw new Error('Žádní partneři k analýze. Vyberte je z výsledků Kroku 3.')
+            }
+
+            const allAlignments: unknown[] = []
+
+            for (let i = 0; i < inputPartners.length; i++) {
+              const ip = inputPartners[i]
+
+              write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'processing' } })
+              write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
+
+              const userMsg = [
+                'Analyzuj soulad mezi tímto partnerem a našimi prodejními argumenty. Vrať strukturovaný JSON dle systémového promptu.',
+                '',
+                'Profil partnera:',
+                '```json',
+                JSON.stringify(ip, null, 2),
+                '```',
+              ].join('\n')
+
+              try {
+                let alignmentOutput = ''
+                const gen = streamStepAI({
+                  stepType: body.stepType,
+                  systemPrompt: systemPromptText,
+                  contextParts: allContextParts,
+                  userMessage: userMsg,
+                })
+                for await (const chunk of gen) {
+                  alignmentOutput += chunk
+                  write({ chunk })
+                }
+                const parsed = parseAIOutput(alignmentOutput)
+                const alignment = {
+                  partnerId: ip.partnerId,
+                  name: ip.name,
+                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
+                    ? parsed
+                    : { raw: parsed }),
+                }
+                allAlignments.push(alignment)
+                write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'done', alignment } })
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                write({ chunk: `  ❌ ${msg}\n` })
+                allAlignments.push({ partnerId: ip.partnerId, name: ip.name, error: msg })
+                write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'error', error: msg } })
+              }
+            }
+
+            write({ chunk: `\n✅ Hotovo! Analyzováno ${inputPartners.length} partnerů.\n` })
+            await prisma.pipelineStep.update({
+              where: { id: step.id },
+              data: { status: 'COMPLETED', outputData: allAlignments as never, completedAt: new Date() },
             })
           } else {
             let fullOutput = ''
