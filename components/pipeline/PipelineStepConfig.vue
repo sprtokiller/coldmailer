@@ -218,6 +218,7 @@ async function confirmSaveToLibrary() {
           :disabled="!pipeline.contextParts.length"
           class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-gray-400"
           @focus="showContextDropdown = true"
+          @click="showContextDropdown = true"
           @blur="onSearchBlur"
         />
         <div

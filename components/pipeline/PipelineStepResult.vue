@@ -20,11 +20,24 @@ const tableRows = computed(() => pipeline.resolveTable(props.step.key)?.rows ?? 
 const allSelected = computed(() => tableRows.value.length > 0 && selectedRows.value.size === tableRows.value.length)
 const someSelected = computed(() => selectedRows.value.size > 0 && selectedRows.value.size < tableRows.value.length)
 
+watch(() => pipeline.getOutputMode(props.step.key, 'item'), (mode) => {
+  if (props.step.key === 'PARTNER_IDENTIFICATION' && mode === 'candidates') {
+    pipeline.initStep3Selection()
+  }
+}, { immediate: true })
+
 const tableGridStyle = computed(() => {
   const t = pipeline.resolveTable(props.step.key)
   if (!t) return {}
   const n = pipeline.tableColumns(t.rows).length
   return { gridTemplateColumns: `1.5rem ${Array(n).fill('minmax(0,1fr)').join(' ')} 2rem` }
+})
+
+const tableGridStyleSimple = computed(() => {
+  const t = pipeline.resolveTable(props.step.key)
+  if (!t) return {}
+  const n = pipeline.tableColumns(t.rows).length
+  return { gridTemplateColumns: `${Array(n).fill('minmax(0,1fr)').join(' ')} 2rem` }
 })
 
 watch(() => tableRows.value.length, () => { selectedRows.value = new Set() })
@@ -223,24 +236,24 @@ async function deleteSelectedRows() {
     <template v-else-if="step.key === 'PARTNER_IDENTIFICATION'">
       <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
         <button
-          v-for="m in [['item', 'Podle položek'], ['candidates', 'Kandidáti'], ['raw', 'Raw']]"
+          v-for="m in [['candidates', 'Výběr leadů'], ['item', 'Podle položek'], ['raw', 'Raw']]"
           :key="m[0]"
           class="px-3 py-1 rounded-lg font-medium transition-all"
-          :class="pipeline.getOutputMode(step.key, 'item') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          :class="pipeline.getOutputMode(step.key, 'candidates') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
           @click="pipeline.setOutputMode(step.key, m[0])"
         >
           {{ m[1] }}
         </button>
       </div>
 
-      <div v-if="pipeline.getOutputMode(step.key, 'item') === 'item'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span>
+      <div v-if="pipeline.getOutputMode(step.key, 'candidates') === 'item'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
+        <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+          <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span><span></span>
         </div>
         <div
           v-for="(pi, idx) in pipeline.partnerItems(step.key)"
           :key="idx"
-          class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
+          class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
           :class="pi.error ? 'bg-red-50' : 'bg-white'"
         >
           <span class="text-gray-400">{{ idx + 1 }}</span>
@@ -249,27 +262,107 @@ async function deleteSelectedRows() {
           <span class="text-center text-gray-500">{{ pi.serpResults ?? '–' }}</span>
           <span class="text-center text-gray-500">{{ pi.pagesLoaded ?? '–' }}</span>
           <span class="text-center font-semibold" :class="(pi.partners?.length ?? 0) > 0 ? 'text-success' : 'text-gray-400'">{{ pi.partners?.length ?? (pi.error ? '✗' : '–') }}</span>
+          <PipelineHoldDeleteButton @delete="pipeline.deletePartnerItem(step.key, idx)" />
         </div>
       </div>
 
-      <div v-else-if="pipeline.getOutputMode(step.key, 'item') === 'candidates'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[1fr_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>Kandidát</span><span class="text-center">Počet položek</span>
+      <div v-else-if="pipeline.getOutputMode(step.key, 'candidates') === 'candidates'">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-500">
+            {{ pipeline.step3SelectedCount() }} / {{ pipeline.step3FilteredCandidates().length }} vybráno
+          </span>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-1.5 text-xs text-gray-500">
+              Min. výskytů:
+              <input
+                v-model.number="pipeline.step3FreqFilter"
+                type="number"
+                min="1"
+                :max="pipeline.step3Candidates().length ? pipeline.step3Candidates()[0]?.frequency ?? 1 : 1"
+                class="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+              />
+            </label>
+            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step3SelectAll()">Vše</button>
+            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step3SelectUnprocessed()">Nevypracované</button>
+            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step3DeselectAll()">Žádné</button>
+          </div>
         </div>
-        <div v-for="(c, ci) in pipeline.candidateList(step.key)" :key="ci" class="grid grid-cols-[1fr_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 bg-white items-center">
-          <span class="font-medium text-gray-700">{{ c.name }}</span>
-          <div class="relative text-center">
-            <span class="cursor-default underline decoration-dotted text-gray-600 font-semibold" @mouseenter="pipeline.candidateHoverIdx = ci" @mouseleave="pipeline.candidateHoverIdx = null">{{ c.itemCount }}</span>
-            <div v-if="pipeline.candidateHoverIdx === ci" class="absolute right-0 bottom-full mb-1 z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-2 text-left min-w-[14rem] max-w-xs">
-              <p class="font-medium text-gray-700 mb-1 text-[11px]">Položky ({{ c.itemCount }}):</p>
-              <ul class="space-y-0.5">
-                <li v-for="n in c.itemNames" :key="n" class="text-gray-500 truncate text-[11px]">· {{ n }}</li>
-              </ul>
+        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-80 overflow-y-auto">
+          <div class="grid grid-cols-[1.5rem_1fr_4rem_1fr_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 sticky top-0 z-10 border-b border-gray-100">
+            <span></span><span>Partner</span><span class="text-center">Výskytů</span><span>Nalezen v</span><span></span>
+          </div>
+          <label
+            v-for="c in pipeline.step3FilteredCandidates()"
+            :key="c.partnerId"
+            class="grid grid-cols-[1.5rem_1fr_4rem_1fr_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
+            :class="pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50'"
+          >
+            <input type="checkbox" v-model="pipeline.step3SelectedIds[c.partnerId]" class="accent-primary" />
+            <span class="font-medium text-gray-700 truncate" :title="c.name">{{ c.name }}</span>
+            <span class="text-center font-semibold" :class="c.frequency > 1 ? 'text-primary' : 'text-gray-400'">{{ c.frequency }}×</span>
+            <span class="text-gray-400 truncate text-[10px]" :title="c.itemNames.join(', ')">{{ c.itemNames.join(', ') }}</span>
+            <PipelineHoldDeleteButton @delete="pipeline.deletePartnerCandidate(step.key, c.name)" />
+          </label>
+          <div v-if="!pipeline.step3FilteredCandidates().length" class="px-3 py-3 text-gray-400 text-center">Žádní kandidáti.</div>
+        </div>
+      </div>
+
+      <pre v-if="pipeline.getOutputMode(step.key, 'candidates') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
+    </template>
+
+    <template v-else-if="step.key === 'MARKET_SCANNING'">
+      <template v-if="pipeline.resolveTable(step.key)">
+        <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
+          <button
+            v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
+            :key="m[0]"
+            class="px-3 py-1 rounded-lg font-medium transition-all"
+            :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            @click="pipeline.setOutputMode(step.key, m[0])"
+          >
+            {{ m[1] }}
+          </button>
+        </div>
+
+        <div v-if="pipeline.getOutputMode(step.key, 'table') === 'table'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
+          <div class="overflow-x-auto max-h-64 overflow-y-auto">
+            <div
+              class="grid bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 sticky top-0 z-10 border-b border-gray-100"
+              :style="tableGridStyleSimple"
+            >
+              <span
+                v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
+                :key="col"
+                class="truncate whitespace-nowrap"
+              >
+                {{ col }}
+              </span>
+              <span></span>
+            </div>
+            <div
+              v-for="(row, ri) in pipeline.resolveTable(step.key)!.rows"
+              :key="ri"
+              class="grid px-3 py-1.5 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60 bg-white"
+              :style="tableGridStyleSimple"
+            >
+              <span
+                v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
+                :key="col"
+                class="text-gray-600 truncate text-[11px]"
+                :title="String(row[col] ?? '')"
+              >
+                {{ typeof row[col] === 'object' ? JSON.stringify(row[col]) : (row[col] ?? '–') }}
+              </span>
+              <PipelineHoldDeleteButton @delete="pipeline.deleteTableRow(step.key, ri)" />
+            </div>
+            <div v-if="!pipeline.resolveTable(step.key)!.rows.length" class="px-3 py-3 text-gray-400 text-center">
+              Žádné záznamy.
             </div>
           </div>
         </div>
-        <div v-if="!pipeline.candidateList(step.key).length" class="px-3 py-3 text-gray-400 text-center">Žádní kandidáti.</div>
-      </div>
+
+        <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
+      </template>
 
       <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
     </template>
@@ -278,7 +371,7 @@ async function deleteSelectedRows() {
       <template v-if="pipeline.resolveTable(step.key)">
         <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
           <button
-            v-for="m in [['table', 'Table'], ['raw', 'Raw']]"
+            v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
             :key="m[0]"
             class="px-3 py-1 rounded-lg font-medium transition-all"
             :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"

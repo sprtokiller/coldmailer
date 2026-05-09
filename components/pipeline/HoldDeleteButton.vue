@@ -66,6 +66,8 @@ function cancel() {
         :stroke-dashoffset="C * (1 - progress / 100)"
       />
     </svg>
-    <span class="relative z-10 text-[11px] leading-none">✕</span>
+    <svg class="relative z-10 w-2.5 h-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M2 2l6 6M8 2l-6 6" />
+    </svg>
   </button>
 </template>

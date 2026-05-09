@@ -118,6 +118,8 @@ interface PipelineRunContext {
   deleteTableRow: (stepKey: string, rowIndex: number) => Promise<void>
   deleteTableRows: (stepKey: string, rowIndices: number[]) => Promise<void>
   deleteProfilingProfile: (stepKey: string, profileIndex: number) => Promise<void>
+  deletePartnerItem: (stepKey: string, itemIndex: number) => Promise<void>
+  deletePartnerCandidate: (stepKey: string, candidateName: string) => Promise<void>
   startEditOutput: (stepKey: string) => void
   cancelEditOutput: () => void
   requestSaveOutput: (stepKey: string) => void
@@ -394,11 +396,9 @@ export async function usePipelineRunPage() {
       ),
     )
     const selected: Record<string, boolean> = {}
-    let picked = 0
     for (const candidate of step3Candidates()) {
       const isProcessed = done.has(candidate.partnerId.toLowerCase()) || done.has(candidate.name.toLowerCase())
-      selected[candidate.partnerId] = !isProcessed && picked < 3
-      if (!isProcessed && picked < 3) picked++
+      selected[candidate.partnerId] = !isProcessed
     }
     step3SelectedIds.value = selected
     step3Initialized.value = true
@@ -611,6 +611,34 @@ export async function usePipelineRunPage() {
     await refresh()
   }
 
+  async function deletePartnerItem(stepKey: string, itemIndex: number) {
+    const result = getStepResult(stepKey)
+    if (!result) return
+    const data = result.outputData as { items?: PartnerResultItem[] }
+    const newItems = (data.items ?? []).filter((_, i) => i !== itemIndex)
+    await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+      method: 'PATCH',
+      body: { outputData: { ...data, items: newItems } },
+    })
+    await refresh()
+  }
+
+  async function deletePartnerCandidate(stepKey: string, candidateName: string) {
+    const result = getStepResult(stepKey)
+    if (!result) return
+    const data = result.outputData as { items?: PartnerResultItem[] }
+    const key = candidateName.toLowerCase().trim()
+    const newItems = (data.items ?? []).map(item => ({
+      ...item,
+      partners: (item.partners ?? []).filter(p => p.name.toLowerCase().trim() !== key),
+    }))
+    await $fetch(`/api/pipeline/${route.params.id}/steps/${result.id}`, {
+      method: 'PATCH',
+      body: { outputData: { ...data, items: newItems } },
+    })
+    await refresh()
+  }
+
   function startEditOutput(stepKey: string) {
     const result = getStepResult(stepKey)
     editingOutputDraft.value = JSON.stringify(result?.outputData ?? {}, null, 2)
@@ -815,6 +843,8 @@ export async function usePipelineRunPage() {
     deleteTableRow,
     deleteTableRows,
     deleteProfilingProfile,
+    deletePartnerItem,
+    deletePartnerCandidate,
     startEditOutput,
     cancelEditOutput,
     requestSaveOutput,
