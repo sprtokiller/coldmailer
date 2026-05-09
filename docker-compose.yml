@@ -21,13 +21,8 @@ services:
       PGPASSWORD: coldmailer
     volumes:
       - ./backups:/backups
-    entrypoint: >
-      sh -c "while true; do
-        pg_dump -h db -U coldmailer coldmailer > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql
-        && echo \"Backup done: $$(date)\"
-        && find /backups -name '*.sql' -mtime +7 -delete;
-        sleep 86400;
-      done"
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
     depends_on:
       db:
         condition: service_healthy
