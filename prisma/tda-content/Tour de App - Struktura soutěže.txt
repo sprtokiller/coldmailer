@@ -1,0 +1,86 @@
+# Struktura soutěže a simulace reálné IT praxe
+
+## Jak soutěž funguje
+
+Tour de App probíhá několik měsíců a skládá se ze tří hlavních částí:
+
+1. nominační kolo,
+2. soutěžní kolo,
+3. grandfinále.
+
+Každá fáze postupně přibližuje účastníky realitě skutečného softwarového projektu a simuluje různé aspekty juniorské IT praxe.
+
+## Nominační kolo
+
+V prvním kole dostanou týmy zadání webové aplikace a mají vytvořit funkční řešení.
+
+Typicky:
+
+- pracují vzdáleně,
+- používají vlastní technologie,
+- učí se samostatně,
+- řeší frontend, backend i návrh aplikace.
+
+V této části se hodnotí hlavně:
+
+- schopnost dotáhnout projekt,
+- technické zvládnutí aplikace,
+- základní orientace ve vývoji,
+- samostatnost.
+
+Tato fáze připomíná první samostatný vývojářský projekt nebo menší freelance zakázku.
+
+## Soutěžní kolo
+
+Druhé kolo přidává jeden z nejdůležitějších prvků celé soutěže – komunikaci s klientem.
+
+Studenti už nedostávají pouze přesné technické zadání, ale musí:
+
+- komunikovat se zástupcem klienta,
+- zjišťovat požadavky,
+- doptávat se,
+- reagovat na změny,
+- prioritizovat funkce,
+- obhajovat rozhodnutí.
+
+Soutěž se tím posouvá od čistého programování směrem k:
+
+- produktovému přemýšlení,
+- analýze,
+- projektovému řízení,
+- komunikaci,
+- UX uvažování.
+
+Tato část velmi připomíná:
+
+- startupové prostředí,
+- juniorské pozice v IT firmách,
+- agenturní nebo freelance vývoj.
+
+## Grandfinále
+
+Grandfinále probíhá fyzicky, často na Fakultě informatiky Masarykovy univerzity.
+
+Finální část bývá intenzivní a zahrnuje:
+
+- několikadenní program,
+- práci pod časovým tlakem,
+- iterace produktu,
+- komunikaci s mentory,
+- úpravy podle feedbacku,
+- závěrečnou prezentaci před porotou.
+
+Studenti zde:
+
+- programují,
+- prezentují,
+- obhajují rozhodnutí,
+- reagují na otázky poroty,
+- iterují řešení v krátkém čase.
+
+Charakterem se grandfinále podobá:
+
+- startup pitchi,
+- klientské prezentaci,
+- internímu demo day,
+- hackathonu propojenému s produktovým vývojem.

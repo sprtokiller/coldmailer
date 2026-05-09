@@ -74,13 +74,13 @@ const form = ref({
   name: '',
   content: '',
   stepType: 'MARKET_SCANNING',
-  stepKeys: ['VALUE_ALIGNMENT'] as string[],
+  stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as string[],
   subject: '',
   body: '',
 })
 
 function resetForm() {
-  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT'], subject: '', body: '' }
+  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '' }
   editingId.value = null
   showForm.value = false
 }

@@ -1,0 +1,67 @@
+# Mise, cílová skupina a filozofie soutěže
+
+## Co je Tour de App
+
+Tour de App je týmová IT soutěž pro středoškoláky zaměřená na vývoj reálných webových aplikací. Na rozdíl od klasických programátorských olympiád nestaví primárně na algoritmických úlohách nebo individuálním výkonu, ale na simulaci skutečné juniorské praxe v softwarovém vývoji.
+
+Účastníci pracují ve 2–3členných týmech a vytvářejí webovou aplikaci podle zadání fiktivního klienta. Součástí soutěže není pouze programování, ale také návrh UX, komunikace s klientem, prioritizace funkcí, prezentace řešení a týmová spolupráce.
+
+Soutěž vznikla jako reakce na problém technického vzdělávání, kdy studenti často umí psát kód, ale nemají zkušenost s:
+
+- prací v týmu,
+- verzováním projektu,
+- komunikací se zákazníkem,
+- analýzou požadavků,
+- prací s nejasným zadáním,
+- prezentací řešení,
+- reálným workflow vývoje aplikací.
+
+Cílem soutěže je proto zmenšovat propast mezi školní teorií a skutečnou IT praxí.
+
+## Pro koho je soutěž určena
+
+Tour de App je určena:
+
+- studentům středních škol,
+- týmům o 2–3 lidech,
+- studentům do 26 let,
+- včetně relativních začátečníků.
+
+Velmi důležitý aspekt celé soutěže je její otevřenost vůči méně zkušeným účastníkům. Organizátoři opakovaně zdůrazňují, že:
+
+- soutěž není jen pro elitní programátory,
+- zapojit se mohou i lidé bez hlubších zkušeností,
+- velká část učení probíhá až během samotné soutěže.
+
+To je oproti běžným IT soutěžím poměrně netypické. Tour de App se nesnaží pouze filtrovat nejlepší technické talenty, ale funguje spíše jako:
+
+- vzdělávací inkubátor,
+- onboarding do IT světa,
+- simulace juniorské praxe,
+- bezpečné prostředí pro první větší projekt.
+
+## Vzdělávací a komunitní charakter
+
+Tour de App není čistě výkonnostní soutěž. Má velmi silnou edukativní a komunitní vrstvu, jejímž cílem je dlouhodobý rozvoj účastníků.
+
+Organizátoři poskytují:
+
+- webináře,
+- články,
+- návody,
+- mentoring,
+- Discord komunitu,
+- konzultace s odborníky.
+
+Celé prostředí je nastavené tak, aby:
+
+- chyba nebyla fatální,
+- experimentování bylo podporované,
+- důležitější než výhra byl progres a získaná zkušenost.
+
+Tour de App se proto profiluje jako:
+
+- moderní,
+- komunitní,
+- praktická,
+- „industry-like“ soutěž propojená s reálnou praxí.

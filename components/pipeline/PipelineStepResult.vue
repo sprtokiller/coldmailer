@@ -20,11 +20,7 @@ const tableRows = computed(() => pipeline.resolveTable(props.step.key)?.rows ?? 
 const allSelected = computed(() => tableRows.value.length > 0 && selectedRows.value.size === tableRows.value.length)
 const someSelected = computed(() => selectedRows.value.size > 0 && selectedRows.value.size < tableRows.value.length)
 
-watch(() => pipeline.getOutputMode(props.step.key, 'item'), (mode) => {
-  if (props.step.key === 'PARTNER_IDENTIFICATION' && mode === 'candidates') {
-    pipeline.initStep3Selection()
-  }
-}, { immediate: true })
+const expandedItem = ref<string | null>(null)
 
 const tableGridStyle = computed(() => {
   const t = pipeline.resolveTable(props.step.key)
@@ -283,78 +279,54 @@ async function deleteSelectedRows() {
     <template v-else-if="step.key === 'PARTNER_IDENTIFICATION'">
       <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
         <button
-          v-for="m in [['candidates', 'Výběr leadů'], ['item', 'Podle položek'], ['raw', 'Raw']]"
+          v-for="m in [['table', 'Přehled'], ['raw', 'Raw']]"
           :key="m[0]"
           class="px-3 py-1 rounded-lg font-medium transition-all"
-          :class="pipeline.getOutputMode(step.key, 'candidates') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
           @click="pipeline.setOutputMode(step.key, m[0])"
         >
           {{ m[1] }}
         </button>
       </div>
 
-      <div v-if="pipeline.getOutputMode(step.key, 'candidates') === 'item'" class="rounded-lg border border-gray-100 overflow-hidden text-xs">
+      <pre v-if="pipeline.getOutputMode(step.key, 'table') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
+
+      <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
         <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
           <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span><span></span>
         </div>
-        <div
-          v-for="(pi, idx) in pipeline.partnerItems(step.key)"
-          :key="idx"
-          class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
-          :class="pi.error ? 'bg-red-50' : 'bg-white'"
-        >
-          <span class="text-gray-400">{{ idx + 1 }}</span>
-          <span class="truncate font-medium text-gray-700" :title="pi.itemName">{{ pi.itemName }}</span>
-          <span class="truncate text-gray-400 text-[10px]" :title="pi.searchTerm">{{ pi.searchTerm ?? '…' }}</span>
-          <span class="text-center text-gray-500">{{ pi.serpResults ?? '–' }}</span>
-          <span class="text-center text-gray-500">{{ pi.pagesLoaded ?? '–' }}</span>
-          <span class="text-center font-semibold" :class="(pi.partners?.length ?? 0) > 0 ? 'text-success' : 'text-gray-400'">{{ pi.partners?.length ?? (pi.error ? '✗' : '–') }}</span>
-          <PipelineHoldDeleteButton @delete="pipeline.deletePartnerItem(step.key, idx)" />
-        </div>
-      </div>
-
-      <div v-else-if="pipeline.getOutputMode(step.key, 'candidates') === 'candidates'">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-500">
-            {{ pipeline.step3SelectedCount() }} / {{ pipeline.step3FilteredCandidates().length }} vybráno
-          </span>
-          <div class="flex items-center gap-3">
-            <label class="flex items-center gap-1.5 text-xs text-gray-500">
-              Min. výskytů:
-              <input
-                v-model.number="pipeline.step3FreqFilter"
-                type="number"
-                min="1"
-                :max="pipeline.step3Candidates().length ? pipeline.step3Candidates()[0]?.frequency ?? 1 : 1"
-                class="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
-            </label>
-            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step3SelectAll()">Vše</button>
-            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step3SelectUnprocessed()">Nevypracované</button>
-            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step3DeselectAll()">Žádné</button>
-          </div>
-        </div>
-        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-80 overflow-y-auto">
-          <div class="grid grid-cols-[1.5rem_1fr_4rem_1fr_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 sticky top-0 z-10 border-b border-gray-100">
-            <span></span><span>Partner</span><span class="text-center">Výskytů</span><span>Nalezen v</span><span></span>
-          </div>
-          <label
-            v-for="c in pipeline.step3FilteredCandidates()"
-            :key="c.partnerId"
-            class="grid grid-cols-[1.5rem_1fr_4rem_1fr_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
-            :class="pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50'"
+        <template v-for="(pi, idx) in pipeline.partnerItems(step.key)" :key="idx">
+          <div
+            class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60 cursor-pointer"
+            :class="pi.error ? 'bg-red-50' : 'bg-white'"
+            @click="expandedItem = expandedItem === pi.itemName ? null : pi.itemName"
           >
-            <input type="checkbox" v-model="pipeline.step3SelectedIds[c.partnerId]" class="accent-primary" />
-            <span class="font-medium text-gray-700 truncate" :title="c.name">{{ c.name }}</span>
-            <span class="text-center font-semibold" :class="c.frequency > 1 ? 'text-primary' : 'text-gray-400'">{{ c.frequency }}×</span>
-            <span class="text-gray-400 truncate text-[10px]" :title="c.itemNames.join(', ')">{{ c.itemNames.join(', ') }}</span>
-            <PipelineHoldDeleteButton @delete="pipeline.deletePartnerCandidate(step.key, c.name)" />
-          </label>
-          <div v-if="!pipeline.step3FilteredCandidates().length" class="px-3 py-3 text-gray-400 text-center">Žádní kandidáti.</div>
-        </div>
+            <span class="text-gray-400">{{ idx + 1 }}</span>
+            <span class="font-medium text-gray-700 truncate" :title="pi.itemName">{{ pi.itemName }}</span>
+            <span class="truncate text-gray-400 text-[10px]" :title="pi.searchTerm">{{ pi.searchTerm ?? '…' }}</span>
+            <span class="text-center text-gray-500">{{ pi.serpResults ?? '–' }}</span>
+            <span class="text-center text-gray-500">{{ pi.pagesLoaded ?? '–' }}</span>
+            <span class="text-center font-semibold" :class="(pi.partners?.length ?? 0) > 0 ? 'text-success' : 'text-gray-400'">{{ pi.partners?.length ?? (pi.error ? '✗' : '–') }}</span>
+            <PipelineHoldDeleteButton @delete.stop="pipeline.deletePartnerItem(step.key, idx)" />
+          </div>
+          <div v-if="expandedItem === pi.itemName" class="px-4 pb-3 pt-2 border-t border-gray-100 bg-gray-50/50">
+            <div v-if="pi.error" class="text-danger text-[11px]">{{ pi.error }}</div>
+            <div v-else-if="!pi.partners?.length" class="text-gray-400 text-[11px]">Žádní partneři nenalezeni.</div>
+            <ul v-else class="space-y-1">
+              <li
+                v-for="p in pi.partners"
+                :key="p.partnerId"
+                class="flex items-center gap-2 text-[11px] text-gray-700"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0"></span>
+                <span class="font-medium">{{ p.name }}</span>
+                <span v-if="p.isNew" class="text-[9px] bg-success/10 text-success px-1.5 py-0.5 rounded-full font-semibold">nový</span>
+              </li>
+            </ul>
+          </div>
+        </template>
+        <div v-if="!pipeline.partnerItems(step.key).length" class="px-3 py-3 text-gray-400 text-center">Žádné položky.</div>
       </div>
-
-      <pre v-if="pipeline.getOutputMode(step.key, 'candidates') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
     </template>
 
     <template v-else-if="step.key === 'MARKET_SCANNING'">

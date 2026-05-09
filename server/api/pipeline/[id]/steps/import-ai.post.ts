@@ -228,6 +228,42 @@ function mergeOutputData(existing: unknown, newData: unknown, stepType: string):
   return [...recordMap.values()]
 }
 
+// If rawText is already valid JSON, return the parsed value directly.
+// mergeOutputData handles array/object/wrapper normalisation internally.
+function tryExtractValidJSON(rawText: string): unknown | null {
+  const { data } = parseAIOutput(rawText.trim())
+  return data ?? null
+}
+
+async function saveStep(
+  existingStep: { id: string } | null,
+  runId: string,
+  body: ImportBody & { systemPromptId?: string },
+  mergedData: unknown,
+  runnerId: string,
+) {
+  if (existingStep) {
+    await prisma.pipelineStep.update({
+      where: { id: existingStep.id },
+      data: { outputData: mergedData as never },
+    })
+  } else {
+    await prisma.pipelineStep.create({
+      data: {
+        pipelineRunId: runId,
+        stepType: body.stepType as never,
+        status: 'COMPLETED',
+        systemPromptId: body.systemPromptId ?? null,
+        contextPartIds: [],
+        inputData: {},
+        outputData: mergedData as never,
+        runnerId,
+        completedAt: new Date(),
+      },
+    })
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
   const runId = getRouterParam(event, 'id')!
@@ -257,8 +293,19 @@ export default defineEventHandler(async (event) => {
     }),
   ])
 
-  const schemaPrompt = customPrompt?.content ?? dbSystemPrompt?.content ?? STEP_SYSTEM_PROMPTS[body.stepType] ?? ''
   const existingData = existingStep?.outputData ?? null
+
+  // If the input is already valid JSON, skip the AI and merge directly.
+  const preDetected = tryExtractValidJSON(body.rawInputText)
+  if (preDetected !== null) {
+    const itemCount = Array.isArray(preDetected) ? preDetected.length : 1
+    console.log('[import-ai] input is already valid JSON — skipping AI, merging %d item(s) directly', itemCount)
+    const mergedData = mergeOutputData(existingData, preDetected, body.stepType)
+    await saveStep(existingStep, runId, body, mergedData, user.id)
+    return { success: true, mergedData }
+  }
+
+  const schemaPrompt = customPrompt?.content ?? dbSystemPrompt?.content ?? STEP_SYSTEM_PROMPTS[body.stepType] ?? ''
 
   const importSystemPrompt = `Jsi asistent pro transformaci dat. Převeď nestrukturovaný text do strukturovaného JSON dle níže definovaného schématu.
 
@@ -274,7 +321,8 @@ PRAVIDLA:
 4. VŽDY vrať JSON POLE (i pokud jde o jediný záznam). Je to nutné pro správné sloučení více importů. Pokud schéma výše říká "single object", zabal ho do pole.
 5. VŠECHNA textová pole (popisky, shrnutí, poznámky, označení) piš VÝHRADNĚ V ČEŠTINĚ. Vlastní jména, URL, e-maily a technické identifikátory ponechej v původní podobě.
 6. VŽDY dokonči JSON strukturu — uzavři všechna pole, objekty a řetězce. Pokud by výstup přesahoval limit tokenů, raději SNIŽ počet vrácených položek, ale NIKDY nevracej neúplný JSON. Méně kompletních záznamů je lepší než více neúplných.
-7. Pokud vstupní text obsahuje citační značky ve formátu 【N†LX-LY】 nebo jiné anotace nástrojů deep research, NEZAHRNUJ je do výstupního JSON — zcela je vynech ze všech textových polí (sizeNote, summary, note, activities apod.).`
+7. Pokud vstupní text obsahuje citační značky ve formátu 【N†LX-LY】 nebo jiné anotace nástrojů deep research, NEZAHRNUJ je do výstupního JSON — zcela je vynech ze všech textových polí (sizeNote, summary, note, activities apod.).
+8. NIKDY neposkytuj vysvětlení, komentáře ani odůvodnění. VŽDY vrať pouze \`\`\`json blok — i pokud se vstupní data zdají být již v požadovaném formátu. Jakákoli odpověď bez \`\`\`json bloku je chyba.`
 
   const existingContext = existingData
     ? `\n\nStávající data (pro deduplikaci — NEOPAKUJ tyto záznamy):\n\`\`\`json\n${JSON.stringify(existingData, null, 2).slice(0, 3000)}\n\`\`\``
@@ -310,27 +358,6 @@ PRAVIDLA:
   }
 
   const mergedData = mergeOutputData(existingData, newData, body.stepType)
-
-  if (existingStep) {
-    await prisma.pipelineStep.update({
-      where: { id: existingStep.id },
-      data: { outputData: mergedData as never },
-    })
-  } else {
-    await prisma.pipelineStep.create({
-      data: {
-        pipelineRunId: runId,
-        stepType: body.stepType as never,
-        status: 'COMPLETED',
-        systemPromptId: body.systemPromptId ?? null,
-        contextPartIds: [],
-        inputData: {},
-        outputData: mergedData as never,
-        runnerId: user.id,
-        completedAt: new Date(),
-      },
-    })
-  }
-
+  await saveStep(existingStep, runId, body, mergedData, user.id)
   return { success: true, mergedData }
 })

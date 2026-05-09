@@ -490,7 +490,7 @@ export async function usePipelineRunPage() {
   }
 
   function step3SelectedCount() {
-    return step3FilteredCandidates().filter(candidate => step3SelectedIds.value[candidate.partnerId]).length
+    return step3FilteredCandidates().filter(c => step3SelectedIds.value[c.partnerId]).length
   }
 
   function partnerItems(stepKey: string): PartnerResultItem[] {
@@ -786,12 +786,12 @@ export async function usePipelineRunPage() {
       }
       inputData = { items: selectedItems }
     } else if (stepKey === 'PARTNER_PROFILING') {
-      const selected = step3FilteredCandidates().filter(candidate => step3SelectedIds.value[candidate.partnerId])
-      if (selected.length === 0) {
+      const allSelected = step3FilteredCandidates().filter(c => step3SelectedIds.value[c.partnerId])
+      if (allSelected.length === 0) {
         alert('Vyberte alespoň jednoho partnera k prozkoumání.')
         return
       }
-      inputData = { partners: selected }
+      inputData = { partners: allSelected }
     } else {
       try {
         inputData = JSON.parse(cfg.inputData || '{}')

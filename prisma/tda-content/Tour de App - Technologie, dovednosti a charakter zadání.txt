@@ -1,0 +1,107 @@
+# Technologie, dovednosti a charakter zadání
+
+## Technologická otevřenost
+
+Tour de App není navázaná na jeden konkrétní framework, jazyk nebo technologii. Důležitější než konkrétní stack je schopnost:
+
+- vytvořit funkční produkt,
+- orientovat se ve workflow,
+- spolupracovat v týmu,
+- řešit problémy samostatně.
+
+Účastníci často pracují s technologiemi jako:
+
+- frontend frameworky,
+- backendové služby,
+- databáze,
+- API,
+- Docker,
+- Git.
+
+Organizátoři zároveň poskytují studijní materiály k tématům jako:
+
+- Git,
+- Docker,
+- frontend,
+- backend,
+- návrh aplikací,
+- týmová spolupráce.
+
+## Praktické dovednosti
+
+Tour de App rozvíjí praktické dovednosti velmi podobné skutečné juniorské praxi v softwarových firmách.
+
+Účastníci si osvojují například:
+
+- práci s verzovacím systémem,
+- deployment,
+- návrh databází,
+- API komunikaci,
+- UX návrh,
+- prezentaci projektu,
+- time management,
+- prioritizaci práce,
+- komunikaci v týmu,
+- práci s nejasným zadáním.
+
+Soutěž tak nesimuluje pouze samotné programování, ale celý proces tvorby digitálního produktu.
+
+## Jaké typy lidí soutěž rozvíjí
+
+Tour de App není zaměřena pouze na „čisté kodéry“. Dobře funguje i pro lidi se silnějšími netechnickými nebo hybridními dovednostmi.
+
+Rozvíjí například:
+
+- frontend vývojáře,
+- backend vývojáře,
+- designéry,
+- analytiky,
+- projektové manažery,
+- prezentující členy týmu,
+- komunikativní koordinátory.
+
+Tour de App je proto výrazně:
+
+- týmová,
+- interdisciplinární,
+- produktově orientovaná soutěž.
+
+## Charakter zadání
+
+Zadání v Tour de App bývají navržena tak, aby připomínala skutečný produktový vývoj.
+
+Typicky:
+
+- mají nejednoznačné požadavky,
+- umožňují různé přístupy,
+- nejdou jednoduše „vygooglit“,
+- vyžadují rozhodování a analýzu.
+
+V pozdějších kolech navíc:
+
+- část požadavků vzniká během komunikace,
+- klient může měnit priority,
+- tým musí reagovat na feedback.
+
+Hodnotí se tedy nejen technická implementace, ale i:
+
+- adaptabilita,
+- analýza,
+- rozhodování,
+- argumentace,
+- UX přemýšlení,
+- schopnost reagovat na změny.
+
+## Rozsah a růst soutěže
+
+Čtvrtý ročník soutěže byl zahájen v říjnu 2025.
+
+V daném ročníku:
+
+- se přihlásilo 144 týmů,
+- zapojilo se 88 škol,
+- 45 škol bylo nových,
+- soutěž se rozšířila i mimo Česko,
+- nově se zapojily školy z Německa a Polska.
+
+Jedním z deklarovaných cílů organizátorů je vytvořit soutěž s mezinárodním přesahem, kde si studenti mohou bezpečně vyzkoušet vývoj webových aplikací v praxi bez ohledu na jazyk nebo předchozí zkušenosti.

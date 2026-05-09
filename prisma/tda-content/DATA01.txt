@@ -1,0 +1,169 @@
+{
+  "competitions": [
+    {
+      "url": "https://olympiada.ksp.mff.cuni.cz",
+      "name": "Olympiáda v informatice",
+      "type": "programming",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "MŠMT (ve spolupráci s MFF UK)",
+      "description": "Celostátní soutěž pro středoškoláky v řešení algoritmických úloh pomocí programování.",
+      "target_group": "SŠ"
+    },
+    {
+      "url": "https://ksp.mff.cuni.cz",
+      "name": "Korespondenční seminář z programování (KSP)",
+      "type": "programming",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Matematicko-fyzikální fakulta UK",
+      "description": "Dlouhodobá soutěž pro středoškoláky, kteří řeší programátorské úlohy na dálku v několika sériích během roku.",
+      "target_group": "SŠ"
+    },
+    {
+      "url": "https://ksi.fi.muni.cz",
+      "name": "Korespondenční seminář z informatiky (KSI)",
+      "type": "programming",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Fakulta informatiky Masarykovy univerzity",
+      "description": "Celoroční programátorský seminář pro středoškoláky, kteří řeší informatické a algoritmické úlohy na dálku.",
+      "target_group": "SŠ"
+    },
+    {
+      "url": "https://robosoutez.fel.cvut.cz",
+      "name": "Robosoutěž",
+      "type": "robotics",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Fakulta elektrotechnická ČVUT",
+      "description": "Soutěž středoškolských týmů ve stavbě a programování robotů z Lega Mindstorms, s vyvrcholením na půdě ČVUT.",
+      "target_group": "SŠ"
+    },
+    {
+      "url": "https://www.robotiada.cz",
+      "name": "Robotiáda",
+      "type": "robotics",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "JCMM (Jihomoravské centrum pro mezinárodní mobilitu)",
+      "description": "Mezinárodní soutěž mladých robotiků v Brně, kde týmy z různých věkových kategorií (žáci i studenti) soutěží s vlastními roboty v různých disciplínách.",
+      "target_group": "mix"
+    },
+    {
+      "url": "http://robotickyden.cz",
+      "name": "Robotický den",
+      "type": "robotics",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Spolek Roboti ve spolupráci s ČVUT",
+      "description": "Otevřená mezinárodní robotická soutěž a přehlídka v Praze s řadou kategorií pro roboty různých konstrukcí a věkových skupin soutěžících.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://robocupjunior.cz",
+      "name": "RoboCup Junior ČR",
+      "type": "robotics",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "RoboCup Junior CZ (spolek) a partneři",
+      "description": "Národní kolo mezinárodní soutěže RoboCup Junior, kde středoškolské týmy soutěží v robotických disciplínách (záchranář, fotbal, tanec) s možností postupu na světové finále.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.firstlegoleague.cz",
+      "name": "FIRST Lego League Czech Republic",
+      "type": "robotics",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "First Lego League Czech (organizace)",
+      "description": "Týmová soutěž pro mládež (9–16 let) zaměřená na stavbu a programování robotů ze stavebnice LEGO Mindstorms s prezentací projektů na dané téma.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://icuk.cz/pro-skoly-v2/hackathony",
+      "name": "ICUK Hackathon (Hackathon Ústecký kraj)",
+      "type": "hackathon",
+      "level": "regional",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Inovační Centrum Ústeckého kraje (ICUK)",
+      "description": "24hodinový hackathon v Ústeckém kraji určený primárně pro středoškoláky a vysokoškoláky, zaměřený na rychlou tvorbu inovativních projektů pod vedením mentorů.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.aimtechackathon.cz",
+      "name": "Aimtec Hackathon",
+      "type": "hackathon",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Aimtec (technologická společnost)",
+      "description": "Víkendový hackathon v Plzni se zaměřením na IoT, VR a další moderní technologie, kde studenti i profesionálové tvoří v týmech prototypy digitálních produktů.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.hackprague.com",
+      "name": "HackPrague",
+      "type": "hackathon",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "HackPrague (komunita a nezisková organizace)",
+      "description": "Mezinárodní hackathon pořádaný v Praze, kde se scházejí mladí vývojáři, studenti i profesionálové k intenzivní tvorbě inovativních aplikací během 24–36 hodin.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://2024.spaceappschallenge.org/locations/prague/",
+      "name": "NASA Space Apps Challenge Prague",
+      "type": "hackathon",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "NASA (lokálně koordinováno Czech Space Office)",
+      "description": "Pražská edice celosvětového hackathonu NASA Space Apps, kde smíšené týmy nadšenců a studentů během víkendu vytvářejí softwarová i hardwarová řešení pro výzvy z oblasti vesmíru a Země.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://technovationchallenge.org",
+      "name": "Technovation Girls Czech Republic",
+      "type": "product",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Technovation & Czechitas",
+      "description": "Celosvětová soutěž pro dívky ve věku 10–18 let, v níž týmy navrhují a programují mobilní aplikaci řešící společenský problém a učí se podnikatelskému myšlení.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://contest.felk.cvut.cz",
+      "name": "CTU Open Contest (ACM ICPC qualifiers)",
+      "type": "programming",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "ČVUT Praha",
+      "description": "Vysokoškolská týmová soutěž v programování (regionální kolo ICPC pro ČR/SR), kde tříčlenné týmy řeší algoritmické úlohy na čas.",
+      "target_group": "VŠ"
+    },
+    {
+      "url": "https://soutezapodnikej.cz",
+      "name": "Soutěž a Podnikej",
+      "type": "product",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Soutěž & Podnikej o.p.s.",
+      "description": "Celostátní soutěž pro středoškoláky, v níž jednotlivci nebo týmy rozvíjejí svůj podnikatelský nápad (často digitální produkt nebo službu) od prototypu až k business plánu a soutěží o realizaci.",
+      "target_group": "SŠ"
+    }
+  ]
+}
