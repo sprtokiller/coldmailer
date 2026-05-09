@@ -118,4 +118,4 @@ Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:
   }
 }
 
-Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
+Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj. Výstup bude v češtině.

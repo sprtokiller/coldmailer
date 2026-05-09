@@ -77,3 +77,4 @@ DŮLEŽITÉ:
 - hookHypothesis musí být specifická pro tohoto partnera a tento moment – ne generická fráze.
 - Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v top3 (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
+- Výstup bude v češtině.

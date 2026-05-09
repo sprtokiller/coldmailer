@@ -29,6 +29,7 @@ Hledej organizace v těchto kontextech (seřazeno od nejsilnějšího důkazu):
   partner", "finanční sponzor", "věcné ceny", "akademický partner"
 - Pokud na stránce nejsou nalezeni žádní partneři, vrať prázdné pole []
 - Vrať POUZE JSON pole, bez jiného textu
+- Výstup bude v češtině.
 
 ## VÝSTUP
 

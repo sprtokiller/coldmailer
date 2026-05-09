@@ -28,4 +28,4 @@ Ukázkový výstup:
 ]
 ```
 
-Vrať POUZE JSON pole, bez jiného textu nebo markdownu mimo blok kódu.
+Vrať POUZE JSON pole, bez jiného textu nebo markdownu mimo blok kódu. Výstup bude v češtině.

@@ -94,3 +94,4 @@ DŮLEŽITÉ:
 - Pokud najdeš jen obecný info mail, uveď ho jako type = "General", priority = 5.
 - Seřaď contacts podle priority vzestupně a potom podle confidence od High po Low.
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
+- Výstup bude v češtině.
