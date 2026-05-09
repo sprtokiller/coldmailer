@@ -12,6 +12,7 @@ interface ExecuteBody {
   stepType: string
   systemPromptId?: string
   contextPartIds?: string[]
+  manualContext?: string
   sellingPointId?: string
   inputData?: Record<string, unknown>
 }
@@ -53,6 +54,11 @@ export default defineEventHandler(async (event) => {
     dbSystemPrompt?.content ??
     STEP_SYSTEM_PROMPTS[body.stepType] ??
     'You are a helpful assistant.'
+
+  const allContextParts = [
+    ...contextParts.map(c => `${c.name}:\n${c.content}`),
+    ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
+  ]
 
   const step = await prisma.pipelineStep.create({
     data: {
@@ -155,7 +161,7 @@ export default defineEventHandler(async (event) => {
                 const gen = streamStepAI({
                   stepType: body.stepType,
                   systemPrompt: systemPromptText,
-                  contextParts: contextParts.map(c => `${c.name}:\n${c.content}`),
+                  contextParts: allContextParts,
                   userMessage: userMsg,
                 })
                 for await (const chunk of gen) {
@@ -190,7 +196,7 @@ export default defineEventHandler(async (event) => {
             const gen = streamStepAI({
               stepType: body.stepType,
               systemPrompt: systemPromptText,
-              contextParts: contextParts.map((c) => `${c.name}:\n${c.content}`),
+              contextParts: allContextParts,
               userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
             })
             for await (const chunk of gen) {

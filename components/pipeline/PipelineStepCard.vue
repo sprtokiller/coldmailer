@@ -48,7 +48,7 @@ if (!pipeline) {
           </span>
         </div>
         <span class="block text-xs text-gray-400 mt-0.5">{{ step.description }}</span>
-        <div v-if="pipeline.getStepResult(step.key) && pipeline.activeStep !== step.key" class="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+        <div v-if="pipeline.getStepResult(step.key) && pipeline.activeStep !== step.key" class="flex items-center mt-2 pt-2 border-t border-gray-50">
           <span class="text-xs font-medium text-gray-500">
             <span v-if="pipeline.stepResultRunnerName(step.key)">{{ pipeline.stepResultRunnerName(step.key) }}</span>
             <span v-if="pipeline.stepResultStatus(step.key)" class="ml-2">
@@ -56,12 +56,6 @@ if (!pipeline) {
                 {{ pipeline.stepResultStatus(step.key) }}
               </span>
             </span>
-          </span>
-          <span
-            class="text-xs text-gray-400 hover:text-primary transition-colors shrink-0 cursor-pointer"
-            @click.stop="pipeline.startEditOutput(step.key)"
-          >
-            Upravit
           </span>
         </div>
       </div>

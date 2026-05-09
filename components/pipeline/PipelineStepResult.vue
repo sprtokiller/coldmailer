@@ -20,6 +20,13 @@ const tableRows = computed(() => pipeline.resolveTable(props.step.key)?.rows ?? 
 const allSelected = computed(() => tableRows.value.length > 0 && selectedRows.value.size === tableRows.value.length)
 const someSelected = computed(() => selectedRows.value.size > 0 && selectedRows.value.size < tableRows.value.length)
 
+const tableGridStyle = computed(() => {
+  const t = pipeline.resolveTable(props.step.key)
+  if (!t) return {}
+  const n = pipeline.tableColumns(t.rows).length
+  return { gridTemplateColumns: `1.5rem ${Array(n).fill('minmax(0,1fr)').join(' ')} 2rem` }
+})
+
 watch(() => tableRows.value.length, () => { selectedRows.value = new Set() })
 
 function toggleSelectAll() {
@@ -146,7 +153,7 @@ async function deleteSelectedRows() {
             >
               {{ pipeline.expandedProfileName === profile.name ? '▲' : '▼' }}
             </span>
-            <button type="button" class="text-gray-300 hover:text-danger transition-colors text-center leading-none" title="Smazat" @click.stop="pipeline.deleteProfilingProfile(step.key, pi)">✕</button>
+            <PipelineHoldDeleteButton @delete="pipeline.deleteProfilingProfile(step.key, pi)" />
           </div>
 
           <div v-if="pipeline.expandedProfileName === String(profile.name ?? '')" class="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/50 space-y-3 text-xs">
@@ -287,51 +294,57 @@ async function deleteSelectedRows() {
             <button type="button" class="text-danger hover:underline ml-auto" @click="deleteSelectedRows">Smazat vybrané</button>
             <button type="button" class="text-gray-400 hover:text-gray-600" @click="selectedRows = new Set()">Zrušit</button>
           </div>
-          <div class="overflow-x-auto rounded-lg border border-gray-100 text-xs max-h-64 overflow-y-auto">
+          <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
             <p v-if="pipeline.resolveTable(step.key)!.wrapKey" class="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 border-b border-gray-100 font-mono">
               {{ pipeline.resolveTable(step.key)!.wrapKey }}
             </p>
-            <table class="w-full border-collapse">
-              <thead class="bg-gray-50 sticky top-0">
-                <tr>
-                  <th class="px-3 py-1.5 border-b border-gray-100 w-6">
-                    <input
-                      type="checkbox"
-                      :checked="allSelected"
-                      :ref="(el) => { if (el) (el as HTMLInputElement).indeterminate = someSelected }"
-                      class="accent-primary cursor-pointer"
-                      @change="toggleSelectAll"
-                    />
-                  </th>
-                  <th
-                    v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
-                    :key="col"
-                    class="text-left px-3 py-1.5 font-medium text-gray-400 border-b border-gray-100 whitespace-nowrap"
-                  >
-                    {{ col }}
-                  </th>
-                  <th class="px-2 py-1.5 border-b border-gray-100 w-6"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(row, ri) in pipeline.resolveTable(step.key)!.rows"
-                  :key="ri"
-                  class="border-t border-gray-50 hover:bg-gray-50/60"
-                  :class="selectedRows.has(ri) ? 'bg-primary/5' : ''"
+            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+              <div
+                class="grid bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 sticky top-0 z-10 border-b border-gray-100"
+                :style="tableGridStyle"
+              >
+                <span class="flex items-center">
+                  <input
+                    type="checkbox"
+                    :checked="allSelected"
+                    :ref="(el) => { if (el) (el as HTMLInputElement).indeterminate = someSelected }"
+                    class="accent-primary cursor-pointer"
+                    @change="toggleSelectAll"
+                  />
+                </span>
+                <span
+                  v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
+                  :key="col"
+                  class="truncate whitespace-nowrap"
                 >
-                  <td class="px-3 py-1.5 align-top">
-                    <input type="checkbox" :checked="selectedRows.has(ri)" class="accent-primary cursor-pointer" @change="toggleRow(ri)" />
-                  </td>
-                  <td v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)" :key="col" class="px-3 py-1.5 text-gray-600 align-top max-w-xs">
-                    <span class="block truncate" :title="String(row[col] ?? '')">{{ typeof row[col] === 'object' ? JSON.stringify(row[col]) : (row[col] ?? '–') }}</span>
-                  </td>
-                  <td class="px-2 py-1.5 align-top text-center">
-                    <button type="button" class="text-gray-300 hover:text-danger transition-colors" title="Smazat řádek" @click="pipeline.deleteTableRow(step.key, ri)">✕</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  {{ col }}
+                </span>
+                <span></span>
+              </div>
+              <div
+                v-for="(row, ri) in pipeline.resolveTable(step.key)!.rows"
+                :key="ri"
+                class="grid px-3 py-1.5 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60"
+                :style="tableGridStyle"
+                :class="selectedRows.has(ri) ? 'bg-primary/5' : 'bg-white'"
+              >
+                <span class="flex items-center">
+                  <input type="checkbox" :checked="selectedRows.has(ri)" class="accent-primary cursor-pointer" @change="toggleRow(ri)" />
+                </span>
+                <span
+                  v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
+                  :key="col"
+                  class="text-gray-600 truncate text-[11px]"
+                  :title="String(row[col] ?? '')"
+                >
+                  {{ typeof row[col] === 'object' ? JSON.stringify(row[col]) : (row[col] ?? '–') }}
+                </span>
+                <PipelineHoldDeleteButton @delete="pipeline.deleteTableRow(step.key, ri)" />
+              </div>
+              <div v-if="!pipeline.resolveTable(step.key)!.rows.length" class="px-3 py-3 text-gray-400 text-center">
+                Žádné záznamy.
+              </div>
+            </div>
           </div>
         </div>
 

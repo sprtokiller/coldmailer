@@ -42,6 +42,7 @@ interface PipelineRunResponse {
 interface StepConfigState {
   systemPromptId: string
   contextPartIds: string[]
+  manualContext: string
   sellingPointId: string
   inputData: string
 }
@@ -119,6 +120,7 @@ interface PipelineRunContext {
   copiedPromptKey: string | null
   candidateHoverIdx: number | null
   getConfig: (stepKey: string) => StepConfigState
+  saveContextPartToLibrary: (stepKey: string, name: string) => Promise<void>
   isAiImportStep: (stepKey: string) => boolean
   toggleAiImport: (stepKey: string) => void
   runAiImport: (stepKey: string) => Promise<void>
@@ -262,11 +264,27 @@ export async function usePipelineRunPage() {
       stepConfig.value[stepKey] = {
         systemPromptId: lastSuccessful?.systemPromptId ?? systemPrompt?.id ?? '',
         contextPartIds: [],
+        manualContext: '',
         sellingPointId: '',
         inputData,
       }
     }
     return stepConfig.value[stepKey]
+  }
+
+  async function saveContextPartToLibrary(stepKey: string, name: string) {
+    const cfg = getConfig(stepKey)
+    const created = await $fetch<{ id: string; name: string; content: string }>('/api/library/context-parts', {
+      method: 'POST',
+      body: { name, content: cfg.manualContext },
+    })
+    if (contextParts.value && !contextParts.value.find(cp => cp.id === created.id)) {
+      contextParts.value.push({ id: created.id, name: created.name, content: created.content })
+    }
+    if (!cfg.contextPartIds.includes(created.id)) {
+      cfg.contextPartIds.push(created.id)
+    }
+    cfg.manualContext = ''
   }
 
   function isAiImportStep(stepKey: string) {
@@ -417,8 +435,18 @@ export async function usePipelineRunPage() {
 
   function initStep3Selection() {
     if (step3Initialized.value) return
+    const done = new Set(
+      profilingOutputProfiles('PARTNER_PROFILING').map(p =>
+        String(p.partnerId ?? p.name ?? '').toLowerCase(),
+      ),
+    )
     const selected: Record<string, boolean> = {}
-    for (const candidate of step3Candidates()) selected[candidate.partnerId] = true
+    let picked = 0
+    for (const candidate of step3Candidates()) {
+      const isProcessed = done.has(candidate.partnerId.toLowerCase()) || done.has(candidate.name.toLowerCase())
+      selected[candidate.partnerId] = !isProcessed && picked < 3
+      if (!isProcessed && picked < 3) picked++
+    }
     step3SelectedIds.value = selected
     step3Initialized.value = true
   }
@@ -730,6 +758,7 @@ export async function usePipelineRunPage() {
           stepType: stepKey,
           systemPromptId: cfg.systemPromptId || undefined,
           contextPartIds: cfg.contextPartIds.length ? cfg.contextPartIds : undefined,
+          manualContext: cfg.manualContext || undefined,
           sellingPointId: cfg.sellingPointId || undefined,
           inputData,
         }),
@@ -833,6 +862,7 @@ export async function usePipelineRunPage() {
     copiedPromptKey,
     candidateHoverIdx,
     getConfig,
+    saveContextPartToLibrary,
     isAiImportStep,
     toggleAiImport,
     runAiImport,

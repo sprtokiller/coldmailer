@@ -95,10 +95,18 @@ async function save() {
       }
       await refreshPrompts()
     } else if (tab.value === 'context') {
-      await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+      if (editingId.value) {
+        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content } })
+      } else {
+        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+      }
       await refreshContext()
     } else if (tab.value === 'selling') {
-      await $fetch('/api/library/selling-points', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+      if (editingId.value) {
+        await $fetch(`/api/library/selling-points/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content } })
+      } else {
+        await $fetch('/api/library/selling-points', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+      }
       await refreshSelling()
     } else {
       await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
@@ -242,30 +250,29 @@ const tabs: { key: Tab; label: string }[] = [
         v-for="item in currentItems"
         :key="item.id"
         class="bg-white rounded-xl border p-5 transition-colors"
-        :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
+        :class="[
+          item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100',
+          tab !== 'drafts' ? 'cursor-pointer hover:border-primary/40 hover:shadow-sm' : '',
+        ]"
+        @click="tab !== 'drafts' && startEdit(item)"
       >
-        <h3 class="font-medium text-gray-800 text-sm mb-1.5">{{ item.name }}</h3>
-        <div class="flex items-center gap-1.5 flex-wrap mb-2">
-          <span v-if="item.isSystem" class="text-xs text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
-            Systémový
-          </span>
-          <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+        <div class="flex items-center gap-2 min-w-0" :class="item.stepType ? 'mb-1.5' : 'mb-2'">
+          <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
+          <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
             {{ item.stepType.replace(/_/g, ' ') }}
           </span>
-          <span class="inline-flex items-center gap-1 text-xs text-gray-400">
-            <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
-            <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full" referrerpolicy="no-referrer" />
-            {{ item.isSystem ? 'Systém' : item.author?.name }}
-            · {{ new Date(item.createdAt).toLocaleDateString('cs-CZ') }}
-          </span>
-          <button
-            v-if="tab === 'prompts'"
-            class="text-xs text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors ml-auto"
-            @click="startEdit(item)"
-          >
-            Upravit
-          </button>
         </div>
+
+        <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
+          <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full shrink-0" referrerpolicy="no-referrer" />
+          <span>{{ item.isSystem ? 'Systém' : item.author?.name }}</span>
+          <template v-if="!item.isSystem">
+            <span class="text-gray-300">·</span>
+            <span>{{ new Date(item.createdAt).toLocaleDateString('cs-CZ') }}</span>
+          </template>
+        </div>
+
         <p class="text-xs text-gray-500 line-clamp-3 font-mono">
           {{ item.content ?? item.subject }}
         </p>

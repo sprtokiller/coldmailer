@@ -17,20 +17,19 @@ async function main() {
 
   console.log(`System user: ${systemUser.id}`)
 
-  // Seed one default prompt per step type — idempotent via name + authorId check.
+  // Seed one default prompt per step type — idempotent via stepType + isSystem + authorId.
   for (const [stepType, content] of Object.entries(STEP_SYSTEM_PROMPTS)) {
-    const name = DEFAULT_PROMPT_NAMES[stepType] ?? `Default – ${stepType}`
+    const name = DEFAULT_PROMPT_NAMES[stepType] ?? 'Výchozí'
     const existing = await prisma.systemPrompt.findFirst({
-      where: { name, authorId: systemUser.id },
+      where: { stepType: stepType as never, isSystem: true, authorId: systemUser.id },
     })
 
     if (existing) {
-      // Keep content and isSystem flag in sync with source code.
       await prisma.systemPrompt.update({
         where: { id: existing.id },
-        data: { content, isSystem: true },
+        data: { name, content, isSystem: true },
       })
-      console.log(`  ↻ Updated: ${name}`)
+      console.log(`  ↻ Updated: ${stepType} → "${name}"`)
     } else {
       await prisma.systemPrompt.create({
         data: {
@@ -41,7 +40,7 @@ async function main() {
           isSystem: true,
         },
       })
-      console.log(`  ✓ Created: ${name}`)
+      console.log(`  ✓ Created: ${stepType} → "${name}"`)
     }
   }
 }

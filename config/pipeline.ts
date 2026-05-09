@@ -40,19 +40,19 @@ export const DEEP_RESEARCH_STEPS = new Set(
 // ── UI badge metadata per model (used in pipeline page) ───────────────────────
 export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
   [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',     cls: 'bg-blue-100 text-blue-700'      },
-  [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet (latest)',    cls: 'bg-emerald-100 text-emerald-700' },
+  [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet 4.5',         cls: 'bg-emerald-100 text-emerald-700' },
   [MODELS.GMAIL]:         { label: 'Gmail API',                 cls: 'bg-red-100 text-red-700'         },
   [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
 }
 
 // ── Default system-prompt display names (used by prisma/seed.ts) ──────────────
 export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
-  MARKET_SCANNING:        'Výchozí – Market Scanning',
-  PARTNER_IDENTIFICATION: 'Výchozí – Partner Identification',
-  PARTNER_PROFILING:      'Výchozí – Partner Profiling',
-  CONTACT_DISCOVERY:      'Výchozí – Contact Discovery',
-  VALUE_ALIGNMENT:        'Výchozí – Value Alignment',
-  OUTREACH_PREPARATION:   'Výchozí – Outreach Preparation',
+  MARKET_SCANNING:        'Výchozí',
+  PARTNER_IDENTIFICATION: 'Výchozí',
+  PARTNER_PROFILING:      'Výchozí',
+  CONTACT_DISCOVERY:      'Výchozí',
+  VALUE_ALIGNMENT:        'Výchozí',
+  OUTREACH_PREPARATION:   'Výchozí',
 }
 
 // ── System prompt content ─────────────────────────────────────────────────────
