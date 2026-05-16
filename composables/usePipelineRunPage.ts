@@ -45,6 +45,7 @@ interface StepConfigState {
   manualContext: string
   sellingPointId: string
   inputData: string
+  emailDraftId: string
 }
 
 interface PartnerResultItem {
@@ -71,6 +72,7 @@ interface PipelineRunContext {
   prompts: PromptOption[]
   contextParts: Array<{ id: string; name: string; content: string; stepKeys: string[] }>
   sellingPoints: Array<{ id: string; name: string }>
+  emailDrafts: Array<{ id: string; name: string; subject: string; body: string }>
   activeStep: string | null
   executingStep: string | null
   streamOutputs: Record<string, string>
@@ -115,6 +117,12 @@ interface PipelineRunContext {
   step3Initialized: boolean
   step4SelectedIds: Record<string, boolean>
   step4Initialized: boolean
+  step5SelectedIds: Record<string, boolean>
+  step5Initialized: boolean
+  step6SelectedPartnerName: string | null
+  step6PreviewTo: string
+  step6PreviewSubject: string
+  step6PreviewBody: string
   expandedProfileName: string | null
   promptPreviewStep: string | null
   outputViewMode: Record<string, string>
@@ -154,6 +162,13 @@ interface PipelineRunContext {
   step4DeselectAll: () => void
   step4SelectUnprocessed: () => void
   step4SelectedCount: () => number
+  step5Alignments: () => Array<Record<string, unknown>>
+  initStep5Selection: () => void
+  step5SelectAll: () => void
+  step5DeselectAll: () => void
+  step5SelectedCount: () => number
+  outreachEmails: () => Array<Record<string, unknown>>
+  initStep6Preview: (partnerName: string) => void
   updatePartnerItem: (stepKey: string, item: { index: number; total: number; itemName: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; status: 'processing' | 'done' | 'error'; error?: string }) => void
   updateAlignmentItem: (stepKey: string, item: { index: number; total: number; name: string; status: 'processing' | 'done' | 'error'; error?: string; alignment?: Record<string, unknown> }) => void
   alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>
@@ -185,16 +200,18 @@ export const pipelineRunKey = Symbol('pipelineRun')
 
 export async function usePipelineRunPage() {
   const route = useRoute()
-  const [runResult, promptsResult, contextPartsResult, sellingPointsResult] = await Promise.all([
+  const [runResult, promptsResult, contextPartsResult, sellingPointsResult, emailDraftsResult] = await Promise.all([
     useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`),
     useFetch<PromptOption[]>('/api/library/prompts', { default: () => [] }),
     useFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { default: () => [] }),
     useFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { default: () => [] }),
+    useFetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { default: () => [] }),
   ])
   const { data: run, refresh } = runResult
   const { data: prompts } = promptsResult
   const { data: contextParts } = contextPartsResult
   const { data: sellingPoints } = sellingPointsResult
+  const { data: emailDrafts } = emailDraftsResult
 
   const activeStep = ref<string | null>(null)
   const executingStep = ref<string | null>(null)
@@ -253,6 +270,13 @@ export async function usePipelineRunPage() {
   const copiedPromptKey = ref<string | null>(null)
   const candidateHoverIdx = ref<number | null>(null)
 
+  const step5SelectedIds = ref<Record<string, boolean>>({})
+  const step5Initialized = ref(false)
+  const step6SelectedPartnerName = ref<string | null>(null)
+  const step6PreviewTo = ref('')
+  const step6PreviewSubject = ref('')
+  const step6PreviewBody = ref('')
+
   function getConfig(stepKey: string) {
     if (!stepConfig.value[stepKey]) {
       const lastSuccessful = run.value?.steps
@@ -277,6 +301,7 @@ export async function usePipelineRunPage() {
         manualContext: '',
         sellingPointId: '',
         inputData,
+        emailDraftId: '',
       }
     }
     return stepConfig.value[stepKey]
@@ -431,6 +456,55 @@ export async function usePipelineRunPage() {
     return step4Partners().filter(p => step4SelectedIds.value[p.name]).length
   }
 
+  function step5Alignments(): Array<Record<string, unknown>> {
+    return alignmentOutputAlignments('VALUE_ALIGNMENT')
+  }
+
+  function initStep5Selection() {
+    if (step5Initialized.value) return
+    const done = new Set(
+      outreachEmails().map(e => String(e.partnerName ?? e.name ?? '').toLowerCase()),
+    )
+    const selected: Record<string, boolean> = {}
+    for (const a of step5Alignments()) {
+      const isProcessed = done.has(String(a.name ?? '').toLowerCase())
+      selected[String(a.name ?? '')] = !isProcessed
+    }
+    step5SelectedIds.value = selected
+    step5Initialized.value = true
+  }
+
+  function step5SelectAll() {
+    const selected = { ...step5SelectedIds.value }
+    for (const a of step5Alignments()) selected[String(a.name ?? '')] = true
+    step5SelectedIds.value = selected
+  }
+
+  function step5DeselectAll() {
+    const selected = { ...step5SelectedIds.value }
+    for (const a of step5Alignments()) selected[String(a.name ?? '')] = false
+    step5SelectedIds.value = selected
+  }
+
+  function step5SelectedCount() {
+    return step5Alignments().filter(a => step5SelectedIds.value[String(a.name ?? '')]).length
+  }
+
+  function outreachEmails(): Array<Record<string, unknown>> {
+    const data = getStepResult('OUTREACH_PREPARATION')?.outputData
+    if (!Array.isArray(data)) return []
+    return data as Array<Record<string, unknown>>
+  }
+
+  function initStep6Preview(partnerName: string) {
+    const email = outreachEmails().find(e => String(e.partnerName ?? e.name ?? '') === partnerName)
+    if (email) {
+      step6PreviewTo.value = String(email.to ?? '')
+      step6PreviewSubject.value = String(email.subject ?? '')
+      step6PreviewBody.value = String(email.body ?? '')
+    }
+  }
+
   function step2Items(): Array<{ index: number; name: string; raw: Record<string, unknown> }> {
     const data = getStepResult('MARKET_SCANNING')?.outputData
     if (!data) return []
@@ -478,6 +552,15 @@ export async function usePipelineRunPage() {
     if (val === 'PARTNER_IDENTIFICATION') initStep2Selection()
     if (val === 'PARTNER_PROFILING') initStep3Selection()
     if (val === 'VALUE_ALIGNMENT') initStep4Selection()
+    if (val === 'OUTREACH_PREPARATION') initStep5Selection()
+    if (val === 'OUTREACH_EXECUTION') {
+      if (!step6SelectedPartnerName.value && outreachEmails().length > 0) {
+        const first = outreachEmails()[0]
+        const name = String(first.partnerName ?? first.name ?? '')
+        step6SelectedPartnerName.value = name
+        initStep6Preview(name)
+      }
+    }
   })
 
   function step3Candidates(): Step3Candidate[] {
@@ -868,6 +951,30 @@ export async function usePipelineRunPage() {
         return
       }
       inputData = { partners: selected }
+    } else if (stepKey === 'OUTREACH_PREPARATION') {
+      const cfg = getConfig(stepKey)
+      if (!cfg.emailDraftId) {
+        alert('Vyberte e-mailovou šablonu z knihovny.')
+        return
+      }
+      const selectedAlignments = step5Alignments()
+        .filter(a => step5SelectedIds.value[String(a.name ?? '')])
+      if (selectedAlignments.length === 0) {
+        alert('Vyberte alespoň jednoho partnera pro přípravu oslovení.')
+        return
+      }
+      inputData = { partners: selectedAlignments }
+    } else if (stepKey === 'OUTREACH_EXECUTION') {
+      if (!step6PreviewTo.value || !step6PreviewSubject.value || !step6PreviewBody.value) {
+        alert('Vyplňte příjemce, předmět a tělo e-mailu v náhledu.')
+        return
+      }
+      inputData = {
+        to: step6PreviewTo.value,
+        subject: step6PreviewSubject.value,
+        body: step6PreviewBody.value,
+        partnerName: step6SelectedPartnerName.value,
+      }
     } else {
       try {
         inputData = JSON.parse(cfg.inputData || '{}')
@@ -892,6 +999,7 @@ export async function usePipelineRunPage() {
           contextPartIds: cfg.contextPartIds.length ? cfg.contextPartIds : undefined,
           manualContext: cfg.manualContext || undefined,
           sellingPointId: cfg.sellingPointId || undefined,
+          emailDraftId: cfg.emailDraftId || undefined,
           inputData,
         }),
       })
@@ -943,6 +1051,7 @@ export async function usePipelineRunPage() {
             if (data.done) {
               if (stepKey === 'MARKET_SCANNING') step2Initialized.value = false
               if (stepKey === 'PARTNER_PROFILING') step4Initialized.value = false
+              if (stepKey === 'OUTREACH_PREPARATION') step5Initialized.value = false
               await refresh()
             }
           } catch {
@@ -971,6 +1080,7 @@ export async function usePipelineRunPage() {
     prompts,
     contextParts,
     sellingPoints,
+    emailDrafts,
     activeStep,
     executingStep,
     streamOutputs,
@@ -991,6 +1101,12 @@ export async function usePipelineRunPage() {
     step3Initialized,
     step4SelectedIds,
     step4Initialized,
+    step5SelectedIds,
+    step5Initialized,
+    step6SelectedPartnerName,
+    step6PreviewTo,
+    step6PreviewSubject,
+    step6PreviewBody,
     expandedProfileName,
     promptPreviewStep,
     outputViewMode,
@@ -1030,6 +1146,13 @@ export async function usePipelineRunPage() {
     step4DeselectAll,
     step4SelectUnprocessed,
     step4SelectedCount,
+    step5Alignments,
+    initStep5Selection,
+    step5SelectAll,
+    step5DeselectAll,
+    step5SelectedCount,
+    outreachEmails,
+    initStep6Preview,
     updatePartnerItem,
     updateAlignmentItem,
     alignmentOutputAlignments,

@@ -521,84 +521,89 @@ async function deleteSelectedRows() {
       <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
     </template>
 
-    <template v-else>
-      <template v-if="pipeline.resolveTable(step.key)">
-        <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
-          <button
-            v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
-            :key="m[0]"
-            class="px-3 py-1 rounded-lg font-medium transition-all"
-            :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-            @click="pipeline.setOutputMode(step.key, m[0])"
-          >
-            {{ m[1] }}
-          </button>
-        </div>
-
-        <div v-if="pipeline.getOutputMode(step.key, 'table') === 'table'">
-          <div v-if="selectedRows.size > 0" class="flex items-center gap-3 px-3 py-1.5 mb-2 bg-primary/5 border border-primary/20 rounded-lg text-xs">
-            <span class="text-primary font-medium">{{ selectedRows.size }} vybráno</span>
-            <button type="button" class="text-danger hover:underline ml-auto" @click="deleteSelectedRows">Smazat vybrané</button>
-            <button type="button" class="text-gray-400 hover:text-gray-600" @click="selectedRows = new Set()">Zrušit</button>
-          </div>
-          <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-            <p v-if="pipeline.resolveTable(step.key)!.wrapKey" class="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 border-b border-gray-100 font-mono">
-              {{ pipeline.resolveTable(step.key)!.wrapKey }}
-            </p>
-            <div class="overflow-x-auto max-h-64 overflow-y-auto">
-              <div
-                class="grid bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 sticky top-0 z-10 border-b border-gray-100"
-                :style="tableGridStyle"
-              >
-                <span class="flex items-center">
-                  <input
-                    type="checkbox"
-                    :checked="allSelected"
-                    :ref="(el) => { if (el) (el as HTMLInputElement).indeterminate = someSelected }"
-                    class="accent-primary cursor-pointer"
-                    @change="toggleSelectAll"
-                  />
-                </span>
-                <span
-                  v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
-                  :key="col"
-                  class="truncate whitespace-nowrap"
-                >
-                  {{ col }}
-                </span>
-                <span></span>
-              </div>
-              <div
-                v-for="(row, ri) in pipeline.resolveTable(step.key)!.rows"
-                :key="ri"
-                class="grid px-3 py-1.5 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60"
-                :style="tableGridStyle"
-                :class="selectedRows.has(ri) ? 'bg-primary/5' : 'bg-white'"
-              >
-                <span class="flex items-center">
-                  <input type="checkbox" :checked="selectedRows.has(ri)" class="accent-primary cursor-pointer" @change="toggleRow(ri)" />
-                </span>
-                <span
-                  v-for="col in pipeline.tableColumns(pipeline.resolveTable(step.key)!.rows)"
-                  :key="col"
-                  class="text-gray-600 truncate text-[11px]"
-                  :title="String(row[col] ?? '')"
-                >
-                  {{ typeof row[col] === 'object' ? JSON.stringify(row[col]) : (row[col] ?? '–') }}
-                </span>
-                <PipelineHoldDeleteButton @delete="pipeline.deleteTableRow(step.key, ri)" />
-              </div>
-              <div v-if="!pipeline.resolveTable(step.key)!.rows.length" class="px-3 py-3 text-gray-400 text-center">
-                Žádné záznamy.
-              </div>
+    <template v-else-if="step.key === 'OUTREACH_PREPARATION'">
+      <div class="space-y-4">
+        <div
+          v-for="(email, ei) in pipeline.outreachEmails()"
+          :key="ei"
+          class="rounded-xl border bg-white overflow-hidden"
+          :class="email.error ? 'border-danger/30' : 'border-gray-200'"
+        >
+          <!-- Email header -->
+          <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-semibold text-gray-800 text-sm truncate">{{ email.partnerName }}</span>
+              <span v-if="email.error" class="text-[11px] bg-danger/10 text-danger px-2 py-0.5 rounded-full">chyba</span>
             </div>
+            <button
+              v-if="!email.error"
+              type="button"
+              class="shrink-0 text-[11px] text-primary hover:underline"
+              @click="pipeline.step6SelectedPartnerName = String(email.partnerName ?? ''); pipeline.initStep6Preview(String(email.partnerName ?? ''))"
+            >
+              Použít v Kroku 6 →
+            </button>
+          </div>
+
+          <div v-if="email.error" class="px-4 py-3 text-sm text-danger">{{ email.error }}</div>
+          <template v-else>
+            <!-- Subject line -->
+            <div class="px-4 pt-3 pb-1 flex items-baseline gap-2">
+              <span class="text-[11px] font-medium text-gray-400 shrink-0 uppercase tracking-wide">Předmět</span>
+              <span class="font-semibold text-gray-800 text-sm">{{ email.subject }}</span>
+            </div>
+            <!-- To -->
+            <div v-if="email.to" class="px-4 pb-2 flex items-baseline gap-2">
+              <span class="text-[11px] font-medium text-gray-400 shrink-0 uppercase tracking-wide w-14">Komu</span>
+              <span class="text-sm text-gray-600">{{ email.to }}</span>
+            </div>
+            <!-- Body -->
+            <div class="px-4 pb-4 pt-2 border-t border-gray-50">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Tělo e-mailu</p>
+              <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-[Parkinsans,sans-serif] max-h-64 overflow-y-auto">{{ email.body }}</div>
+            </div>
+          </template>
+        </div>
+        <div v-if="!pipeline.outreachEmails().length" class="text-center py-8 text-gray-400 text-sm">
+          Žádné e-maily nebyly vygenerovány.
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="step.key === 'OUTREACH_EXECUTION'">
+      <div v-if="pipeline.getStepResult(step.key)?.outputData" class="rounded-xl border border-success/30 bg-success/5 p-5">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p class="font-semibold text-success text-sm">Gmail draft vytvořen</p>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <div class="flex gap-3">
+            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Komu</span>
+            <span class="text-gray-700">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.to }}</span>
+          </div>
+          <div class="flex gap-3">
+            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Předmět</span>
+            <span class="text-gray-700 font-medium">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.subject }}</span>
+          </div>
+          <div class="flex gap-3">
+            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Draft ID</span>
+            <span class="text-gray-500 font-mono text-xs">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.gmailDraftId }}</span>
           </div>
         </div>
-
-        <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
-      </template>
-
-      <pre v-else class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
+        <a
+          class="mt-4 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+          href="https://mail.google.com/mail/u/0/#drafts"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Otevřít drafty v Gmailu ↗
+        </a>
+      </div>
     </template>
+
   </div>
 </template>

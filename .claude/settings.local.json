@@ -20,7 +20,10 @@
       "Bash(bunx prisma *)",
       "Bash(pg_dump --version)",
       "PowerShell(Get-Command pg_dump -ErrorAction SilentlyContinue)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\sprto\\\\Documents\\\\Temp\\\\coldmailer\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(bun add *)"
     ]
   }
 }

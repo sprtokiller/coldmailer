@@ -14,6 +14,7 @@ interface ExecuteBody {
   contextPartIds?: string[]
   manualContext?: string
   sellingPointId?: string
+  emailDraftId?: string
   inputData?: Record<string, unknown>
 }
 
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
 
-  const [contextParts, customPrompt, dbSystemPrompt, sellingPoint] = await Promise.all([
+  const [contextParts, customPrompt, dbSystemPrompt, sellingPoint, emailDraft] = await Promise.all([
     body.contextPartIds?.length
       ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds } } })
       : Promise.resolve([]),
@@ -49,6 +50,9 @@ export default defineEventHandler(async (event) => {
     }),
     body.sellingPointId
       ? prisma.sellingPoint.findUnique({ where: { id: body.sellingPointId } })
+      : Promise.resolve(null),
+    body.emailDraftId
+      ? prisma.emailDraft.findUnique({ where: { id: body.emailDraftId } })
       : Promise.resolve(null),
   ])
 
@@ -260,6 +264,77 @@ export default defineEventHandler(async (event) => {
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: allAlignments as never, completedAt: new Date() },
+            })
+          } else if (body.stepType === 'OUTREACH_PREPARATION') {
+            const inputPartners = (() => {
+              const d = body.inputData
+              if (Array.isArray(d)) return d
+              const p = (d as Record<string, unknown> | undefined)?.partners
+              if (Array.isArray(p)) return p
+              return []
+            })() as Array<Record<string, unknown>>
+
+            if (inputPartners.length === 0) {
+              throw new Error('Žádní partneři k oslovení. Vyberte je z výsledků Kroku 4 (Value Alignment).')
+            }
+
+            const templateSection = emailDraft
+              ? [
+                  'E-mailová šablona (respektuj tento formát, styl a délku):',
+                  `Předmět: ${emailDraft.subject}`,
+                  `Tělo:\n${emailDraft.body}`,
+                ].join('\n')
+              : null
+
+            const allEmails: unknown[] = []
+
+            for (let i = 0; i < inputPartners.length; i++) {
+              const ip = inputPartners[i]
+              write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
+
+              const userMsg = [
+                'Vytvoř personalizovaný cold e-mail pro tohoto partnera. Vrať JSON objekt s poli: to (e-mailová adresa, pokud je k dispozici, jinak prázdný řetězec), subject (string), body (prostý text).',
+                '',
+                templateSection,
+                '',
+                'Alignment data partnera (použij top argumenty a doporučený kontakt):',
+                '```json',
+                JSON.stringify(ip, null, 2),
+                '```',
+              ].filter(s => s !== null).join('\n')
+
+              try {
+                let emailOutput = ''
+                const gen = streamStepAI({
+                  stepType: body.stepType,
+                  systemPrompt: systemPromptText,
+                  contextParts: allContextParts,
+                  userMessage: userMsg,
+                })
+                for await (const chunk of gen) {
+                  emailOutput += chunk
+                  write({ chunk })
+                }
+                const parsed = parseAIOutput(emailOutput)
+                const emailData = {
+                  partnerName: String(ip.name ?? ''),
+                  partnerId: ip.partnerId,
+                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
+                    ? parsed
+                    : { raw: parsed }),
+                }
+                allEmails.push(emailData)
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                write({ chunk: `  ❌ ${msg}\n` })
+                allEmails.push({ partnerName: String(ip.name ?? ''), error: msg })
+              }
+            }
+
+            write({ chunk: `\n✅ Hotovo! Připraveno ${inputPartners.length} e-mailů.\n` })
+            await prisma.pipelineStep.update({
+              where: { id: step.id },
+              data: { status: 'COMPLETED', outputData: allEmails as never, completedAt: new Date() },
             })
           } else {
             let fullOutput = ''

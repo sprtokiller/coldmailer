@@ -534,7 +534,7 @@ async function confirmSaveToLibrary() {
       </template>
     </div>
 
-    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT'].includes(step.key)" class="mt-4">
+    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
         Vstupní data (JSON)
         <button type="button" class="ml-2 text-primary hover:underline" @click="pipeline.getConfig(step.key).inputData = pipeline.prevStepOutput(step.key)">
@@ -549,9 +549,137 @@ async function confirmSaveToLibrary() {
       />
     </div>
 
+    <!-- ── Step 5: OUTREACH_PREPARATION ──────────────────────────────────────── -->
+    <div v-if="step.key === 'OUTREACH_PREPARATION'" class="mt-4 space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">
+          E-mailová šablona
+          <span class="text-danger ml-1">*</span>
+        </label>
+        <select
+          v-model="pipeline.getConfig(step.key).emailDraftId"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-colors"
+          :class="submitAttempted && !pipeline.getConfig(step.key).emailDraftId
+            ? 'border-danger/50 focus:ring-danger/30 bg-danger/5'
+            : 'border-gray-200 focus:ring-primary/30'"
+        >
+          <option value="">— vyberte šablonu z knihovny —</option>
+          <option v-for="d in pipeline.emailDrafts" :key="d.id" :value="d.id">
+            {{ d.name }} · {{ d.subject }}
+          </option>
+        </select>
+        <p
+          class="mt-1 text-xs text-danger"
+          :class="{ invisible: !(submitAttempted && !pipeline.getConfig(step.key).emailDraftId) }"
+        >
+          E-mailová šablona je povinná – AI ji použije jako základ pro personalizaci.
+        </p>
+      </div>
+
+      <div v-if="pipeline.step5Alignments().length === 0" class="text-xs text-gray-400 py-2">
+        Nejprve spusťte Krok 4 (Value Alignment), abyste získali partnery pro oslovení.
+      </div>
+      <template v-else>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-medium text-gray-500">
+            Partneři z Kroku 4
+            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step5SelectedCount() }} / {{ pipeline.step5Alignments().length }} vybráno)</span>
+          </label>
+          <div class="flex items-center gap-3">
+            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step5SelectAll()">Vše</button>
+            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step5DeselectAll()">Žádné</button>
+          </div>
+        </div>
+        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
+          <div class="grid grid-cols-[1.5rem_1fr_10rem_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+            <span></span><span>Partner</span><span>Celková shoda</span><span>Top argument</span>
+          </div>
+          <label
+            v-for="a in pipeline.step5Alignments()"
+            :key="String(a.name ?? '')"
+            class="grid grid-cols-[1.5rem_1fr_10rem_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
+            :class="pipeline.step5SelectedIds[String(a.name ?? '')] ? '' : 'opacity-50'"
+          >
+            <input type="checkbox" v-model="pipeline.step5SelectedIds[String(a.name ?? '')]" class="accent-primary" />
+            <span class="font-medium text-gray-700 truncate" :title="String(a.name ?? '')">{{ a.name }}</span>
+            <span
+              class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full w-fit"
+              :class="a.overallFitScore === 'Vysoký' ? 'text-success bg-success/10' : a.overallFitScore === 'Střední' ? 'text-amber-600 bg-amber-50' : 'text-gray-400 bg-gray-100'"
+            >{{ a.overallFitScore ?? '–' }}</span>
+            <span class="text-gray-400 truncate text-[10px]">
+              {{ Array.isArray(a.top3Arguments) && (a.top3Arguments as Record<string, unknown>[]).length
+                ? String((a.top3Arguments as Record<string, unknown>[])[0].argumentId ?? '')
+                : '–' }}
+            </span>
+          </label>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── Step 6: OUTREACH_EXECUTION ─────────────────────────────────────────── -->
+    <div v-if="step.key === 'OUTREACH_EXECUTION'" class="mt-4 space-y-4">
+      <div v-if="pipeline.outreachEmails().length === 0" class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        Nejprve spusťte Krok 5 (Outreach Preparation) pro vygenerování e-mailů.
+      </div>
+      <template v-else>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">
+            Vyberte partnera k odeslání
+            <span class="text-danger ml-1">*</span>
+          </label>
+          <select
+            v-model="pipeline.step6SelectedPartnerName"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            @change="pipeline.step6SelectedPartnerName && pipeline.initStep6Preview(pipeline.step6SelectedPartnerName)"
+          >
+            <option value="">— vyberte partnera —</option>
+            <option
+              v-for="email in pipeline.outreachEmails().filter(e => !e.error)"
+              :key="String(email.partnerName ?? '')"
+              :value="String(email.partnerName ?? '')"
+            >
+              {{ email.partnerName }}
+            </option>
+          </select>
+        </div>
+
+        <template v-if="pipeline.step6SelectedPartnerName">
+          <div class="space-y-3 rounded-xl border border-primary/20 bg-primary/3 p-4">
+            <p class="text-xs font-semibold text-primary mb-1">Náhled e-mailu · upravte před odesláním</p>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Příjemce (To)</label>
+              <input
+                v-model="pipeline.step6PreviewTo"
+                type="email"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="jmeno@firma.cz"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Předmět</label>
+              <input
+                v-model="pipeline.step6PreviewSubject"
+                type="text"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu</label>
+              <textarea
+                v-model="pipeline.step6PreviewBody"
+                rows="12"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y leading-relaxed"
+              />
+            </div>
+            <p class="text-[11px] text-gray-400">Kliknutím na „Spustit krok" vytvoříte draft přímo v Gmailu s výše uvedenými daty.</p>
+          </div>
+        </template>
+      </template>
+    </div>
+
     <div class="flex items-center gap-2 flex-wrap mt-4">
       <button
-        :disabled="pipeline.executingStep !== null"
+        :disabled="pipeline.executingStep !== null || (step.key === 'OUTREACH_EXECUTION' && (!pipeline.step6SelectedPartnerName || !pipeline.step6PreviewTo || !pipeline.step6PreviewSubject || !pipeline.step6PreviewBody))"
         class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
         @click="handleExecute"
       >

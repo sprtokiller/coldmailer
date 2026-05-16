@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Underline from '@tiptap/extension-underline'
+import TextAlign from '@tiptap/extension-text-align'
+import Placeholder from '@tiptap/extension-placeholder'
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
 definePageMeta({ middleware: 'auth' })
@@ -83,6 +88,61 @@ function resetForm() {
   form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '' }
   editingId.value = null
   showForm.value = false
+  editor.value?.commands.setContent('')
+}
+
+// ── Tiptap editor ─────────────────────────────────────────────────────────────
+const editor = useEditor({
+  extensions: [
+    StarterKit,
+    Underline,
+    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Placeholder.configure({ placeholder: 'Napište tělo e-mailu…' }),
+  ],
+  content: '',
+  editorProps: {
+    attributes: {
+      class: 'prose prose-sm max-w-none min-h-[10rem] focus:outline-none px-4 py-3 font-[Parkinsans,sans-serif]',
+    },
+  },
+  onUpdate({ editor: e }) {
+    form.value.body = e.getHTML()
+  },
+})
+
+watch(showForm, (visible) => {
+  if (!visible) return
+  if (tab.value === 'drafts') {
+    nextTick(() => {
+      editor.value?.commands.setContent(form.value.body || '')
+    })
+  }
+})
+
+watch(tab, (t) => {
+  if (t === 'drafts' && showForm.value) {
+    nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
+  }
+})
+
+// Predefined signature presets
+const SIGNATURES = [
+  {
+    label: 'Standardní',
+    html: `<p>S pozdravem,</p><p><strong>[Jméno]</strong><br>[Pozice] | SCG<br>[Email] | [Telefon]</p>`,
+  },
+  {
+    label: 'Krátká',
+    html: `<p>--<br><strong>[Jméno]</strong>, SCG</p>`,
+  },
+  {
+    label: 'S odkazem',
+    html: `<p>S pozdravem,<br><strong>[Jméno]</strong><br>[Pozice] | SCG<br><a href="https://scg.cz">scg.cz</a></p>`,
+  },
+]
+
+function insertSignature(html: string) {
+  editor.value?.chain().focus().insertContent('<p></p>' + html).run()
 }
 
 const route = useRoute()
@@ -104,9 +164,14 @@ function startEdit(item: LibraryItem) {
   editingId.value = item.id
   form.value.name = item.name
   form.value.content = item.content ?? ''
+  form.value.subject = (item as LibraryItem & { subject?: string }).subject ?? ''
+  form.value.body = (item as LibraryItem & { body?: string }).body ?? ''
   form.value.stepType = item.stepType ?? 'MARKET_SCANNING'
   form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
   showForm.value = true
+  if (tab.value === 'drafts') {
+    nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
+  }
 }
 
 watch(() => form.value.stepType, (newType, oldType) => {
@@ -159,7 +224,11 @@ async function save() {
       }
       await refreshSelling()
     } else {
-      await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
+      if (editingId.value) {
+        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
+      } else {
+        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
+      }
       await refreshDrafts()
     }
     resetForm()
@@ -279,8 +348,60 @@ const tabs: { key: Tab; label: string }[] = [
             <input v-model="form.subject" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Šablona těla e-mailu</label>
-            <textarea v-model="form.body" rows="6" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y" />
+            <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu (WYSIWYG)</label>
+            <!-- Tiptap toolbar -->
+            <div v-if="editor" class="flex flex-wrap items-center gap-1 p-2 bg-gray-50 border border-gray-200 rounded-t-lg">
+              <button
+                type="button"
+                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
+                :class="editor.isActive('bold') ? 'bg-gray-200 font-bold' : ''"
+                title="Tučné"
+                @click="editor.chain().focus().toggleBold().run()"
+              ><strong>B</strong></button>
+              <button
+                type="button"
+                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors italic"
+                :class="editor.isActive('italic') ? 'bg-gray-200' : ''"
+                title="Kurzíva"
+                @click="editor.chain().focus().toggleItalic().run()"
+              ><em>I</em></button>
+              <button
+                type="button"
+                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors underline"
+                :class="editor.isActive('underline') ? 'bg-gray-200' : ''"
+                title="Podtržení"
+                @click="editor.chain().focus().toggleUnderline().run()"
+              >U</button>
+              <span class="w-px h-4 bg-gray-200 mx-1"></span>
+              <button
+                type="button"
+                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
+                :class="editor.isActive('bulletList') ? 'bg-gray-200' : ''"
+                title="Nečíslovaný seznam"
+                @click="editor.chain().focus().toggleBulletList().run()"
+              >• —</button>
+              <button
+                type="button"
+                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
+                :class="editor.isActive('orderedList') ? 'bg-gray-200' : ''"
+                title="Číslovaný seznam"
+                @click="editor.chain().focus().toggleOrderedList().run()"
+              >1. —</button>
+              <span class="w-px h-4 bg-gray-200 mx-1"></span>
+              <span class="text-[11px] text-gray-400 ml-1 mr-0.5">Podpis:</span>
+              <button
+                v-for="sig in SIGNATURES"
+                :key="sig.label"
+                type="button"
+                class="px-2 py-1 text-[11px] rounded border border-gray-200 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors"
+                @click="insertSignature(sig.html)"
+              >+ {{ sig.label }}</button>
+            </div>
+            <!-- Tiptap editor area -->
+            <div class="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary/30 bg-white">
+              <EditorContent :editor="editor" class="text-sm" />
+            </div>
+            <p class="mt-1 text-[11px] text-gray-400">Formátování se uloží jako HTML a AI je při generování e-mailů rozumí.</p>
           </div>
         </template>
         <template v-else>
@@ -366,12 +487,9 @@ const tabs: { key: Tab; label: string }[] = [
       <div
         v-for="item in currentItems"
         :key="item.id"
-        class="bg-white rounded-xl border p-5 transition-colors"
-        :class="[
-          item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100',
-          tab !== 'drafts' ? 'cursor-pointer hover:border-primary/40 hover:shadow-sm' : '',
-        ]"
-        @click="tab !== 'drafts' && startEdit(item)"
+        class="bg-white rounded-xl border p-5 transition-colors cursor-pointer hover:border-primary/40 hover:shadow-sm"
+        :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
+        @click="startEdit(item)"
       >
         <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
           <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
@@ -407,3 +525,47 @@ const tabs: { key: Tab; label: string }[] = [
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Tiptap WYSIWYG editor styles */
+:deep(.ProseMirror) {
+  font-family: 'Parkinsans', sans-serif;
+  min-height: 10rem;
+  padding: 0.75rem 1rem;
+  outline: none;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #374151;
+}
+
+:deep(.ProseMirror p) {
+  margin: 0 0 0.5em 0;
+}
+
+:deep(.ProseMirror strong) {
+  font-weight: 600;
+}
+
+:deep(.ProseMirror ul),
+:deep(.ProseMirror ol) {
+  padding-left: 1.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+:deep(.ProseMirror li) {
+  margin-bottom: 0.1rem;
+}
+
+:deep(.ProseMirror a) {
+  color: var(--color-primary, #6366f1);
+  text-decoration: underline;
+}
+
+:deep(.ProseMirror p.is-editor-empty:first-child::before) {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+</style>
