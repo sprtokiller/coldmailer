@@ -8,7 +8,7 @@ import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
 definePageMeta({ middleware: 'auth' })
 
-type Tab = 'prompts' | 'context' | 'selling' | 'drafts'
+type Tab = 'prompts' | 'context' | 'selling' | 'drafts' | 'signatures'
 type Author = { id: string; name: string; image: string | null }
 type LibraryItem = {
   id: string
@@ -18,9 +18,20 @@ type LibraryItem = {
   stepType?: string
   stepKeys?: string[]
   isSystem?: boolean
+  isDefault?: boolean
   author?: Author
   createdAt: string | Date
   derivedFromId: string | null
+}
+
+type SignatureItem = {
+  id: string
+  name: string
+  content: string
+  isDefault: boolean
+  authorId: string
+  createdAt: string | Date
+  updatedAt: string | Date
 }
 
 const tab = ref<Tab>('prompts')
@@ -29,6 +40,7 @@ const { data: prompts, refresh: refreshPrompts } = await useFetch('/api/library/
 const { data: contextParts, refresh: refreshContext } = await useFetch('/api/library/context-parts', { default: () => [] })
 const { data: sellingPoints, refresh: refreshSelling } = await useFetch('/api/library/selling-points', { default: () => [] })
 const { data: emailDrafts, refresh: refreshDrafts } = await useFetch('/api/library/email-drafts', { default: () => [] })
+const { data: signatures, refresh: refreshSignatures } = await useFetch<SignatureItem[]>('/api/library/signatures', { default: () => [] })
 
 const STEP_TYPES = [
   'MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING',
@@ -82,10 +94,12 @@ const form = ref({
   stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as string[],
   subject: '',
   body: '',
+  signatureContent: '',
+  signatureIsDefault: false,
 })
 
 function resetForm() {
-  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '' }
+  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '', signatureContent: '', signatureIsDefault: false }
   editingId.value = null
   showForm.value = false
   editor.value?.commands.setContent('')
@@ -168,6 +182,8 @@ function startEdit(item: LibraryItem) {
   form.value.body = (item as LibraryItem & { body?: string }).body ?? ''
   form.value.stepType = item.stepType ?? 'MARKET_SCANNING'
   form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
+  form.value.signatureContent = item.content ?? ''
+  form.value.signatureIsDefault = item.isDefault ?? false
   showForm.value = true
   if (tab.value === 'drafts') {
     nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
@@ -223,17 +239,39 @@ async function save() {
         await $fetch('/api/library/selling-points', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
       }
       await refreshSelling()
-    } else {
+    } else if (tab.value === 'drafts') {
       if (editingId.value) {
         await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
       } else {
         await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
       }
       await refreshDrafts()
+    } else {
+      if (editingId.value) {
+        await $fetch(`/api/library/signatures/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.signatureContent, isDefault: form.value.signatureIsDefault } })
+      } else {
+        await $fetch('/api/library/signatures', { method: 'POST', body: { name: form.value.name, content: form.value.signatureContent, isDefault: form.value.signatureIsDefault } })
+      }
+      await refreshSignatures()
     }
     resetForm()
   } finally {
     saving.value = false
+  }
+}
+
+// ── Signature delete ─────────────────────────────────────────────────────────
+const deletingSignatureId = ref<string | null>(null)
+
+async function deleteSignature(id: string) {
+  if (!confirm('Opravdu smazat tento podpis?')) return
+  deletingSignatureId.value = id
+  try {
+    await $fetch(`/api/library/signatures/${id}`, { method: 'DELETE' })
+    await refreshSignatures()
+    if (editingId.value === id) resetForm()
+  } finally {
+    deletingSignatureId.value = null
   }
 }
 
@@ -247,7 +285,8 @@ const allItems = computed(() => {
   if (tab.value === 'prompts') return prompts.value as LibraryItem[]
   if (tab.value === 'context') return contextParts.value as LibraryItem[]
   if (tab.value === 'selling') return sellingPoints.value as LibraryItem[]
-  return emailDrafts.value as LibraryItem[]
+  if (tab.value === 'drafts') return emailDrafts.value as LibraryItem[]
+  return [] as LibraryItem[]
 })
 
 const currentItems = computed(() => {
@@ -278,6 +317,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'context', label: 'Kontextové části' },
   { key: 'selling', label: 'Prodejní argumenty' },
   { key: 'drafts', label: 'E-mailové šablony' },
+  { key: 'signatures', label: 'Podpisy' },
 ]
 </script>
 
@@ -342,7 +382,18 @@ const tabs: { key: Tab; label: string }[] = [
           </div>
         </div>
 
-        <template v-if="tab === 'drafts'">
+        <template v-if="tab === 'signatures'">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Obsah podpisu (WYSIWYG)</label>
+            <RichTextEditor v-model="form.signatureContent" />
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="sig-default" v-model="form.signatureIsDefault" type="checkbox" class="accent-primary" />
+            <label for="sig-default" class="text-sm text-gray-600 cursor-pointer select-none">Nastavit jako výchozí</label>
+          </div>
+        </template>
+
+        <template v-else-if="tab === 'drafts'">
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Šablona předmětu</label>
             <input v-model="form.subject" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
@@ -479,50 +530,91 @@ const tabs: { key: Tab; label: string }[] = [
       </select>
     </div>
 
-    <div v-if="currentItems.length === 0" class="text-center py-16 text-gray-400 text-sm">
-      {{ allItems.length === 0 ? 'Zatím nic. Vytvořte položku tlačítkem + Nový.' : 'Žádné položky neodpovídají aktuálním filtrům.' }}
-    </div>
-
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div
-        v-for="item in currentItems"
-        :key="item.id"
-        class="bg-white rounded-xl border p-5 transition-colors cursor-pointer hover:border-primary/40 hover:shadow-sm"
-        :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
-        @click="startEdit(item)"
-      >
-        <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
-          <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
-          <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-            {{ item.stepType.replace(/_/g, ' ') }}
-          </span>
-        </div>
-        <div v-if="tab === 'context' && item.stepKeys?.length" class="flex flex-wrap gap-1 mb-2">
-          <span
-            v-for="sk in item.stepKeys"
-            :key="sk"
-            class="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-100 whitespace-nowrap"
-          >{{ sk.replace(/_/g, ' ') }}</span>
-        </div>
-
-        <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-          <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
-          <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full shrink-0" referrerpolicy="no-referrer" />
-          <span>{{ item.isSystem ? 'Systém' : item.author?.name }}</span>
-          <template v-if="!item.isSystem">
-            <span class="text-gray-300">·</span>
-            <span>{{ new Date(item.createdAt).toLocaleDateString('cs-CZ') }}</span>
-          </template>
-        </div>
-
-        <p class="text-xs text-gray-500 line-clamp-3 font-mono">
-          {{ item.content ?? item.subject }}
-        </p>
-        <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
-          ↗ odvozeno z jiného dokumentu
+    <!-- Signatures list -->
+    <template v-if="tab === 'signatures'">
+      <div v-if="signatures.length === 0" class="text-center py-16 text-gray-400 text-sm">
+        Zatím žádné podpisy. Vytvořte podpis tlačítkem + Nový.
+      </div>
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="sig in signatures"
+          :key="sig.id"
+          class="bg-white rounded-xl border border-gray-100 p-5 transition-colors hover:border-primary/40 hover:shadow-sm"
+          :class="sig.isDefault ? 'border-primary/30 bg-primary/3' : ''"
+        >
+          <div class="flex items-start gap-2 min-w-0 mb-2">
+            <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
+            <span v-if="sig.isDefault" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">výchozí</span>
+          </div>
+          <div class="text-xs text-gray-400 mb-3">{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</div>
+          <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="sig.content" />
+          <div class="flex items-center gap-2">
+            <button
+              class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
+              @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, createdAt: sig.createdAt, derivedFromId: null })"
+            >Upravit</button>
+            <button
+              v-if="!sig.isDefault"
+              class="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+              @click="$fetch(`/api/library/signatures/${sig.id}`, { method: 'PATCH', body: { isDefault: true } }).then(refreshSignatures)"
+            >Nastavit jako výchozí</button>
+            <button
+              class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
+              :disabled="deletingSignatureId === sig.id"
+              @click="deleteSignature(sig.id)"
+            >{{ deletingSignatureId === sig.id ? '…' : 'Smazat' }}</button>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
+
+    <!-- Other tabs list -->
+    <template v-else>
+      <div v-if="currentItems.length === 0" class="text-center py-16 text-gray-400 text-sm">
+        {{ allItems.length === 0 ? 'Zatím nic. Vytvořte položku tlačítkem + Nový.' : 'Žádné položky neodpovídají aktuálním filtrům.' }}
+      </div>
+
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="item in currentItems"
+          :key="item.id"
+          class="bg-white rounded-xl border p-5 transition-colors cursor-pointer hover:border-primary/40 hover:shadow-sm"
+          :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
+          @click="startEdit(item)"
+        >
+          <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
+            <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
+            <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+              {{ item.stepType.replace(/_/g, ' ') }}
+            </span>
+          </div>
+          <div v-if="tab === 'context' && item.stepKeys?.length" class="flex flex-wrap gap-1 mb-2">
+            <span
+              v-for="sk in item.stepKeys"
+              :key="sk"
+              class="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-100 whitespace-nowrap"
+            >{{ sk.replace(/_/g, ' ') }}</span>
+          </div>
+
+          <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+            <span v-if="item.isSystem" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold shrink-0">S</span>
+            <img v-else-if="item.author?.image" :src="item.author.image" :alt="item.author.name" class="w-4 h-4 rounded-full shrink-0" referrerpolicy="no-referrer" />
+            <span>{{ item.isSystem ? 'Systém' : item.author?.name }}</span>
+            <template v-if="!item.isSystem">
+              <span class="text-gray-300">·</span>
+              <span>{{ new Date(item.createdAt).toLocaleDateString('cs-CZ') }}</span>
+            </template>
+          </div>
+
+          <p class="text-xs text-gray-500 line-clamp-3 font-mono">
+            {{ item.content ?? item.subject }}
+          </p>
+          <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
+            ↗ odvozeno z jiného dokumentu
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 

@@ -26,7 +26,12 @@ export interface StepAIInput {
   userMessage: string
 }
 
-export async function* streamStepAI(input: StepAIInput): AsyncGenerator<string> {
+export interface StreamStepAIResult {
+  stream: AsyncGenerator<string>
+  getCost: () => Promise<number>
+}
+
+export function streamStepAI(input: StepAIInput): StreamStepAIResult {
   const client = createClient()
   const model = modelForStep(input.stepType)
 
@@ -48,12 +53,38 @@ export async function* streamStepAI(input: StepAIInput): AsyncGenerator<string> 
       : {}),
   }
 
-  const stream = await client.chat.completions.create(
-    params as Parameters<typeof client.chat.completions.create>[0],
-  ) as AsyncIterable<ChatCompletionChunk>
+  let capturedGenerationId: string | null = null
 
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content
-    if (delta) yield delta
+  async function* generator(): AsyncGenerator<string> {
+    const stream = await client.chat.completions.create(
+      params as Parameters<typeof client.chat.completions.create>[0],
+    ) as AsyncIterable<ChatCompletionChunk>
+
+    for await (const chunk of stream) {
+      // Capture generation ID from first chunk (top-level id field)
+      if (!capturedGenerationId && chunk.id) {
+        capturedGenerationId = chunk.id
+      }
+      const delta = chunk.choices[0]?.delta?.content
+      if (delta) yield delta
+    }
   }
+
+  async function getCost(): Promise<number> {
+    if (!capturedGenerationId) return 0
+    try {
+      const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+      const res = await fetch(
+        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(capturedGenerationId)}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      )
+      if (!res.ok) return 0
+      const json = await res.json() as { data?: { total_cost?: number } }
+      return json.data?.total_cost ?? 0
+    } catch {
+      return 0
+    }
+  }
+
+  return { stream: generator(), getCost }
 }

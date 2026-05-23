@@ -2,11 +2,21 @@ import { sendStream, setResponseHeaders } from 'h3'
 import { Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { requirePermission } from '~/server/utils/permissions'
 import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+
+const STEP_PERMISSION_MAP: Record<string, 'pipeline.serpapi' | 'pipeline.deep_research' | 'pipeline.claude' | 'pipeline.gmail'> = {
+  PARTNER_IDENTIFICATION: 'pipeline.serpapi',
+  MARKET_SCANNING: 'pipeline.deep_research',
+  PARTNER_PROFILING: 'pipeline.deep_research',
+  VALUE_ALIGNMENT: 'pipeline.claude',
+  OUTREACH_PREPARATION: 'pipeline.claude',
+  OUTREACH_EXECUTION: 'pipeline.gmail',
+}
 
 interface ExecuteBody {
   stepType: string
@@ -32,6 +42,17 @@ export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
   const runId = getRouterParam(event, 'id')!
   const body = await readBody<ExecuteBody>(event)
+
+  const stepPerm = STEP_PERMISSION_MAP[body.stepType]
+  if (stepPerm) {
+    await requirePermission(event, stepPerm)
+  }
+
+  // Budget enforcement: reject if user has exceeded their limit
+  const budget = await prisma.userBudget.findUnique({ where: { userId: user.id } })
+  if (budget?.limitUsd != null && budget.usedUsd >= budget.limitUsd) {
+    throw createError({ statusCode: 402, statusMessage: `Překročen budget limit ($${budget.limitUsd.toFixed(2)} USD)` })
+  }
 
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
@@ -114,10 +135,18 @@ export default defineEventHandler(async (event) => {
               stepId: step.id,
             })
             let finalOutput: unknown = {}
+            let partnerIdCostUsd = 0
             for await (const ev of gen) {
               if (ev.type === 'progress') write({ chunk: ev.text })
               else if (ev.type === 'item') write({ partnerItem: ev.item })
-              else if (ev.type === 'output') finalOutput = ev.data
+              else if (ev.type === 'output') { finalOutput = ev.data; partnerIdCostUsd = ev.totalCostUsd }
+            }
+            if (partnerIdCostUsd > 0) {
+              await prisma.userBudget.upsert({
+                where: { userId: user.id },
+                create: { userId: user.id, usedUsd: partnerIdCostUsd },
+                update: { usedUsd: { increment: partnerIdCostUsd } },
+              })
             }
             await prisma.pipelineStep.update({
               where: { id: step.id },
@@ -166,16 +195,17 @@ export default defineEventHandler(async (event) => {
 
               try {
                 let partnerOutput = ''
-                const gen = streamStepAI({
+                const { stream: aiStream, getCost } = streamStepAI({
                   stepType: body.stepType,
                   systemPrompt: systemPromptText,
                   contextParts: allContextParts,
                   userMessage: userMsg,
                 })
-                for await (const chunk of gen) {
+                for await (const chunk of aiStream) {
                   partnerOutput += chunk
                   write({ chunk })
                 }
+                await trackCost(getCost, user.id)
                 const parsed = parseAIOutput(partnerOutput)
                 const profile = {
                   partnerId: ip.partnerId,
@@ -232,16 +262,17 @@ export default defineEventHandler(async (event) => {
 
               try {
                 let alignmentOutput = ''
-                const gen = streamStepAI({
+                const { stream: aiStream, getCost } = streamStepAI({
                   stepType: body.stepType,
                   systemPrompt: systemPromptText,
                   contextParts: allContextParts,
                   userMessage: userMsg,
                 })
-                for await (const chunk of gen) {
+                for await (const chunk of aiStream) {
                   alignmentOutput += chunk
                   write({ chunk })
                 }
+                await trackCost(getCost, user.id)
                 const parsed = parseAIOutput(alignmentOutput)
                 const alignment = {
                   partnerId: ip.partnerId,
@@ -305,16 +336,17 @@ export default defineEventHandler(async (event) => {
 
               try {
                 let emailOutput = ''
-                const gen = streamStepAI({
+                const { stream: aiStream, getCost } = streamStepAI({
                   stepType: body.stepType,
                   systemPrompt: systemPromptText,
                   contextParts: allContextParts,
                   userMessage: userMsg,
                 })
-                for await (const chunk of gen) {
+                for await (const chunk of aiStream) {
                   emailOutput += chunk
                   write({ chunk })
                 }
+                await trackCost(getCost, user.id)
                 const parsed = parseAIOutput(emailOutput)
                 const emailData = {
                   partnerName: String(ip.name ?? ''),
@@ -338,16 +370,17 @@ export default defineEventHandler(async (event) => {
             })
           } else {
             let fullOutput = ''
-            const gen = streamStepAI({
+            const { stream: aiStream, getCost } = streamStepAI({
               stepType: body.stepType,
               systemPrompt: systemPromptText,
               contextParts: allContextParts,
               userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
             })
-            for await (const chunk of gen) {
+            for await (const chunk of aiStream) {
               fullOutput += chunk
               write({ chunk })
             }
+            await trackCost(getCost, user.id)
             const outputData = parseAIOutput(fullOutput)
             await prisma.pipelineStep.update({
               where: { id: step.id },
@@ -376,6 +409,21 @@ export default defineEventHandler(async (event) => {
 
   return sendStream(event, stream)
 })
+
+async function trackCost(getCost: () => Promise<number>, userId: string): Promise<void> {
+  try {
+    const costUsd = await getCost()
+    if (costUsd > 0) {
+      await prisma.userBudget.upsert({
+        where: { userId },
+        create: { userId, usedUsd: costUsd },
+        update: { usedUsd: { increment: costUsd } },
+      })
+    }
+  } catch {
+    // Non-fatal: cost tracking failure should not break the pipeline
+  }
+}
 
 function parseAIOutput(text: string): unknown {
   const match = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/)

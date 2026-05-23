@@ -59,6 +59,9 @@ export default defineNuxtConfig({
   googleFonts: {
     families: {
       Parkinsans: [300, 400, 500, 600, 700, 800],
+      'Inter Tight': [400, 500, 600, 700],
+      Dosis: [400, 500, 600, 700],
+      Figtree: [400, 500, 600, 700],
     },
     display: 'swap',
   },

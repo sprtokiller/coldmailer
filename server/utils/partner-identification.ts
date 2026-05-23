@@ -28,6 +28,21 @@ export function findItemArray(
   return { error: 'Vstupní data nejsou JSON objekt ani pole.' }
 }
 
+async function fetchGenerationCost(generationId: string): Promise<number> {
+  try {
+    const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+    const res = await fetch(
+      `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    )
+    if (!res.ok) return 0
+    const json = await res.json() as { data?: { total_cost?: number } }
+    return json.data?.total_cost ?? 0
+  } catch {
+    return 0
+  }
+}
+
 function parseJson(text: string): unknown {
   const match = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/)
   const raw = match ? match[1] : text.trim()
@@ -50,7 +65,7 @@ export interface ItemProgress {
 export type PartnerIdEvent =
   | { type: 'progress'; text: string }
   | { type: 'item'; item: ItemProgress }
-  | { type: 'output'; data: unknown }
+  | { type: 'output'; data: unknown; totalCostUsd: number }
 
 export interface PartnerIdOptions {
   inputData: Record<string, unknown>
@@ -73,6 +88,7 @@ export async function* runPartnerIdentification(
 
   let existingPartners = await prisma.partner.findMany({ select: { id: true, name: true, website: true } })
   const allResults: unknown[] = []
+  let totalCostUsd = 0
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
@@ -119,6 +135,7 @@ export async function* runPartnerIdentification(
             ],
             max_tokens: 1000,
           })
+          if (res.id) totalCostUsd += await fetchGenerationCost(res.id)
           const parsed = parseJson(res.choices[0]?.message?.content ?? '[]')
           const list = Array.isArray(parsed) ? parsed : ((parsed as { partners?: unknown[] })?.partners ?? [])
           foundPartners.push(...(list as typeof foundPartners).filter(p => p?.name))
@@ -155,6 +172,7 @@ export async function* runPartnerIdentification(
               ],
               max_tokens: 60,
             })
+            if (res.id) totalCostUsd += await fetchGenerationCost(res.id)
             const dedup = parseJson(res.choices[0]?.message?.content ?? '{"exists":false}') as { exists: boolean; existingId?: string }
             if (dedup.exists && dedup.existingId) { partnerId = dedup.existingId; isNew = false; }
             else throw new Error('new')
@@ -191,5 +209,5 @@ export async function* runPartnerIdentification(
   }
 
   yield { type: 'progress', text: `\n✅ Hotovo! Zpracováno ${items.length} položek.\n` }
-  yield { type: 'output', data: { items: allResults, totalItems: items.length } }
+  yield { type: 'output', data: { items: allResults, totalItems: items.length }, totalCostUsd }
 }

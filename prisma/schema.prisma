@@ -17,13 +17,65 @@ model User {
   refreshToken String?
   tokenExpiry  DateTime?
   createdAt    DateTime  @default(now())
+  isSuperAdmin Boolean   @default(false)
 
   systemPrompts SystemPrompt[]
   contextParts  ContextPart[]
   sellingPoints SellingPoint[]
   emailDrafts   EmailDraft[]
+  signatures    Signature[]
   pipelineRuns  PipelineRun[]
   stepsRun      PipelineStep[] @relation("StepRunner")
+  roles         UserRole[]
+  permOverrides UserPermission[]
+  budget        UserBudget?
+}
+
+model Role {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  color       String     @default("#6366f1")
+  permissions String[]
+  isSystem    Boolean    @default(false)
+  users       UserRole[]
+  createdAt   DateTime   @default(now())
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+  @@id([userId, roleId])
+}
+
+model UserPermission {
+  id      String  @id @default(cuid())
+  userId  String
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key     String
+  granted Boolean
+  @@unique([userId, key])
+}
+
+model UserBudget {
+  userId   String @id
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  limitUsd Float?
+  usedUsd  Float  @default(0)
+}
+
+model Signature {
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  isDefault Boolean  @default(false)
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum StepType {

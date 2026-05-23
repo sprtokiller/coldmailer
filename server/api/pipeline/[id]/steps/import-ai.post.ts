@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { getEffectivePermissions } from '~/server/utils/permissions'
 import { OPENROUTER, MODELS, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
 interface ImportBody {
@@ -10,6 +11,13 @@ interface ImportBody {
 }
 
 const SUPPORTED_STEPS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT']
+
+const STEP_PERMISSION_MAP: Record<string, string> = {
+  PARTNER_IDENTIFICATION: 'pipeline.serpapi',
+  MARKET_SCANNING: 'pipeline.deep_research',
+  PARTNER_PROFILING: 'pipeline.deep_research',
+  VALUE_ALIGNMENT: 'pipeline.claude',
+}
 
 function extractFromFence(text: string): string {
   const openMatch = text.match(/```(?:json)?\s*\n?/)
@@ -274,6 +282,14 @@ export default defineEventHandler(async (event) => {
   }
   if (!SUPPORTED_STEPS.includes(body.stepType)) {
     throw createError({ statusCode: 400, statusMessage: `AI Import not supported for step ${body.stepType}` })
+  }
+
+  const stepPerm = STEP_PERMISSION_MAP[body.stepType]
+  if (stepPerm) {
+    const perms = await getEffectivePermissions(user.id)
+    if (!perms.includes(stepPerm)) {
+      throw createError({ statusCode: 403, statusMessage: `Nemáte oprávnění: ${stepPerm}` })
+    }
   }
 
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })

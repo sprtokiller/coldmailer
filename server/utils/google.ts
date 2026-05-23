@@ -87,7 +87,7 @@ export async function createGmailDraft(
     [
       `To: ${to}`,
       `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Type: text/html; charset=UTF-8',
       '',
       body,
     ].join('\r\n'),

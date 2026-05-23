@@ -1,18 +1,20 @@
 import { prisma } from '~/server/utils/prisma'
-import { requireAuth } from '~/server/utils/requireAuth'
+import { requirePermission } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
-  const user = await requireAuth(event)
+  const user = await requirePermission(event, 'prompts.own.edit')
   const id = getRouterParam(event, 'id')!
   const body = await readBody<{ name: string; content: string; stepType: string }>(event)
 
   const prompt = await prisma.systemPrompt.findUnique({ where: { id } })
   if (!prompt) throw createError({ statusCode: 404, statusMessage: 'Prompt not found' })
 
-  // isSystem prompts are owned by the system user — any authenticated user may edit them.
-  // Regular prompts may only be edited by their author.
-  if (!prompt.isSystem && prompt.authorId !== user.id) {
-    throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+  // isSystem prompts require prompts.system.edit
+  if (prompt.isSystem) {
+    await requirePermission(event, 'prompts.system.edit')
+  } else if (prompt.authorId !== user.id) {
+    // Other user's prompt requires prompts.others.edit
+    await requirePermission(event, 'prompts.others.edit')
   }
 
   return prisma.systemPrompt.update({

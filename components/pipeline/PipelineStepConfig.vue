@@ -45,6 +45,16 @@ function onSearchBlur() {
   setTimeout(() => { showContextDropdown.value = false }, 150)
 }
 
+// ── Signature selector (Step 6) ───────────────────────────────────────────────
+const selectedSignatureId = ref(
+  pipeline.signatures?.find(s => s.isDefault)?.id ?? '',
+)
+
+function onSignatureChange(id: string) {
+  selectedSignatureId.value = id
+  pipeline.applySignature(id)
+}
+
 // ── Step execution with local validation ─────────────────────────────────────
 const submitAttempted = ref(false)
 
@@ -643,6 +653,20 @@ async function confirmSaveToLibrary() {
           </select>
         </div>
 
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Podpis</label>
+          <select
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            :value="selectedSignatureId"
+            @change="onSignatureChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">— bez podpisu —</option>
+            <option v-for="sig in pipeline.signatures" :key="sig.id" :value="sig.id">
+              {{ sig.name }}{{ sig.isDefault ? ' (výchozí)' : '' }}
+            </option>
+          </select>
+        </div>
+
         <template v-if="pipeline.step6SelectedPartnerName">
           <div class="space-y-3 rounded-xl border border-primary/20 bg-primary/3 p-4">
             <p class="text-xs font-semibold text-primary mb-1">Náhled e-mailu · upravte před odesláním</p>
@@ -665,11 +689,7 @@ async function confirmSaveToLibrary() {
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu</label>
-              <textarea
-                v-model="pipeline.step6PreviewBody"
-                rows="12"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y leading-relaxed"
-              />
+              <RichTextEditor v-model="pipeline.step6PreviewBody" />
             </div>
             <p class="text-[11px] text-gray-400">Kliknutím na „Spustit krok" vytvoříte draft přímo v Gmailu s výše uvedenými daty.</p>
           </div>

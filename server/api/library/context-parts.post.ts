@@ -1,8 +1,8 @@
 import { prisma } from '~/server/utils/prisma'
-import { requireAuth } from '~/server/utils/requireAuth'
+import { requirePermission } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
-  const user = await requireAuth(event)
+  const user = await requirePermission(event, 'context.own.edit')
   const body = await readBody<{ name: string; content: string; stepKeys?: string[]; derivedFromId?: string }>(event)
 
   return prisma.contextPart.create({

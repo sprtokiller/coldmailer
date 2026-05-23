@@ -37,12 +37,21 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  // If no superadmin exists in the system yet, promote the logging-in user
+  const superadminCount = await prisma.user.count({ where: { isSuperAdmin: true } })
+  if (superadminCount === 0) {
+    await prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } })
+  }
+
+  const finalUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, email: true, name: true, image: true, isSuperAdmin: true } })
+
   await setUserSession(event, {
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      image: user.image,
+      id: finalUser!.id,
+      email: finalUser!.email,
+      name: finalUser!.name,
+      image: finalUser!.image,
+      isSuperAdmin: finalUser!.isSuperAdmin,
     },
   })
 
