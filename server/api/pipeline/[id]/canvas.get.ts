@@ -132,6 +132,14 @@ export default defineEventHandler(async (event) => {
     }
   })
 
+  const EDGE_FLOW_LABELS: Record<string, string> = {
+    MARKET_SCANNING:        'soutěží',
+    PARTNER_IDENTIFICATION: 'partnerů',
+    PARTNER_PROFILING:      'profilů',
+    VALUE_ALIGNMENT:        'alignmentů',
+    OUTREACH_PREPARATION:   'e-mailů',
+  }
+
   const edges = STEP_ORDER.slice(0, -1).map((stepType, i) => {
     const nextType = STEP_ORDER[i + 1]
     const step = latestByType.get(stepType)
@@ -157,7 +165,7 @@ export default defineEventHandler(async (event) => {
       id: `e-${stepType}-${nextType}`,
       source: `step-${stepType}`,
       target: `step-${nextType}`,
-      label: flowCount > 0 ? `${flowCount} záznamů` : '',
+      label: flowCount > 0 ? `${flowCount} ${EDGE_FLOW_LABELS[stepType] ?? 'záznamů'}` : '',
     }
   })
 
