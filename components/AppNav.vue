@@ -31,6 +31,13 @@ async function logout() {
             Knihovna
           </NuxtLink>
           <NuxtLink
+            to="/records"
+            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            active-class="text-gray-800 font-medium"
+          >
+            Databáze
+          </NuxtLink>
+          <NuxtLink
             to="/settings"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"

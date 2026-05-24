@@ -29,6 +29,11 @@ model User {
   roles         UserRole[]
   permOverrides UserPermission[]
   budget        UserBudget?
+
+  globalRecords    GlobalRecord[]
+  inputSources     InputSource[]
+  addedRefs        PipelineRecordRef[]
+  recordEvents     RecordEvent[]
 }
 
 model Role {
@@ -154,8 +159,10 @@ model PipelineRun {
   name      String
   authorId  String
   author    User           @relation(fields: [authorId], references: [id])
-  createdAt DateTime       @default(now())
-  steps     PipelineStep[]
+  createdAt    DateTime       @default(now())
+  steps        PipelineStep[]
+  inputSources InputSource[]
+  recordRefs   PipelineRecordRef[]
 }
 
 model PipelineStep {
@@ -176,28 +183,139 @@ model PipelineStep {
   runner         User          @relation("StepRunner", fields: [runnerId], references: [id])
   createdAt      DateTime      @default(now())
   candidatePartners CandidatePartner[]
-  completedAt    DateTime?
+  completedAt       DateTime?
+  inputSources      InputSource[]
+  recordRefs        PipelineRecordRef[]
 }
 
 model Partner {
-  id          String   @id @default(cuid())
-  name        String
-  website     String?
-  description String?
-  type        String?
-  rawData     Json?
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  website        String?
+  description    String?
+  type           String?
+  rawData        Json?
+  createdAt      DateTime @default(now())
+  globalRecordId String?
 
   candidateRelations CandidatePartner[]
 }
 
 model CandidatePartner {
+  id                 String       @id @default(cuid())
+  itemName           String
+  itemUrl            String?
+  partnerId          String
+  partner            Partner      @relation(fields: [partnerId], references: [id])
+  pipelineStepId     String
+  step               PipelineStep @relation(fields: [pipelineStepId], references: [id])
+  createdAt          DateTime     @default(now())
+  pipelineRecordRefId String?
+}
+
+// ── Global Record System ─────────────────────────────────────────────────────
+
+enum RecordType {
+  COMPETITION
+  PARTNER
+  ORGANISATION
+  CHANNEL
+  SOURCE
+  OPPORTUNITY
+}
+
+enum RelevanceStatus {
+  RELEVANT
+  IRRELEVANT
+  UNCERTAIN
+}
+
+enum AddMethod {
+  GENERATED
+  IMPORTED
+  MANUAL
+  GLOBAL_DB
+  INHERITED
+}
+
+enum InputSourceType {
+  MINI_DEEP_RESEARCH
+  AI_IMPORT
+  MANUAL_ADD
+  GLOBAL_DB_SELECT
+}
+
+model GlobalRecord {
+  id              String          @id @default(cuid())
+  type            RecordType
+  canonicalName   String
+  normalizedName  String
+  payload         Json
+  relevanceStatus RelevanceStatus @default(UNCERTAIN)
+  relevanceNotes  String?
+  sourceMetadata  Json?
+  createdBy       String
+  creator         User            @relation(fields: [createdBy], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  duplicateOfId   String?
+  duplicateOf     GlobalRecord?   @relation("Duplicates", fields: [duplicateOfId], references: [id])
+  duplicates      GlobalRecord[]  @relation("Duplicates")
+
+  pipelineRefs    PipelineRecordRef[]
+  events          RecordEvent[]
+
+  @@index([normalizedName])
+  @@index([type, relevanceStatus])
+}
+
+model InputSource {
+  id            String          @id @default(cuid())
+  type          InputSourceType
+  pipelineRunId String
+  pipelineRun   PipelineRun     @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  stepId        String?
+  step          PipelineStep?   @relation(fields: [stepId], references: [id])
+  label         String
+  createdBy     String
+  creator       User            @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime        @default(now())
+  metadata      Json?
+
+  recordRefs    PipelineRecordRef[]
+}
+
+model PipelineRecordRef {
+  id                      String          @id @default(cuid())
+  pipelineRunId           String
+  pipelineRun             PipelineRun     @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  stepId                  String
+  step                    PipelineStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  globalRecordId          String
+  globalRecord            GlobalRecord    @relation(fields: [globalRecordId], references: [id])
+  inputSourceId           String?
+  inputSource             InputSource?    @relation(fields: [inputSourceId], references: [id])
+  addedBy                 String
+  adder                   User            @relation(fields: [addedBy], references: [id])
+  addedAt                 DateTime        @default(now())
+  isSelectedForProcessing Boolean         @default(true)
+  addMethod               AddMethod
+  localNote               String?
+  localStatus             RelevanceStatus?
+
+  @@unique([pipelineRunId, stepId, globalRecordId])
+  @@index([stepId, isSelectedForProcessing])
+}
+
+model RecordEvent {
   id             String       @id @default(cuid())
-  itemName       String
-  itemUrl        String?
-  partnerId      String
-  partner        Partner      @relation(fields: [partnerId], references: [id])
-  pipelineStepId String
-  step           PipelineStep @relation(fields: [pipelineStepId], references: [id])
-  createdAt      DateTime     @default(now())
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id])
+  pipelineRunId  String?
+  stepId         String?
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  eventType      String
+  timestamp      DateTime     @default(now())
+  metadata       Json?
 }

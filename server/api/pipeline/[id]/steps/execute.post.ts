@@ -6,6 +6,7 @@ import { requirePermission } from '~/server/utils/permissions'
 import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
+import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
@@ -152,6 +153,39 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date() },
             })
+
+            // GlobalRecord extraction for discovered partners — non-fatal
+            const piItems = (finalOutput as { items?: unknown[] } | null)?.items ?? []
+            const allPartnerIds = piItems.flatMap(item => {
+              const it = item as { partners?: Array<{ partnerId: string }> }
+              return (it.partners ?? []).map(p => p.partnerId)
+            }).filter(Boolean)
+            if (allPartnerIds.length > 0) {
+              const dbPartners = await prisma.partner.findMany({
+                where: { id: { in: allPartnerIds } },
+                select: { id: true, name: true, website: true, description: true, type: true, rawData: true },
+              })
+              const inputSource = await prisma.inputSource.create({
+                data: {
+                  type: 'MINI_DEEP_RESEARCH',
+                  pipelineRunId: runId,
+                  stepId: step.id,
+                  label: `Partner Identification – ${new Date().toLocaleString('cs-CZ')}`,
+                  createdBy: user.id,
+                },
+              })
+              for (const p of dbPartners) {
+                await findOrCreateGlobalRecord(
+                  {
+                    name: p.name,
+                    url: p.website ?? undefined,
+                    type: 'PARTNER',
+                    payload: { name: p.name, website: p.website, description: p.description, type: p.type, ...(p.rawData as Record<string, unknown> ?? {}) },
+                  },
+                  user.id, runId, step.id, inputSource.id, 'GENERATED'
+                ).catch(() => {})
+              }
+            }
           } else if (body.stepType === 'PARTNER_PROFILING') {
             // inputData: { partners: [{ partnerId?, name, frequency?, itemNames? }] }
             const inputPartners = (() => {
@@ -368,6 +402,47 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: allEmails as never, completedAt: new Date() },
             })
+          } else if (body.stepType === 'MARKET_SCANNING') {
+            let fullOutput = ''
+            const { stream: aiStream, getCost } = streamStepAI({
+              stepType: body.stepType,
+              systemPrompt: systemPromptText,
+              contextParts: allContextParts,
+              userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
+            })
+            for await (const chunk of aiStream) {
+              fullOutput += chunk
+              write({ chunk })
+            }
+            await trackCost(getCost, user.id)
+            const outputData = parseAIOutput(fullOutput)
+            await prisma.pipelineStep.update({
+              where: { id: step.id },
+              data: { status: 'COMPLETED', outputData: outputData as never, completedAt: new Date() },
+            })
+
+            // GlobalRecord extraction — non-fatal, runs after outputData is persisted
+            const msItems = Array.isArray(outputData) ? outputData as Record<string, unknown>[] : []
+            if (msItems.length > 0) {
+              const inputSource = await prisma.inputSource.create({
+                data: {
+                  type: 'MINI_DEEP_RESEARCH',
+                  pipelineRunId: runId,
+                  stepId: step.id,
+                  label: `Market Scanning – ${new Date().toLocaleString('cs-CZ')}`,
+                  createdBy: user.id,
+                },
+              })
+              for (const item of msItems) {
+                const name = String(item.name ?? item.nazev ?? item.itemName ?? '')
+                if (!name) continue
+                const url = String(item.url ?? item.website ?? item.web ?? '') || undefined
+                await findOrCreateGlobalRecord(
+                  { name, url, type: 'COMPETITION', payload: item },
+                  user.id, runId, step.id, inputSource.id, 'GENERATED'
+                ).catch(() => {})
+              }
+            }
           } else {
             let fullOutput = ''
             const { stream: aiStream, getCost } = streamStepAI({

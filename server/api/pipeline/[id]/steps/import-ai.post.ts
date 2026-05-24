@@ -3,6 +3,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getEffectivePermissions } from '~/server/utils/permissions'
 import { OPENROUTER, MODELS, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 
 interface ImportBody {
   stepType: string
@@ -249,14 +250,15 @@ async function saveStep(
   body: ImportBody & { systemPromptId?: string },
   mergedData: unknown,
   runnerId: string,
-) {
+): Promise<string> {
   if (existingStep) {
     await prisma.pipelineStep.update({
       where: { id: existingStep.id },
       data: { outputData: mergedData as never },
     })
+    return existingStep.id
   } else {
-    await prisma.pipelineStep.create({
+    const created = await prisma.pipelineStep.create({
       data: {
         pipelineRunId: runId,
         stepType: body.stepType as never,
@@ -269,6 +271,7 @@ async function saveStep(
         completedAt: new Date(),
       },
     })
+    return created.id
   }
 }
 
@@ -317,7 +320,8 @@ export default defineEventHandler(async (event) => {
     const itemCount = Array.isArray(preDetected) ? preDetected.length : 1
     console.log('[import-ai] input is already valid JSON — skipping AI, merging %d item(s) directly', itemCount)
     const mergedData = mergeOutputData(existingData, preDetected, body.stepType)
-    await saveStep(existingStep, runId, body, mergedData, user.id)
+    const stepId = await saveStep(existingStep, runId, body, mergedData, user.id)
+    await extractMSGlobalRecords(body.stepType, mergedData, user.id, runId, stepId)
     return { success: true, mergedData }
   }
 
@@ -374,6 +378,41 @@ PRAVIDLA:
   }
 
   const mergedData = mergeOutputData(existingData, newData, body.stepType)
-  await saveStep(existingStep, runId, body, mergedData, user.id)
+  const stepId = await saveStep(existingStep, runId, body, mergedData, user.id)
+  await extractMSGlobalRecords(body.stepType, mergedData, user.id, runId, stepId)
   return { success: true, mergedData }
 })
+
+async function extractMSGlobalRecords(
+  stepType: string,
+  mergedData: unknown,
+  userId: string,
+  pipelineRunId: string,
+  stepId: string,
+): Promise<void> {
+  if (stepType !== 'MARKET_SCANNING') return
+  const items = Array.isArray(mergedData) ? mergedData as Record<string, unknown>[] : []
+  if (items.length === 0) return
+  try {
+    const inputSource = await prisma.inputSource.create({
+      data: {
+        type: 'AI_IMPORT',
+        pipelineRunId,
+        stepId,
+        label: `AI Import – ${new Date().toLocaleString('cs-CZ')}`,
+        createdBy: userId,
+      },
+    })
+    for (const item of items) {
+      const name = String(item.name ?? item.nazev ?? item.itemName ?? '')
+      if (!name) continue
+      const url = String(item.url ?? item.website ?? item.web ?? '') || undefined
+      await findOrCreateGlobalRecord(
+        { name, url, type: 'COMPETITION', payload: item },
+        userId, pipelineRunId, stepId, inputSource.id, 'IMPORTED'
+      ).catch(() => {})
+    }
+  } catch {
+    // Non-fatal
+  }
+}

@@ -510,40 +510,6 @@ async function confirmSaveToLibrary() {
       </template>
     </div>
 
-    <div v-if="step.key === 'PARTNER_IDENTIFICATION'" class="mt-4">
-      <div v-if="pipeline.step2Items().length === 0" class="text-xs text-gray-400 py-2">
-        Nejprve spusťte Krok 1 (Market Scanning), abyste získali položky ke zpracování.
-      </div>
-      <template v-else>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-medium text-gray-500">
-            Položky z Kroku 1
-            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step2SelectedCount() }} / {{ pipeline.step2Items().length }} vybráno)</span>
-          </label>
-          <div class="flex items-center gap-3">
-            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step2SelectAll()">Vše</button>
-            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step2DeselectAll()">Žádné</button>
-          </div>
-        </div>
-        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
-          <label
-            v-for="item in pipeline.step2Items()"
-            :key="item.index"
-            class="flex items-center gap-3 px-3 py-2 border-t border-gray-50 cursor-pointer hover:bg-gray-50/60 first:border-t-0"
-            :class="pipeline.step2SelectedItems[String(item.index)] ? '' : 'opacity-50'"
-          >
-            <input
-              type="checkbox"
-              :checked="pipeline.step2SelectedItems[String(item.index)]"
-              class="accent-primary shrink-0"
-              @change="pipeline.step2SelectedItems[String(item.index)] = ($event.target as HTMLInputElement).checked"
-            />
-            <span class="font-medium text-gray-700 truncate" :title="item.name">{{ item.name }}</span>
-          </label>
-        </div>
-      </template>
-    </div>
-
     <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
         Vstupní data (JSON)
@@ -725,44 +691,6 @@ async function confirmSaveToLibrary() {
         {{ pipeline.copiedPromptKey === step.key ? 'Zkopírováno!' : 'Kopírovat prompt' }}
       </button>
 
-      <button
-        v-if="pipeline.isAiImportStep(step.key)"
-        type="button"
-        class="border border-violet-300 text-violet-600 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-violet-50 disabled:opacity-50 transition-colors flex items-center gap-2"
-        :disabled="pipeline.aiImportLoading"
-        @click="pipeline.toggleAiImport(step.key)"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        {{ pipeline.aiImportStep === step.key ? 'Zavřít import' : 'AI Import' }}
-      </button>
-    </div>
-
-    <div v-if="pipeline.isAiImportStep(step.key) && pipeline.aiImportStep === step.key" class="rounded-xl border border-violet-200 bg-violet-50/40 p-4 space-y-3 mt-4">
-      <p class="text-xs font-medium text-violet-700">
-        AI Import – vložte nestrukturovaná data z externího nástroje. Claude je automaticky převede do správného formátu a sloučí s existujícími výsledky.
-      </p>
-      <textarea
-        v-model="pipeline.aiImportText"
-        rows="7"
-        class="w-full border border-violet-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none bg-white"
-        placeholder="Vložte text, CSV, výstup z externího nástroje…"
-      />
-      <div class="flex gap-2">
-        <button
-          class="bg-violet-600 text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-1.5"
-          :disabled="pipeline.aiImportLoading || !pipeline.aiImportText.trim()"
-          @click="pipeline.runAiImport(step.key)"
-        >
-          <svg v-if="pipeline.aiImportLoading" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ pipeline.aiImportLoading ? 'Zpracovávám…' : 'Importovat a sloučit' }}
-        </button>
-        <button type="button" class="text-xs text-gray-400 hover:text-gray-600 px-3" @click="pipeline.aiImportStep = null">Zrušit</button>
-      </div>
     </div>
 
     <div v-if="pipeline.executingStep === step.key && pipeline.streamOutputs[step.key]" class="mt-4">
