@@ -75,10 +75,15 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
     </div>
 
     <div class="p-4">
-      <div v-if="total > 0" class="text-xs text-gray-400">
-        {{ total }} partnerů
-      </div>
-      <div v-else class="text-xs text-gray-400 text-center py-2">Žádní partneři · klikněte pro spuštění</div>
+      <template v-if="total > 0">
+        <div class="text-xs text-gray-400">{{ total }} partnerů</div>
+      </template>
+      <template v-else>
+        <button
+          class="w-full text-xs py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
+          @click.stop="canvas.openOverlay(props.id, data.stepId, data.stepType)"
+        >▶ Spustit krok</button>
+      </template>
     </div>
 
     <Handle type="source" :position="Position.Right" class="!bg-indigo-400" />
