@@ -696,6 +696,14 @@ const modelBadge = computed(() => {
   const model = STEP_MODEL[stepType.value]
   return model ? MODEL_BADGE[model] ?? null : null
 })
+
+// ── Auto-refresh canvas after step execution ──────────────────────────────────
+
+watch(() => matchedStep.value?.status, (newStatus, oldStatus) => {
+  if (oldStatus === 'RUNNING' && (newStatus === 'COMPLETED' || newStatus === 'FAILED')) {
+    canvas.fetchCanvasData()
+  }
+})
 </script>
 
 <template>
@@ -1031,20 +1039,22 @@ const modelBadge = computed(() => {
           <div class="px-5 py-3 border-b border-gray-100 flex gap-2 flex-wrap flex-shrink-0">
             <button
               class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-              @click="activeAddPanel = null; activeTab = 'config'"
+              @click="isOutputStep ? (activeTab = 'input') : (activeAddPanel = null, activeTab = 'config')"
             >▶ Spustit</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'import' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'import' ? null : 'import'"
-            >↑ Importovat</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'db' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'db' ? null : 'db'"
-            >🔍 Z databáze</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'manual' ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'manual' ? null : 'manual'"
-            >+ Ručně</button>
+            <template v-if="!isOutputStep">
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'import' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = activeAddPanel === 'import' ? null : 'import'"
+              >↑ Importovat</button>
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'db' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = activeAddPanel === 'db' ? null : 'db'"
+              >🔍 Z databáze</button>
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'manual' ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = activeAddPanel === 'manual' ? null : 'manual'"
+              >+ Ručně</button>
+            </template>
           </div>
 
           <!-- Import panel -->
