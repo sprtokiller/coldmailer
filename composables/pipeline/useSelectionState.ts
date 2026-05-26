@@ -70,15 +70,30 @@ export function useSelectionState(
           candidate.frequency++
           candidate.itemNames.push(item.itemName)
         } else {
-          map.set(p.partnerId, { partnerId: p.partnerId, name: p.name, frequency: 1, itemNames: [item.itemName] })
+          map.set(p.partnerId, { partnerId: p.partnerId, name: p.name, frequency: 1, itemNames: [item.itemName], source: 'step2' })
         }
       }
     }
+
+    // Include partners that exist in step 3's output but were not identified in step 2
+    const existingNames = new Set([...map.values()].map(c => c.name.toLowerCase().trim()))
+    for (const profile of profilingOutputProfiles('PARTNER_PROFILING')) {
+      const name = String(profile.name ?? '')
+      if (!name) continue
+      if (!existingNames.has(name.toLowerCase().trim())) {
+        const syntheticId = 'direct:' + name.toLowerCase().trim()
+        map.set(syntheticId, { partnerId: syntheticId, name, frequency: 0, itemNames: [], source: 'direct' })
+        existingNames.add(name.toLowerCase().trim())
+      }
+    }
+
     return [...map.values()].sort((a, b) => b.frequency - a.frequency)
   }
 
   function step3FilteredCandidates() {
-    return step3Candidates().filter(candidate => candidate.frequency >= step3FreqFilter.value)
+    return step3Candidates().filter(candidate =>
+      candidate.source === 'direct' || candidate.frequency >= step3FreqFilter.value,
+    )
   }
 
   function initStep3Selection() {

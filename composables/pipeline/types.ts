@@ -43,6 +43,7 @@ export interface Step3Candidate {
   name: string
   frequency: number
   itemNames: string[]
+  source: 'step2' | 'direct'
 }
 
 export type PromptOption = {

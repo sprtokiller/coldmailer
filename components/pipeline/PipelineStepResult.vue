@@ -213,7 +213,7 @@ async function deleteSelectedRows() {
 
               <div v-if="profile.socialInvolvement">
                 <p class="font-medium text-gray-600 mb-0.5">Společenská angažovanost</p>
-                <p class="text-gray-600 leading-relaxed">{{ profile.socialInvolvement }}</p>
+                <p class="text-gray-600 leading-relaxed" v-html="renderLinks(profile.socialInvolvement as string)" />
               </div>
 
               <div v-if="Array.isArray(profile.contacts) && (profile.contacts as unknown[]).length">
@@ -267,7 +267,7 @@ async function deleteSelectedRows() {
 
               <div v-if="profile.researchNotes" class="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2">
                 <p class="font-medium text-amber-700 mb-0.5">Poznámky výzkumníka</p>
-                <p class="text-amber-800 leading-relaxed">{{ profile.researchNotes }}</p>
+                <p class="text-amber-800 leading-relaxed" v-html="renderLinks(profile.researchNotes as string)" />
               </div>
             </template>
           </div>

@@ -98,6 +98,7 @@ export default defineEventHandler(async (event) => {
       systemPromptId: body.systemPromptId ?? null,
       contextPartIds: body.contextPartIds ?? [],
       sellingPointId: body.sellingPointId ?? null,
+      emailDraftId: body.emailDraftId ?? null,
       inputData: (body.inputData ?? {}) as Prisma.InputJsonValue,
       runnerId: user.id,
     },
@@ -130,8 +131,24 @@ export default defineEventHandler(async (event) => {
               data: { status: 'COMPLETED', outputData: result as never, completedAt: new Date() },
             })
           } else if (body.stepType === 'PARTNER_IDENTIFICATION') {
+            // Read actual selection from DB — overrides client-sent inputData
+            const msStep = await prisma.pipelineStep.findFirst({
+              where: { pipelineRunId: runId, stepType: 'MARKET_SCANNING' },
+              orderBy: { createdAt: 'desc' },
+            })
+            let piInputData: Record<string, unknown> = body.inputData ?? {}
+            if (msStep) {
+              const selectedRefs = await prisma.pipelineRecordRef.findMany({
+                where: { stepId: msStep.id, isSelectedForProcessing: true },
+                include: { globalRecord: { select: { payload: true, canonicalName: true } } },
+                orderBy: { addedAt: 'asc' },
+              })
+              if (selectedRefs.length > 0) {
+                piInputData = { items: selectedRefs.map(r => ({ ...(r.globalRecord.payload as Record<string, unknown>), name: r.globalRecord.canonicalName })) }
+              }
+            }
             const gen = runPartnerIdentification({
-              inputData: body.inputData ?? {},
+              inputData: piInputData,
               extractPrompt: systemPromptText,
               stepId: step.id,
             })

@@ -486,12 +486,23 @@ async function confirmSaveToLibrary() {
             v-for="c in pipeline.step3FilteredCandidates()"
             :key="c.partnerId"
             class="grid grid-cols-[1.5rem_1fr_4rem_1fr_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
-            :class="pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50'"
+            :class="[
+              pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50',
+              c.source === 'direct' ? 'bg-amber-50/40' : '',
+            ]"
           >
             <input type="checkbox" v-model="pipeline.step3SelectedIds[c.partnerId]" class="accent-primary" />
-            <span class="font-medium text-gray-700 truncate" :title="c.name">{{ c.name }}</span>
-            <span class="text-center font-semibold" :class="c.frequency > 1 ? 'text-primary' : 'text-gray-400'">{{ c.frequency }}×</span>
-            <span class="text-gray-400 truncate text-[10px]" :title="c.itemNames.join(', ')">{{ c.itemNames.join(', ') }}</span>
+            <span class="font-medium text-gray-700 truncate flex items-center gap-1" :title="c.name">
+              {{ c.name }}
+              <span v-if="c.source === 'direct'" class="shrink-0 text-[9px] bg-amber-100 text-amber-600 px-1 py-0.5 rounded font-semibold">přímý import</span>
+            </span>
+            <span
+              class="text-center font-semibold"
+              :class="c.source === 'direct' ? 'text-amber-400' : c.frequency > 1 ? 'text-primary' : 'text-gray-400'"
+            >{{ c.source === 'direct' ? '–' : c.frequency + '×' }}</span>
+            <span class="text-gray-400 truncate text-[10px]" :title="c.source === 'direct' ? 'Přímo importováno do kroku 3' : c.itemNames.join(', ')">
+              {{ c.source === 'direct' ? 'Přímo importováno' : c.itemNames.join(', ') }}
+            </span>
             <button
               type="button"
               class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"

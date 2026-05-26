@@ -87,9 +87,15 @@ export async function getStepRecords(stepId: string, filters: StepRecordFilters 
       ...(filters.search && { globalRecord: { canonicalName: { contains: filters.search, mode: 'insensitive' } } }),
     },
     include: {
+      adder: { select: { name: true } },
       globalRecord: {
         include: {
-          pipelineRefs: { select: { pipelineRunId: true } },
+          pipelineRefs: {
+            select: {
+              pipelineRunId: true,
+              pipelineRun: { select: { name: true } },
+            },
+          },
         },
       },
       inputSource: { select: { id: true, label: true, type: true, pipelineRunId: true } },

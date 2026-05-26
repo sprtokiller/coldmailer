@@ -58,8 +58,11 @@ const isLast = computed(() => props.data.stepType === 'OUTREACH_EXECUTION')
     <div class="p-4">
       <div class="flex items-center justify-between mb-1">
         <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">{{ STEP_NUMBERS[data.stepType] ?? '' }}</span>
-        <span v-if="STATUS_BADGES[data.status]" :class="['text-xs px-2 py-0.5 rounded-full font-medium', STATUS_BADGES[data.status].cls]">
+        <span v-if="STATUS_BADGES[data.status] && (data.status === 'RUNNING' || data.status === 'FAILED')" :class="['text-xs px-2 py-0.5 rounded-full font-medium', STATUS_BADGES[data.status].cls]">
           {{ STATUS_BADGES[data.status].label }}
+        </span>
+        <span v-else-if="total > 0" class="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-600">
+          {{ total }} {{ outputLabel }}
         </span>
       </div>
       <h3 class="text-sm font-semibold text-gray-800">{{ data.label }}</h3>
@@ -68,7 +71,6 @@ const isLast = computed(() => props.data.stepType === 'OUTREACH_EXECUTION')
         class="mt-2 w-full text-xs py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
         @click.stop="canvas.openOverlay(id, data.stepId, data.stepType)"
       >▶ Spustit krok</button>
-      <p v-if="total > 0" class="text-xs text-gray-400 mt-2">{{ total }} {{ outputLabel }}</p>
     </div>
 
     <Handle v-if="!isLast" type="source" :position="Position.Right" class="!bg-gray-300" />

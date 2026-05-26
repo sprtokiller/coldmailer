@@ -21,13 +21,16 @@ async function createRun() {
   }
 }
 
-function stepCount(steps: { status: string }[]) {
-  return {
-    total: steps.length,
-    done: steps.filter((s) => s.status === 'COMPLETED').length,
-    failed: steps.filter((s) => s.status === 'FAILED').length,
-  }
-}
+type RunStats = NonNullable<typeof runs.value>[0]['stats']
+
+const STAT_DEFS: { key: keyof RunStats; label: string; tooltip: string }[] = [
+  { key: 'competitions', label: 'soutěží',     tooltip: 'Soutěže a akce (Market Scanning)' },
+  { key: 'partners',     label: 'partnerů',    tooltip: 'Unikátní identifikovaní partneři (Identifikace)' },
+  { key: 'profiles',     label: 'profilů',     tooltip: 'Profilovaní partneři (Profilování)' },
+  { key: 'alignments',   label: 'alignmentů',  tooltip: 'Partneři s Value Alignmentem' },
+  { key: 'outreach',     label: 'e-mailů',     tooltip: 'Připravené návrhy e-mailů k oslovení' },
+  { key: 'sent',         label: 'v Gmailu',    tooltip: 'Drafty vytvořené v Gmailu (Odeslání)' },
+]
 </script>
 
 <template>
@@ -86,25 +89,22 @@ function stepCount(steps: { status: string }[]) {
           <span class="text-xs text-gray-400">{{ run.author.name }}</span>
         </div>
 
-        <div v-if="run.steps.length > 0">
-          <div class="flex gap-1 mb-2">
-            <div
-              v-for="(step, i) in run.steps"
-              :key="i"
-              class="h-1.5 rounded-full flex-1"
-              :class="{
-                'bg-success': step.status === 'COMPLETED',
-                'bg-danger': step.status === 'FAILED',
-                'bg-primary': step.status === 'RUNNING',
-                'bg-gray-200': step.status === 'PENDING',
-              }"
-            />
-          </div>
-          <p class="text-xs text-gray-400">
-            {{ stepCount(run.steps).done }} / {{ stepCount(run.steps).total }} kroků dokončeno
-          </p>
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-1">
+          <template v-for="def in STAT_DEFS" :key="def.key">
+            <span
+              v-if="run.stats[def.key] !== null"
+              class="text-xs text-gray-500 tabular-nums"
+              :title="def.tooltip"
+            >
+              <span class="font-semibold text-gray-800">{{ run.stats[def.key] }}</span>
+              {{ def.label }}
+            </span>
+          </template>
+          <span
+            v-if="STAT_DEFS.every(d => run.stats[d.key] === null)"
+            class="text-xs text-gray-400"
+          >Zatím nebyly spuštěny žádné kroky</span>
         </div>
-        <p v-else class="text-xs text-gray-400">Zatím nebyly spuštěny žádné kroky</p>
       </NuxtLink>
     </div>
   </div>
