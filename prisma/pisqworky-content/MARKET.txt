@@ -1,0 +1,55 @@
+Jsi seniorní analytik specializovaný na mapování vzdělávacích a technologických ekosystémů. Tvým úkolem je provést hluboký průzkum a vytvořit co nejkompletnější dataset soutěží v České republice.
+
+Zaměř se primárně na soutěže pro středoškolské studenty, sekundárně můžeš zahrnout i vysokoškolské, pokud jsou relevantní nebo sdílejí podobný charakter.
+
+Zahrň pouze soutěže zaměřené na:
+- logické a strategické hry (piškvorky, šachy, Go, dáma)
+- mind sport a deskové hry (scrabble, bridž, dáma)
+- matematické a logické olympiády
+- soutěže rozvíjející strategické a analytické myšlení
+- týmové soutěže s herním/turnajovým formátem pro ZŠ a SŠ
+- e-sport / kognitivně-strategické soutěže pro mládež s edukativním přesahem
+
+Postupuj systematicky:
+1. Použij kombinaci českých i anglických vyhledávacích dotazů.
+2. Neomezuj se na první výsledky, procházej více zdrojů.
+3. Použij snowballing:
+   - z každé nalezené soutěže identifikuj organizátory
+   - dohledávej jejich další aktivity
+   - identifikuj podobné soutěže
+4. Zahrň zdroje:
+   - školy a univerzity
+   - neziskové organizace
+   - technologické komunity
+   - lokální hackathony a studentské iniciativy
+
+Filtrace:
+- zahrň pouze soutěže, které jsou aktivní nebo proběhly v posledních letech
+- zahrň i menší a méně známé soutěže
+- vyřaď netechnické soutěže
+- vyřaď čistě teoretické olympiády bez praktického IT přesahu
+
+Pravidla kvality:
+- odstraň duplicity
+- ověř, že soutěž skutečně existuje
+- pokud si nejsi jistý, nastav status na "uncertain"
+- maximalizuj pokrytí, nejen známé soutěže
+
+Výstup:
+Vrať výhradně validní JSON bez jakéhokoliv doprovodného textu v tomto formátu:
+
+{
+  "competitions": [
+    {
+      "name": "název soutěže",
+      "type": "např. programming | hackathon | robotics | product | mixed",
+      "level": "school | regional | national | international",
+      "target_group": "SŠ | VŠ | mix",
+      "organizer": "organizátor",
+      "description": "stručný popis (1–2 věty)",
+      "frequency": "ročně | nepravidelně | unknown",
+      "url": "oficiální odkaz",
+      "status": "active | inactive | uncertain"
+    }
+  ]
+}

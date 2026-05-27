@@ -1,0 +1,147 @@
+{
+  "competitions": [
+    {
+      "url": "https://www.logickaolympiada.cz",
+      "name": "Logická olympiáda",
+      "type": "product",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Mensa ČR",
+      "description": "Celostátní soutěž pro žáky MŠ, ZŠ a studenty SŠ založená na řešení logických úloh, kde úspěch nezávisí na znalostech, ale na schopnosti samostatného úsudku a logického uvažování.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.ibobr.cz",
+      "name": "Bobřík informatiky (iBobr)",
+      "type": "programming",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Pedagogická fakulta JU v Českých Budějovicích",
+      "description": "Online soutěž pro žáky ZŠ a studenty SŠ zaměřená na informatické a logické myšlení; úlohy řeší žáci individuálně ve školních počítačových učebnách napříč ČR i zahraničím.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.matematickaolympiada.cz",
+      "name": "Matematická olympiáda",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Jednota českých matematiků a fyziků (JČMF) ve spolupráci s MŠMT",
+      "description": "Tradiční postupová soutěž pro žáky ZŠ a SŠ v řešení matematických úloh, s několika věkovými kategoriemi a postupem ze školního přes okresní a krajské až po celostátní kolo.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://mo.jcmf.cz/pythagoriada",
+      "name": "Pythagoriáda",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "MŠMT (odborně garantováno JČMF)",
+      "description": "Matematická soutěž pro žáky 5.–9. ročníků ZŠ a odpovídajících ročníků víceletých gymnázií, zaměřená na úlohy řešitelné selským rozumem a logickým uvažováním bez pokročilého aparátu.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.matematickyklokan.net",
+      "name": "Matematický klokan",
+      "type": "mixed",
+      "level": "international",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Asociace Kangourou sans frontières (v ČR PřF UP Olomouc)",
+      "description": "Mezinárodní matematická soutěž pro žáky ZŠ a studenty SŠ ve více než 80 zemích, kde účastníci v jednom termínu řeší stejné úlohy ve více obtížnostních kategoriích.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.pangea-soutez.cz",
+      "name": "Pangea",
+      "type": "mixed",
+      "level": "international",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Pangea Wettbewerb (v ČR lokální koordinátoři)",
+      "description": "Mezinárodní matematická soutěž pro žáky ZŠ a víceletých gymnázií, založená na řešení úloh zaměřených na praktické využití matematiky v běžných situacích.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.geniuslogicus.eu",
+      "name": "Genius Logicus",
+      "type": "mixed",
+      "level": "international",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Genius Logicus (mezinárodní organizátor, ČR + SR koordinace)",
+      "description": "Mezinárodní soutěž v řešení logických úloh pro žáky ZŠ a studenty SŠ, s online i papírovou variantou a samostatnými kategoriemi podle věku a obtížnosti.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.chess.cz",
+      "name": "Mistrovství ČR mládeže v šachu",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Šachový svaz České republiky (ŠSČR)",
+      "description": "Národní mistrovství mládeže ve více věkových kategoriích (od nejmladších žáků až po juniory), kde se hraje klasický šachový turnaj s postupem z krajských kvalifikací.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.chess.cz/mladez/skolni-souteze",
+      "name": "Šachová liga škol (Přebor škol v šachu)",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Šachový svaz České republiky (ŠSČR)",
+      "description": "Týmová šachová soutěž pro žáky ZŠ a studenty SŠ reprezentující svou školu; hraje se postupový systém od okresních a krajských přeborů až po republikové finále.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://cago.cz",
+      "name": "Mistrovství ČR mládeže v Go",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Česká asociace Go (ČAGo)",
+      "description": "Národní mistrovství dětí a mládeže ve hře Go, pořádané každoročně Českou asociací Go s několika věkovými kategoriemi a postupem na mezinárodní mládežnické turnaje.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.scrabble-asociace.cz",
+      "name": "Mistrovství ČR ve Scrabble",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Česká asociace Scrabble",
+      "description": "Národní turnaj v české verzi hry Scrabble s otevřenou účastí včetně juniorských kategorií; součástí je série kvalifikačních turnajů a žebříček hráčů.",
+      "target_group": "mix"
+    },
+    {
+      "url": "https://www.soc.cz",
+      "name": "Středoškolská odborná činnost (SOČ) – obory matematika a informatika",
+      "type": "product",
+      "level": "national",
+      "status": "active",
+      "frequency": "ročně",
+      "organizer": "Národní pedagogický institut ČR (NPI) a MŠMT",
+      "description": "Celostátní soutěž SŠ studentů v samostatné odborné práci, kde v oborech matematika a informatika studenti řeší vlastní téma a obhajují ho před odbornou porotou na školní, krajské a celostátní úrovni.",
+      "target_group": "SŠ"
+    },
+    {
+      "url": "https://www.mensa.cz/deti-a-mladez/ntc-learning",
+      "name": "Mensa NTC Learning soutěže",
+      "type": "mixed",
+      "level": "national",
+      "status": "uncertain",
+      "frequency": "ročně",
+      "organizer": "Mensa ČR",
+      "description": "Série aktivit a soutěží Mensy ČR navázaných na metodu NTC Learning, zaměřených na rozvoj logického a abstraktního myšlení u dětí a mládeže ve školách i ve volnočasových klubech.",
+      "target_group": "mix"
+    }
+  ]
+}
