@@ -152,6 +152,7 @@ model EmailDraft {
   derivedFromId String?
   derivedFrom   EmailDraft?  @relation("DraftLineage", fields: [derivedFromId], references: [id])
   derived       EmailDraft[] @relation("DraftLineage")
+  steps         PipelineStep[]
 }
 
 model PipelineRun {
@@ -176,6 +177,8 @@ model PipelineStep {
   contextPartIds String[]
   sellingPointId String?
   sellingPoint   SellingPoint? @relation(fields: [sellingPointId], references: [id])
+  emailDraftId   String?
+  emailDraft     EmailDraft?   @relation(fields: [emailDraftId], references: [id])
   inputData      Json?
   outputData     Json?
   errorMessage   String?

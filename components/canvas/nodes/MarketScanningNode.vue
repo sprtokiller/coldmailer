@@ -52,8 +52,8 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
         <span v-if="STATUS_RUNNING_FAILED[data.status]" :class="['text-xs px-2 py-0.5 rounded-full font-medium', STATUS_RUNNING_FAILED[data.status].cls]">
           {{ STATUS_RUNNING_FAILED[data.status].label }}
         </span>
-        <span v-else-if="data.sources.length > 0" class="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-600">
-          {{ sourceCountLabel(data.sources.length) }}
+        <span v-else-if="total > 0" class="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-600">
+          {{ total }} záznamů
         </span>
       </div>
       <h3 class="text-sm font-semibold text-gray-800">{{ data.label }}</h3>
@@ -72,11 +72,11 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
       </button>
     </div>
 
-    <div class="p-4">
-      <div v-if="total > 0" class="text-xs text-gray-400">
-        {{ total }} záznamů
-      </div>
-      <div v-else class="text-xs text-gray-400 text-center py-2">Žádné záznamy · klikněte pro spuštění</div>
+    <div v-if="total === 0" class="p-4">
+      <button
+        class="w-full text-xs py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
+        @click.stop="canvas.openOverlay(props.id, data.stepId, data.stepType)"
+      >▶ Spustit krok</button>
     </div>
 
     <Handle type="source" :position="Position.Right" class="!bg-indigo-400" />

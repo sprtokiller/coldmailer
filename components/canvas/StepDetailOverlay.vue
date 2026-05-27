@@ -38,12 +38,13 @@ const activeTab = ref<'input' | 'result' | 'config'>('result')
 watch(activeNode, (node) => {
   if (!node) return
   const stepsWithInput = ['PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
-  activeTab.value = stepsWithInput.includes(node.stepType) ? 'input' : 'result'
+  activeTab.value = node.stepType === 'MARKET_SCANNING' ? 'config' : stepsWithInput.includes(node.stepType) ? 'input' : 'result'
   if (node.stepType === 'PARTNER_PROFILING' && pl) pl.initStep3Selection?.()
   else if (node.stepType === 'VALUE_ALIGNMENT' && pl) pl.initStep4Selection?.()
   else if (node.stepType === 'OUTREACH_PREPARATION' && pl) pl.initStep5Selection?.()
   expandedSources.value = new Set()
   activeAddPanel.value = null
+  configSubSection.value = 'run'
   editingRefId.value = null
   expandedCardIdx.value = null
   // Pre-load PI records for cross-pipeline indicator in steps 3-6
@@ -325,7 +326,7 @@ const statusFilter = ref('')
 const searchFilter = ref('')
 
 function panelRecords(panel: SourcePanel): StepRecord[] {
-  return panel.records.filter(r => {
+  const filtered = panel.records.filter(r => {
     if (statusFilter.value && r.globalRecord.relevanceStatus !== statusFilter.value) return false
     if (searchFilter.value) {
       const q = searchFilter.value.toLowerCase()
@@ -333,6 +334,12 @@ function panelRecords(panel: SourcePanel): StepRecord[] {
     }
     return true
   })
+  if (stepType.value === 'PARTNER_IDENTIFICATION') {
+    return [...filtered].sort((a, b) =>
+      piPartnerSources(b.globalRecord.canonicalName).length - piPartnerSources(a.globalRecord.canonicalName).length
+    )
+  }
+  return filtered
 }
 
 // ── Source type config ────────────────────────────────────────────────────────
@@ -370,6 +377,39 @@ function piPayload(rec: StepRecord) {
 
 function piPipelineCount(rec: StepRecord): number {
   return new Set(rec.globalRecord.pipelineRefs.map(r => r.pipelineRunId)).size || 1
+}
+
+function recordProvenance(rec: StepRecord): string {
+  const parts: string[] = []
+  if (rec.adder?.name) parts.push(`Přidal: ${rec.adder.name}`)
+  const pipelineCount = new Set(rec.globalRecord.pipelineRefs.map(r => r.pipelineRunId)).size
+  if (pipelineCount > 1) parts.push(`${pipelineCount}× pipeline`)
+  return parts.join(' · ')
+}
+
+// PI: derive processed competitions and partner source map from step outputData
+const piOutputItems = computed(() => {
+  const data = pipelineCtx?.getStepResult?.('PARTNER_IDENTIFICATION')?.outputData as { items?: unknown[] } | null
+  return (data?.items ?? []) as Array<{ itemName: string; partners: Array<{ name: string }> }>
+})
+const piProcessedItemNames = computed(() => {
+  const s = new Set<string>()
+  for (const item of piOutputItems.value) if (item.itemName) s.add(item.itemName.toLowerCase().trim())
+  return s
+})
+const piPartnerSourceMap = computed(() => {
+  const map = new Map<string, string[]>()
+  for (const item of piOutputItems.value) {
+    for (const p of (item.partners ?? [])) {
+      const key = (p.name ?? '').toLowerCase().trim()
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item.itemName)
+    }
+  }
+  return map
+})
+function piPartnerSources(name: string): string[] {
+  return piPartnerSourceMap.value.get(name.toLowerCase().trim()) ?? []
 }
 
 // MS competition payload helpers
@@ -502,6 +542,7 @@ async function selectAllInSource(key: string, val: boolean) {
 
 type AddPanel = 'import' | 'db' | 'manual' | null
 const activeAddPanel = ref<AddPanel>(null)
+const configSubSection = ref<'run' | 'import' | 'db'>('run')
 
 // Import
 const importText    = ref('')
@@ -516,6 +557,7 @@ async function doImport() {
     await canvas.importAI(stepId.value ?? '', stepType.value, importText.value)
     importText.value = ''
     activeAddPanel.value = null
+    configSubSection.value = 'run'
   } catch (e: unknown) {
     importError.value = (e as { message?: string })?.message ?? 'Chyba importu'
   } finally {
@@ -550,36 +592,100 @@ async function doManual() {
 
 // DB / AI search
 type DbMode = 'text' | 'ai'
-const dbMode        = ref<DbMode>('text')
-const dbQuery       = ref('')
-const dbResults     = ref<Array<{ id: string; canonicalName: string; type: string; relevanceStatus: string }>>([])
-const dbLoading     = ref(false)
-const dbSelectedIds = ref(new Set<string>())
+const dbMode         = ref<DbMode>('text')
+const dbQuery        = ref('')
+const dbResults      = ref<Array<{ id: string; canonicalName: string; type: string; relevanceStatus: string }>>([])
+const dbLoading      = ref(false)
+const dbSelectedIds  = ref(new Set<string>())
+const dbOffset       = ref(0)
+const dbTotal        = ref(0)
+const dbStatusFilter = ref('')
+const DB_PAGE_SIZE   = 20
+
+const dbTotalPages = computed(() => Math.ceil(dbTotal.value / DB_PAGE_SIZE))
+
+function resetDbState() {
+  dbQuery.value = ''
+  dbResults.value = []
+  dbSelectedIds.value = new Set()
+  dbOffset.value = 0
+  dbTotal.value = 0
+  dbStatusFilter.value = ''
+}
 
 watch(activeAddPanel, (p) => {
-  if (p !== 'db') { dbQuery.value = ''; dbResults.value = []; dbSelectedIds.value = new Set() }
+  if (p !== 'db') resetDbState()
+  else doDbSearch()
+})
+
+watch(configSubSection, (s) => {
+  if (s === 'db') doDbSearch()
+  else resetDbState()
 })
 
 async function doDbSearch() {
-  if (!dbQuery.value.trim()) return
   dbLoading.value = true
   try {
     if (dbMode.value === 'ai' && stepId.value) {
       dbResults.value = await canvas.aiSuggestRecords(stepId.value, dbQuery.value, stepRecordType.value)
+      dbTotal.value = dbResults.value.length
     } else {
-      dbResults.value = await $fetch<typeof dbResults.value>('/api/records', {
-        query: { search: dbQuery.value, limit: 20, ...(stepRecordType.value ? { type: stepRecordType.value } : {}) },
+      type DbResp = { records: typeof dbResults.value; total: number } | typeof dbResults.value
+      const resp = await $fetch<DbResp>('/api/records', {
+        query: {
+          search: dbQuery.value,
+          limit: DB_PAGE_SIZE,
+          offset: dbOffset.value,
+          withCount: 'true',
+          ...(stepRecordType.value ? { type: stepRecordType.value } : {}),
+          ...(dbStatusFilter.value ? { status: dbStatusFilter.value } : {}),
+        },
       })
+      const alreadyAdded = new Set(allRecords.value.map(r => r.globalRecord.id))
+      if (resp && !Array.isArray(resp) && 'records' in resp) {
+        dbResults.value = (resp.records ?? []).filter((r: { id: string }) => !alreadyAdded.has(r.id))
+        dbTotal.value = resp.total ?? 0
+      } else {
+        dbResults.value = (resp as typeof dbResults.value).filter((r) => !alreadyAdded.has(r.id))
+        dbTotal.value = dbResults.value.length
+      }
     }
   } finally {
     dbLoading.value = false
   }
 }
 
+function dbSelectAll() {
+  const s = new Set(dbSelectedIds.value)
+  for (const r of dbResults.value) s.add(r.id)
+  dbSelectedIds.value = s
+}
+
+function dbDeselectAll() {
+  dbSelectedIds.value = new Set()
+}
+
 async function handleDbInput() {
   if (dbMode.value !== 'text') return
-  if (dbQuery.value.length >= 2) await doDbSearch()
-  else dbResults.value = []
+  dbOffset.value = 0
+  await doDbSearch()
+}
+
+watch(dbStatusFilter, () => {
+  dbOffset.value = 0
+  doDbSearch()
+})
+
+function dbPrevPage() {
+  if (dbOffset.value === 0) return
+  dbOffset.value = Math.max(0, dbOffset.value - DB_PAGE_SIZE)
+  doDbSearch()
+}
+
+function dbNextPage() {
+  if (dbOffset.value + DB_PAGE_SIZE >= dbTotal.value) return
+  dbOffset.value += DB_PAGE_SIZE
+  doDbSearch()
 }
 
 function toggleDbSelect(id: string) {
@@ -599,6 +705,7 @@ async function addDbSelected() {
   for (const id of dbSelectedIds.value) await canvas.addFromGlobalDB(stepId.value, id)
   dbSelectedIds.value = new Set()
   activeAddPanel.value = null
+  configSubSection.value = 'run'
 }
 
 // ── Edge detail + donut chart ─────────────────────────────────────────────────
@@ -696,6 +803,19 @@ const modelBadge = computed(() => {
   const model = STEP_MODEL[stepType.value]
   return model ? MODEL_BADGE[model] ?? null : null
 })
+
+// ── Auto-refresh canvas after step execution ──────────────────────────────────
+// Watch executingStep: fires whenever any step finishes (regardless of overlay state)
+watch(() => pipeline?.executingStep, (newVal, oldVal) => {
+  if (oldVal !== null && oldVal !== undefined && newVal === null) {
+    canvas.fetchCanvasData()
+  }
+})
+
+function renderLinks(text: string): string {
+  if (!text) return ''
+  return text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-500 underline hover:opacity-80">$1</a>')
+}
 </script>
 
 <template>
@@ -734,8 +854,8 @@ const modelBadge = computed(() => {
         <template v-else>
           <button
             v-for="tab in ([
-              { key: 'result', label: totalRecords > 0 ? `Výsledek (${totalRecords})` : 'Výsledek' },
               { key: 'config', label: 'Konfigurace' },
+              { key: 'result', label: totalRecords > 0 ? `Výsledek (${totalRecords})` : 'Výsledek' },
             ] as const)"
             :key="tab.key"
             :class="['px-5 py-2.5 text-xs font-medium border-b-2 transition-colors', activeTab === tab.key ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700']"
@@ -852,6 +972,10 @@ const modelBadge = computed(() => {
                         @change="toggleMsSel(rec.id, ($event.target as HTMLInputElement).checked)"
                       />
                       <span class="flex-1 text-sm text-gray-800 truncate">{{ rec.globalRecord.canonicalName }}</span>
+                      <span
+                        v-if="piProcessedItemNames.has(rec.globalRecord.canonicalName.toLowerCase().trim())"
+                        class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium flex-shrink-0"
+                      >✓ Zpracováno</span>
                       <a
                         v-if="(rec.globalRecord.payload as Record<string,string>).url"
                         :href="(rec.globalRecord.payload as Record<string,string>).url"
@@ -1027,35 +1151,51 @@ const modelBadge = computed(() => {
         <!-- ── Výsledek tab ── -->
         <template v-else-if="activeTab === 'result'">
 
-          <!-- Add data buttons -->
-          <div class="px-5 py-3 border-b border-gray-100 flex gap-2 flex-wrap flex-shrink-0">
+          <!-- Sub-tabs / Add data buttons -->
+          <div v-if="stepType !== 'MARKET_SCANNING'" class="px-5 py-3 border-b border-gray-100 flex gap-2 flex-wrap flex-shrink-0">
+            <template v-if="!isOutputStep">
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === null ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = null"
+              >Přehled</button>
+              <button
+                class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                @click="activeTab = 'config'"
+              >▶ Spustit</button>
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'import' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = 'import'"
+              >↑ Importovat</button>
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'db' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = 'db'"
+              >🔍 Z databáze</button>
+              <button
+                v-if="!['MARKET_SCANNING', 'PARTNER_IDENTIFICATION'].includes(stepType ?? '')"
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'manual' ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="activeAddPanel = 'manual'"
+              >+ Ručně</button>
+            </template>
             <button
+              v-else
               class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-              @click="activeAddPanel = null; activeTab = 'config'"
+              @click="activeTab = 'input'"
             >▶ Spustit</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'import' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'import' ? null : 'import'"
-            >↑ Importovat</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'db' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'db' ? null : 'db'"
-            >🔍 Z databáze</button>
-            <button
-              :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'manual' ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
-              @click="activeAddPanel = activeAddPanel === 'manual' ? null : 'manual'"
-            >+ Ručně</button>
           </div>
 
           <!-- Import panel -->
           <div v-if="activeAddPanel === 'import'" class="px-5 py-4 border-b border-gray-100 bg-purple-50/40">
-            <p class="text-xs text-gray-500 mb-2">Vložte výstup z Deep Research nebo jiného AI modelu (JSON nebo volný text):</p>
             <textarea
               v-model="importText"
               rows="6"
               placeholder="Vložte JSON nebo text k parsování..."
               class="w-full text-xs px-3 py-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-purple-300 font-mono bg-white"
             />
+            <p class="text-[10px] text-gray-400 mt-1.5">
+              <template v-if="stepType === 'MARKET_SCANNING'">Očekávaný formát: [{ "name": "...", "url": "...", "type": "...", "level": "..." }] —</template>
+              <template v-else-if="stepType === 'PARTNER_IDENTIFICATION'">Očekávaný formát: { "items": [{ "itemName": "...", "partners": [{ "name": "..." }] }] } —</template>
+              Textový vstup je také v pořádku, AI ho automaticky parsuje.
+            </p>
             <p v-if="importError" class="text-xs text-red-500 mt-1">{{ importError }}</p>
             <div class="flex gap-2 mt-2">
               <button
@@ -1069,6 +1209,7 @@ const modelBadge = computed(() => {
 
           <!-- DB / AI search panel -->
           <div v-if="activeAddPanel === 'db'" class="border-b border-gray-100 bg-indigo-50/20">
+            <!-- Search + AI toggle -->
             <div class="px-5 pt-3 pb-2 flex items-center gap-2">
               <input
                 v-model="dbQuery"
@@ -1089,10 +1230,26 @@ const modelBadge = computed(() => {
                 @click="doDbSearch()"
               >{{ dbLoading ? '...' : 'Hledat' }}</button>
             </div>
-            <p class="px-5 pb-2 text-xs text-gray-400">
-              {{ dbMode === 'ai' ? 'AI prohledá záznamy napříč ostatními pipeline' : 'Textové vyhledání' }}
-              <span v-if="stepRecordType" class="ml-1 text-indigo-500">· filtrováno na typ {{ stepRecordType }}</span>
-            </p>
+            <!-- Status filter chips -->
+            <div class="px-5 pb-2 flex items-center gap-1 flex-wrap">
+              <button
+                v-for="(label, key) in STATUS_LABELS"
+                :key="key"
+                :class="['text-xs px-2 py-0.5 rounded-full border transition-colors', dbStatusFilter === key ? STATUS_COLORS[key] + ' border-current' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
+                @click="dbStatusFilter = dbStatusFilter === key ? '' : key"
+              >{{ label }}</button>
+            </div>
+            <!-- Info row + select all -->
+            <div class="px-5 pb-1 flex items-center justify-between">
+              <p v-if="dbTotal > 0" class="text-xs text-gray-400">{{ dbTotal }} v databázi · {{ allRecords.length }} přidáno</p>
+              <p v-else class="text-xs text-gray-400" />
+              <div v-if="dbResults.length > 0" class="flex gap-2">
+                <button class="text-xs text-indigo-600 hover:underline" @click="dbSelectAll()">Vybrat vše</button>
+                <button v-if="dbSelectedIds.size > 0" class="text-xs text-gray-400 hover:underline" @click="dbDeselectAll()">Zrušit</button>
+              </div>
+            </div>
+            <p v-if="dbMode === 'ai'" class="px-5 pb-2 text-xs text-gray-400">AI prohledá záznamy napříč ostatními pipeline</p>
+            <!-- Results list -->
             <div class="max-h-52 overflow-y-auto border-t border-gray-100 divide-y divide-gray-50">
               <div v-if="dbLoading" class="px-5 py-3 text-xs text-gray-400">Hledám...</div>
               <template v-else>
@@ -1100,17 +1257,23 @@ const modelBadge = computed(() => {
                   v-for="rec in dbResults"
                   :key="rec.id"
                   class="px-5 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-indigo-50 transition-colors"
-                  @click="dbMode === 'text' ? addSingle(rec.id) : toggleDbSelect(rec.id)"
+                  @click="toggleDbSelect(rec.id)"
                 >
-                  <input v-if="dbMode === 'ai'" type="checkbox" :checked="dbSelectedIds.has(rec.id)" class="rounded flex-shrink-0" @click.stop="toggleDbSelect(rec.id)" />
+                  <input type="checkbox" :checked="dbSelectedIds.has(rec.id)" class="rounded flex-shrink-0" @click.stop="toggleDbSelect(rec.id)" />
                   <span class="text-sm text-gray-800 flex-1 truncate">{{ rec.canonicalName }}</span>
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 flex-shrink-0">{{ rec.type }}</span>
                   <span :class="['text-xs px-1.5 py-0.5 rounded flex-shrink-0', STATUS_COLORS[rec.relevanceStatus] ?? 'bg-gray-50 text-gray-400']">{{ STATUS_LABELS[rec.relevanceStatus] ?? rec.relevanceStatus }}</span>
                 </div>
-                <div v-if="!dbLoading && dbResults.length === 0 && dbQuery" class="px-5 py-3 text-xs text-gray-400 text-center">Nic nenalezeno.</div>
+                <div v-if="!dbLoading && dbResults.length === 0" class="px-5 py-3 text-xs text-gray-400 text-center">Nic nenalezeno.</div>
               </template>
             </div>
-            <div v-if="dbMode === 'ai' && dbSelectedIds.size > 0" class="px-5 py-2.5 border-t border-gray-100">
+            <!-- Pagination -->
+            <div v-if="dbTotalPages > 1" class="px-5 py-2 flex items-center justify-between border-t border-gray-100">
+              <button :disabled="dbOffset === 0" class="text-xs text-gray-500 disabled:opacity-30 hover:text-indigo-600" @click="dbPrevPage()">← Předchozí</button>
+              <span class="text-xs text-gray-400">{{ Math.floor(dbOffset / DB_PAGE_SIZE) + 1 }} / {{ dbTotalPages }}</span>
+              <button :disabled="dbOffset + DB_PAGE_SIZE >= dbTotal" class="text-xs text-gray-500 disabled:opacity-30 hover:text-indigo-600" @click="dbNextPage()">Další →</button>
+            </div>
+            <!-- Add selected -->
+            <div v-if="dbSelectedIds.size > 0" class="px-5 py-2.5 border-t border-gray-100">
               <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="addDbSelected()">
                 Přidat vybrané ({{ dbSelectedIds.size }})
               </button>
@@ -1173,7 +1336,7 @@ const modelBadge = computed(() => {
                   <button class="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 px-1" @click="toggleCard(i)">{{ expandedCardIdx === i ? '▲' : '▼' }}</button>
                 </div>
                 <!-- Summary -->
-                <p v-if="getStr(profile, 'summary')" class="text-xs text-gray-600 leading-relaxed mb-2">{{ getStr(profile, 'summary') }}</p>
+                <p v-if="getStr(profile, 'summary')" class="text-xs text-gray-600 leading-relaxed mb-2" v-html="renderLinks(getStr(profile, 'summary'))" />
                 <!-- Contacts -->
                 <div v-if="getArr(profile, 'contacts').length > 0" class="mb-2">
                   <div class="text-xs font-medium text-gray-400 mb-1">Kontakty</div>
@@ -1204,8 +1367,8 @@ const modelBadge = computed(() => {
                       <li v-for="(hl, hi) in getArr(profile, 'recentHighlights')" :key="hi">{{ hl }}</li>
                     </ul>
                   </div>
-                  <p v-if="getStr(profile, 'activities')" class="text-xs text-gray-500 mb-2">{{ getStr(profile, 'activities') }}</p>
-                  <p v-if="getStr(profile, 'researchNotes')" class="text-xs text-gray-400 italic">Poznámky: {{ getStr(profile, 'researchNotes') }}</p>
+                  <p v-if="getStr(profile, 'activities')" class="text-xs text-gray-500 mb-2" v-html="renderLinks(getStr(profile, 'activities'))" />
+                  <p v-if="getStr(profile, 'researchNotes')" class="text-xs text-gray-400 italic" v-html="'Poznámky: ' + renderLinks(getStr(profile, 'researchNotes'))" />
                 </template>
                 <div v-if="getArr(profile, 'partnershipStyle').length > 0 && expandedCardIdx !== i" class="flex flex-wrap gap-1">
                   <span v-for="(style, si) in getArr(profile, 'partnershipStyle').slice(0, 3)" :key="si" class="text-xs px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500">{{ style }}</span>
@@ -1319,6 +1482,7 @@ const modelBadge = computed(() => {
           <!-- ── Steps 1-2: GlobalRecord-based rendering ── -->
           <template v-else>
 
+          <template v-if="activeAddPanel === null">
           <!-- Global filter bar -->
           <div class="px-5 py-2 border-b border-gray-100 flex items-center gap-2 flex-wrap flex-shrink-0">
             <input
@@ -1434,6 +1598,7 @@ const modelBadge = computed(() => {
                               <span v-if="msPayload(rec).frequency">{{ msPayload(rec).frequency === 'unknown' ? 'frekvence neznámá' : msPayload(rec).frequency }}</span>
                               <a v-if="msPayload(rec).url" :href="msPayload(rec).url" target="_blank" rel="noopener" class="text-indigo-500 hover:underline" @click.stop>↗ Web</a>
                             </div>
+                            <p v-if="recordProvenance(rec)" class="text-xs text-gray-400 mt-1">{{ recordProvenance(rec) }}</p>
                           </template>
 
                           <!-- PI partner detail -->
@@ -1441,9 +1606,15 @@ const modelBadge = computed(() => {
                             <div class="flex flex-wrap items-center gap-1.5 mb-1">
                               <span v-if="piPayload(rec).industry || piPayload(rec).type" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ piPayload(rec).industry || piPayload(rec).type }}</span>
                               <a v-if="piPayload(rec).website || piPayload(rec).url" :href="piPayload(rec).website || piPayload(rec).url" target="_blank" rel="noopener" class="text-xs text-indigo-500 hover:underline" @click.stop>↗ Web</a>
+                              <span
+                                v-if="piPartnerSources(rec.globalRecord.canonicalName).length > 0"
+                                class="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 cursor-default"
+                                :title="piPartnerSources(rec.globalRecord.canonicalName).join(', ')"
+                              >{{ piPartnerSources(rec.globalRecord.canonicalName).length }}× zdroj</span>
                               <span v-if="piPipelineCount(rec) > 1" class="text-xs px-1.5 py-0.5 rounded bg-green-50 text-green-700 font-medium">{{ piPipelineCount(rec) }}× pipeline</span>
                             </div>
                             <p v-if="piPayload(rec).description" class="text-xs text-gray-500 line-clamp-2">{{ piPayload(rec).description }}</p>
+                            <p v-if="recordProvenance(rec)" class="text-xs text-gray-400 mt-1">{{ recordProvenance(rec) }}</p>
                           </template>
 
                           <!-- Relevance chips (not for MS or PI) -->
@@ -1550,17 +1721,154 @@ const modelBadge = computed(() => {
               </div>
             </div>
           </div>
+          </template><!-- /v-if activeAddPanel === null -->
           </template><!-- /v-else steps 1-2 -->
         </template>
 
         <!-- ── Konfigurace tab ── -->
         <template v-else-if="activeTab === 'config'">
-          <div class="p-5">
-            <div v-if="matchedStep" class="min-w-0">
-              <PipelineStepConfig :step="matchedStep" :idx="stepIdx" />
+          <!-- MARKET_SCANNING + PARTNER_PROFILING: sub-sections -->
+          <template v-if="stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_PROFILING'">
+            <!-- Sub-section nav -->
+            <div class="px-5 py-3 border-b border-gray-100 flex gap-2 flex-shrink-0">
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', configSubSection === 'run' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="configSubSection = 'run'"
+              >▶ Spustit AI</button>
+              <button
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', configSubSection === 'import' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="configSubSection = 'import'"
+              >↑ Importovat</button>
+              <button
+                v-if="stepType === 'MARKET_SCANNING'"
+                :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', configSubSection === 'db' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']"
+                @click="configSubSection = 'db'"
+              >🔍 Z databáze</button>
             </div>
-            <div v-else class="text-sm text-gray-400 text-center py-12">Tento krok ještě nebyl spuštěn.</div>
-          </div>
+
+            <!-- Spustit AI -->
+            <div v-if="configSubSection === 'run'" class="px-5 py-4">
+              <div v-if="matchedStep" class="min-w-0">
+                <PipelineStepConfig :step="matchedStep" :idx="stepIdx" />
+              </div>
+              <div v-else class="text-sm text-gray-400 text-center py-12">Tento krok ještě nebyl spuštěn.</div>
+            </div>
+
+            <!-- Importovat -->
+            <div v-else-if="configSubSection === 'import'" class="px-5 py-4 bg-purple-50/40">
+              <textarea
+                v-model="importText"
+                rows="6"
+                placeholder="Vložte JSON nebo text k parsování..."
+                class="w-full text-xs px-3 py-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-purple-300 font-mono bg-white"
+              />
+              <p class="text-[10px] text-gray-400 mt-1.5">
+                <template v-if="stepType === 'MARKET_SCANNING'">Očekávaný formát: [{ "name": "...", "url": "...", "type": "...", "level": "..." }] — </template>
+                <template v-else-if="stepType === 'PARTNER_PROFILING'">Očekávaný formát: [{ "name": "...", "summary": "...", "contacts": [...] }] — </template>
+                Textový vstup je také v pořádku, AI ho automaticky parsuje.
+              </p>
+              <p v-if="importError" class="text-xs text-red-500 mt-1">{{ importError }}</p>
+              <div class="flex gap-2 mt-2">
+                <button
+                  :disabled="importLoading || !importText.trim()"
+                  class="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  @click="doImport()"
+                >{{ importLoading ? 'Importuji...' : 'Importovat' }}</button>
+                <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors" @click="configSubSection = 'run'">Zrušit</button>
+              </div>
+            </div>
+
+            <!-- Z databáze -->
+            <div v-else-if="configSubSection === 'db'" class="bg-indigo-50/20">
+              <!-- Search + AI toggle -->
+              <div class="px-5 pt-3 pb-2 flex items-center gap-2">
+                <input
+                  v-model="dbQuery"
+                  type="text"
+                  :placeholder="dbMode === 'ai' ? 'Popište, co hledáte...' : 'Textové vyhledání...'"
+                  class="flex-1 text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 bg-white"
+                  @input="handleDbInput()"
+                  @keyup.enter="doDbSearch()"
+                />
+                <button
+                  :class="['text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors', dbMode === 'ai' ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600']"
+                  @click="dbMode = dbMode === 'ai' ? 'text' : 'ai'; dbResults = []"
+                >AI</button>
+                <button
+                  v-if="dbMode === 'ai'"
+                  :disabled="dbLoading || !dbQuery.trim()"
+                  class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  @click="doDbSearch()"
+                >{{ dbLoading ? '...' : 'Hledat' }}</button>
+              </div>
+              <!-- Status filter chips -->
+              <div class="px-5 pb-2 flex items-center gap-1 flex-wrap">
+                <button
+                  v-for="(label, key) in STATUS_LABELS"
+                  :key="key"
+                  :class="['text-xs px-2 py-0.5 rounded-full border transition-colors', dbStatusFilter === key ? STATUS_COLORS[key] + ' border-current' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
+                  @click="dbStatusFilter = dbStatusFilter === key ? '' : key"
+                >{{ label }}</button>
+              </div>
+              <!-- Info row + select all -->
+              <div class="px-5 pb-1 flex items-center justify-between">
+                <p v-if="dbTotal > 0" class="text-xs text-gray-400">{{ dbTotal }} v databázi · {{ allRecords.length }} přidáno</p>
+                <p v-else class="text-xs text-gray-400" />
+                <div v-if="dbResults.length > 0" class="flex gap-2">
+                  <button class="text-xs text-indigo-600 hover:underline" @click="dbSelectAll()">Vybrat vše</button>
+                  <button v-if="dbSelectedIds.size > 0" class="text-xs text-gray-400 hover:underline" @click="dbDeselectAll()">Zrušit</button>
+                </div>
+              </div>
+              <p v-if="dbMode === 'ai'" class="px-5 pb-2 text-xs text-gray-400">AI prohledá záznamy napříč ostatními pipeline</p>
+              <!-- Results list -->
+              <div class="max-h-52 overflow-y-auto border-t border-gray-100 divide-y divide-gray-50">
+                <div v-if="dbLoading" class="px-5 py-3 text-xs text-gray-400">Hledám...</div>
+                <template v-else>
+                  <div
+                    v-for="rec in dbResults"
+                    :key="rec.id"
+                    class="px-5 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-indigo-50 transition-colors"
+                    @click="toggleDbSelect(rec.id)"
+                  >
+                    <input type="checkbox" :checked="dbSelectedIds.has(rec.id)" class="rounded flex-shrink-0" @click.stop="toggleDbSelect(rec.id)" />
+                    <span class="text-sm text-gray-800 flex-1 truncate">{{ rec.canonicalName }}</span>
+                    <span :class="['text-xs px-1.5 py-0.5 rounded flex-shrink-0', STATUS_COLORS[rec.relevanceStatus] ?? 'bg-gray-50 text-gray-400']">{{ STATUS_LABELS[rec.relevanceStatus] ?? rec.relevanceStatus }}</span>
+                  </div>
+                  <div v-if="!dbLoading && dbResults.length === 0" class="px-5 py-3 text-xs text-gray-400 text-center">Nic nenalezeno.</div>
+                </template>
+              </div>
+              <!-- Pagination -->
+              <div v-if="dbTotalPages > 1" class="px-5 py-2 flex items-center justify-between border-t border-gray-100">
+                <button :disabled="dbOffset === 0" class="text-xs text-gray-500 disabled:opacity-30 hover:text-indigo-600" @click="dbPrevPage()">← Předchozí</button>
+                <span class="text-xs text-gray-400">{{ Math.floor(dbOffset / DB_PAGE_SIZE) + 1 }} / {{ dbTotalPages }}</span>
+                <button :disabled="dbOffset + DB_PAGE_SIZE >= dbTotal" class="text-xs text-gray-500 disabled:opacity-30 hover:text-indigo-600" @click="dbNextPage()">Další →</button>
+              </div>
+              <!-- Add selected -->
+              <div v-if="dbSelectedIds.size > 0" class="px-5 py-2.5 border-t border-gray-100">
+                <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="addDbSelected()">
+                  Přidat vybrané ({{ dbSelectedIds.size }})
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Other steps: standard config -->
+          <template v-else>
+            <div class="p-5">
+              <!-- PI: show how many MS records are selected for the next run -->
+              <div
+                v-if="stepType === 'PARTNER_IDENTIFICATION' && msRecords.length > 0"
+                class="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-700"
+              >
+                <span>Zpracuje <strong>{{ msTotalSelected }}</strong> z {{ msRecords.length }} zdrojů z&nbsp;Kroku&nbsp;1.</span>
+                <button class="ml-auto underline text-indigo-500 hover:text-indigo-700 whitespace-nowrap" @click="activeTab = 'input'">Upravit výběr →</button>
+              </div>
+              <div v-if="matchedStep" class="min-w-0">
+                <PipelineStepConfig :step="matchedStep" :idx="stepIdx" />
+              </div>
+              <div v-else class="text-sm text-gray-400 text-center py-12">Tento krok ještě nebyl spuštěn.</div>
+            </div>
+          </template>
         </template>
 
       </div>

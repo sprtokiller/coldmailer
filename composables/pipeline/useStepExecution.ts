@@ -35,14 +35,7 @@ export function useStepExecution(
     let inputData: Record<string, unknown> = {}
 
     if (stepKey === 'PARTNER_IDENTIFICATION') {
-      const selectedItems = step2Items()
-        .filter(item => step2SelectedItems.value[String(item.index)])
-        .map(item => item.raw)
-      if (selectedItems.length === 0) {
-        alert('Vyberte alespoň jednu položku ke zpracování.')
-        return
-      }
-      inputData = { items: selectedItems }
+      // Server reads selection from DB (PipelineRecordRef.isSelectedForProcessing); inputData is ignored.
     } else if (stepKey === 'PARTNER_PROFILING') {
       const allSelected = step3FilteredCandidates().filter(c => step3SelectedIds.value[c.partnerId])
       if (allSelected.length === 0) {

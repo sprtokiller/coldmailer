@@ -6,7 +6,7 @@
     "bun": ">=1.1.0"
   },
   "scripts": {
-    "dev": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs dev",
+    "dev": "node --max-old-space-size=4096 --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs dev",
     "build": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs build",
     "preview": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs preview",
     "postinstall": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs prepare && prisma generate",

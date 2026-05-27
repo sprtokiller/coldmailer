@@ -46,11 +46,14 @@ export function usePromptBuilding(
   }
 
   function step3PartnerCopyPrompt(stepKey: string, partner: Step3Candidate): string {
+    const context = partner.source === 'direct'
+      ? 'Přímo importováno do kroku 3'
+      : `Nalezen v ${partner.frequency} kontextu(ch): ${partner.itemNames.join(', ')}`
     const lines = [
       'Proveď průzkum tohoto potenciálního partnera a vrať strukturovaný JSON definovaný v systémovém promptu:',
       '',
       `Jméno: ${partner.name}`,
-      `Nalezen v ${partner.frequency} kontextu(ch): ${partner.itemNames.join(', ')}`,
+      context,
     ]
     return buildFullPrompt(stepKey, lines.join('\n'))
   }

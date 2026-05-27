@@ -29,13 +29,14 @@ export interface StepRecord {
   localNote: string | null
   localStatus: string | null
   addedAt: string
+  adder: { name: string | null } | null
   globalRecord: {
     id: string
     canonicalName: string
     type: string
     relevanceStatus: string
     payload: Record<string, unknown>
-    pipelineRefs: Array<{ pipelineRunId: string }>
+    pipelineRefs: Array<{ pipelineRunId: string; pipelineRun: { name: string } | null }>
   }
   inputSource: { id: string; label: string; type: string; pipelineRunId: string } | null
 }
