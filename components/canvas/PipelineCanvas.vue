@@ -5,6 +5,7 @@ import { markRaw } from 'vue'
 import MarketScanningNode from '~/components/canvas/nodes/MarketScanningNode.vue'
 import PartnerIdentificationNode from '~/components/canvas/nodes/PartnerIdentificationNode.vue'
 import PlaceholderStepNode from '~/components/canvas/nodes/PlaceholderStepNode.vue'
+import MsInputSourceNode from '~/components/canvas/nodes/MsInputSourceNode.vue'
 import { canvasKey, usePipelineCanvas } from '~/composables/usePipelineCanvas'
 
 const props = defineProps<{ runId: string }>()
@@ -16,6 +17,7 @@ const nodeTypes = {
   marketScanning: markRaw(MarketScanningNode),
   partnerIdentification: markRaw(PartnerIdentificationNode),
   placeholder: markRaw(PlaceholderStepNode),
+  msInputSource: markRaw(MsInputSourceNode),
 }
 
 const { setViewport } = useVueFlow()

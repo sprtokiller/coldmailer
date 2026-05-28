@@ -227,12 +227,6 @@ enum RecordType {
   OPPORTUNITY
 }
 
-enum RelevanceStatus {
-  RELEVANT
-  IRRELEVANT
-  UNCERTAIN
-}
-
 enum AddMethod {
   GENERATED
   IMPORTED
@@ -254,8 +248,6 @@ model GlobalRecord {
   canonicalName   String
   normalizedName  String
   payload         Json
-  relevanceStatus RelevanceStatus @default(UNCERTAIN)
-  relevanceNotes  String?
   sourceMetadata  Json?
   createdBy       String
   creator         User            @relation(fields: [createdBy], references: [id])
@@ -269,7 +261,6 @@ model GlobalRecord {
   events          RecordEvent[]
 
   @@index([normalizedName])
-  @@index([type, relevanceStatus])
 }
 
 model InputSource {
@@ -304,7 +295,6 @@ model PipelineRecordRef {
   isSelectedForProcessing Boolean         @default(true)
   addMethod               AddMethod
   localNote               String?
-  localStatus             RelevanceStatus?
 
   @@unique([pipelineRunId, stepId, globalRecordId])
   @@index([stepId, isSelectedForProcessing])

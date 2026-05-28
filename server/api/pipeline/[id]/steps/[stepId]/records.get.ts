@@ -10,14 +10,12 @@ function legacyRecordsFromOutputData(step: { id: string; stepType: string; outpu
     isSelectedForProcessing: boolean
     addMethod: string
     localNote: null
-    localStatus: null
     addedAt: string
     inputSource: null
     globalRecord: {
       id: string
       canonicalName: string
       type: string
-      relevanceStatus: string
       payload: Record<string, unknown>
       pipelineRefs: Array<{ pipelineRunId: string }>
     }
@@ -36,14 +34,12 @@ function legacyRecordsFromOutputData(step: { id: string; stepType: string; outpu
         isSelectedForProcessing: true,
         addMethod: 'GENERATED',
         localNote: null,
-        localStatus: null,
         addedAt: new Date(0).toISOString(),
         inputSource: null,
         globalRecord: {
           id: `legacy-${name.slice(0, 20)}`,
           canonicalName: name,
           type: 'COMPETITION',
-          relevanceStatus: 'UNCERTAIN',
           payload: item,
           pipelineRefs: [],
         },
@@ -65,14 +61,12 @@ function legacyRecordsFromOutputData(step: { id: string; stepType: string; outpu
           isSelectedForProcessing: true,
           addMethod: 'GENERATED',
           localNote: null,
-          localStatus: null,
           addedAt: new Date(0).toISOString(),
           inputSource: null,
           globalRecord: {
             id: `legacy-${partner.partnerId}`,
             canonicalName: partner.name,
             type: 'PARTNER',
-            relevanceStatus: 'UNCERTAIN',
             payload: { partnerId: partner.partnerId, name: partner.name, itemName: piItem.itemName },
             pipelineRefs: [],
           },
@@ -93,7 +87,6 @@ export default defineEventHandler(async (event) => {
   if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
 
   const refs = await getStepRecords(stepId, {
-    relevanceStatus: query.relevanceStatus as never | undefined,
     inputSourceId: query.inputSourceId as string | undefined,
     search: query.search as string | undefined,
     isSelectedForProcessing: query.isSelectedForProcessing !== undefined

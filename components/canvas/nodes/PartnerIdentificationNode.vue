@@ -9,7 +9,7 @@ const props = defineProps<{
     stepType: string
     label: string
     status: string
-    recordCounts: { relevant: number; irrelevant: number; uncertain: number; total: number }
+    recordCounts: { total: number }
     sources: Array<{ id: string; label: string; type: string; createdAt: string | Date }>
   }
 }>()

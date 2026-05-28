@@ -6,7 +6,6 @@ export default defineEventHandler(async (event) => {
   const refId = getRouterParam(event, 'refId')!
   const body = await readBody<{
     isSelectedForProcessing?: boolean
-    localStatus?: string | null
     localNote?: string | null
   }>(event)
 
@@ -17,7 +16,6 @@ export default defineEventHandler(async (event) => {
     where: { id: refId },
     data: {
       ...(body.isSelectedForProcessing !== undefined && { isSelectedForProcessing: body.isSelectedForProcessing }),
-      ...(body.localStatus !== undefined && { localStatus: body.localStatus as never }),
       ...(body.localNote !== undefined && { localNote: body.localNote }),
     },
   })

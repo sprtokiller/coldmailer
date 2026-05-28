@@ -1,5 +1,5 @@
 import { prisma } from '~/server/utils/prisma'
-import type { RecordType, RelevanceStatus, AddMethod } from '@prisma/client'
+import type { RecordType, AddMethod } from '@prisma/client'
 import { checkDuplicate, normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 
@@ -11,10 +11,13 @@ interface GlobalRecordCandidate {
 }
 
 interface StepRecordFilters {
-  relevanceStatus?: RelevanceStatus
   inputSourceId?: string
   search?: string
   isSelectedForProcessing?: boolean
+}
+
+const SOURCE_PRIORITY: Record<string, number> = {
+  GENERATED: 3, IMPORTED: 2, GLOBAL_DB: 1, MANUAL: 1, INHERITED: 0,
 }
 
 export async function findOrCreateGlobalRecord(
@@ -26,14 +29,27 @@ export async function findOrCreateGlobalRecord(
   addMethod: AddMethod
 ): Promise<{ globalRecordId: string; wasCreated: boolean }> {
   const dedup = await checkDuplicate({ name: candidate.name, url: candidate.url, type: candidate.type })
+  const newPriority = SOURCE_PRIORITY[addMethod] ?? 0
 
   if (dedup.matchStatus === 'exact_match' || (dedup.matchStatus === 'probable_match' && dedup.confidence >= 0.85)) {
     const globalRecordId = dedup.matchedRecordId!
-    await prisma.pipelineRecordRef.upsert({
+    const existing = await prisma.pipelineRecordRef.findUnique({
       where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId, stepId, globalRecordId } },
-      create: { pipelineRunId, stepId, globalRecordId, inputSourceId, addedBy: userId, addMethod },
-      update: {},
+      select: { addMethod: true },
     })
+    if (existing) {
+      const existingPriority = SOURCE_PRIORITY[existing.addMethod] ?? 0
+      if (newPriority > existingPriority) {
+        await prisma.pipelineRecordRef.update({
+          where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId, stepId, globalRecordId } },
+          data: { addMethod, inputSourceId },
+        })
+      }
+    } else {
+      await prisma.pipelineRecordRef.create({
+        data: { pipelineRunId, stepId, globalRecordId, inputSourceId, addedBy: userId, addMethod },
+      })
+    }
     await logEvent({ globalRecordId, pipelineRunId, stepId, userId, eventType: 'DEDUP_LINKED', metadata: { explanation: dedup.explanation } })
     return { globalRecordId, wasCreated: false }
   }
@@ -47,7 +63,6 @@ export async function findOrCreateGlobalRecord(
         canonicalName: candidate.name,
         normalizedName: normalizedCandidateName,
         payload: candidate.payload,
-        relevanceStatus: 'UNCERTAIN',
         createdBy: userId,
         duplicateOfId: dedup.matchedRecordId,
       },
@@ -59,14 +74,12 @@ export async function findOrCreateGlobalRecord(
     return { globalRecordId: record.id, wasCreated: true }
   }
 
-  // unique
   const record = await prisma.globalRecord.create({
     data: {
       type: candidate.type,
       canonicalName: candidate.name,
       normalizedName: normalizedCandidateName,
       payload: candidate.payload,
-      relevanceStatus: 'UNCERTAIN',
       createdBy: userId,
     },
   })
@@ -77,12 +90,27 @@ export async function findOrCreateGlobalRecord(
   return { globalRecordId: record.id, wasCreated: true }
 }
 
+export async function updateRelevanceStatus(
+  recordId: string,
+  status: string,
+  userId: string,
+  pipelineRunId?: string,
+): Promise<void> {
+  const record = await prisma.globalRecord.findUnique({ where: { id: recordId } })
+  if (!record) return
+  const payload = { ...(record.payload as Record<string, unknown>), relevanceStatus: status }
+  await prisma.globalRecord.update({
+    where: { id: recordId },
+    data: { payload: payload as never },
+  })
+  await logEvent({ globalRecordId: recordId, pipelineRunId, userId, eventType: 'STATUS_CHANGED', metadata: { status } })
+}
+
 export async function getStepRecords(stepId: string, filters: StepRecordFilters = {}) {
   return prisma.pipelineRecordRef.findMany({
     where: {
       stepId,
       ...(filters.isSelectedForProcessing !== undefined && { isSelectedForProcessing: filters.isSelectedForProcessing }),
-      ...(filters.relevanceStatus !== undefined && { globalRecord: { relevanceStatus: filters.relevanceStatus } }),
       ...(filters.inputSourceId !== undefined && { inputSourceId: filters.inputSourceId }),
       ...(filters.search && { globalRecord: { canonicalName: { contains: filters.search, mode: 'insensitive' } } }),
     },
@@ -104,15 +132,3 @@ export async function getStepRecords(stepId: string, filters: StepRecordFilters 
   })
 }
 
-export async function updateRelevanceStatus(
-  globalRecordId: string,
-  status: RelevanceStatus,
-  userId: string,
-  pipelineRunId?: string
-): Promise<void> {
-  await prisma.globalRecord.update({
-    where: { id: globalRecordId },
-    data: { relevanceStatus: status },
-  })
-  await logEvent({ globalRecordId, pipelineRunId, userId, eventType: 'RELEVANCE_SET', metadata: { status } })
-}

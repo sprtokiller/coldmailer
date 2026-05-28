@@ -6,7 +6,6 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
   const type = query.type as string | undefined
-  const status = query.status as string | undefined
   const search = query.search as string | undefined
   const pipelineRunId = query.pipelineRunId as string | undefined
   const offset = Number(query.offset ?? 0)
@@ -16,7 +15,6 @@ export default defineEventHandler(async (event) => {
 
   const where = {
     ...(type && { type: type as never }),
-    ...(status && { relevanceStatus: status as never }),
     ...(search && { canonicalName: { contains: search, mode: 'insensitive' } }),
     ...(pipelineRunId && { pipelineRefs: { some: { pipelineRunId } } }),
   }

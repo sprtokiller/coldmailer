@@ -1,6 +1,8 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
+const HIGH_PRIORITY = new Set(['GENERATED', 'IMPORTED'])
+
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
   const runId = getRouterParam(event, 'id')!
@@ -14,7 +16,22 @@ export default defineEventHandler(async (event) => {
   if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
   if (!record) throw createError({ statusCode: 404, statusMessage: 'GlobalRecord not found' })
 
-  // Find or create a shared GLOBAL_DB_SELECT InputSource for this step
+  // Enforce priority: skip if a higher-priority source already holds this record
+  const existing = await prisma.pipelineRecordRef.findUnique({
+    where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId: runId, stepId, globalRecordId } },
+    select: { addMethod: true },
+  })
+  if (existing) {
+    if (HIGH_PRIORITY.has(existing.addMethod)) {
+      return { skipped: true, existingSource: existing.addMethod }
+    }
+    // Already a GLOBAL_DB ref — ensure it's selected
+    return prisma.pipelineRecordRef.update({
+      where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId: runId, stepId, globalRecordId } },
+      data: { isSelectedForProcessing: true },
+    })
+  }
+
   let inputSource = await prisma.inputSource.findFirst({
     where: { stepId, type: 'GLOBAL_DB_SELECT' },
   })
@@ -30,9 +47,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return prisma.pipelineRecordRef.upsert({
-    where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId: runId, stepId, globalRecordId } },
-    create: { pipelineRunId: runId, stepId, globalRecordId, addedBy: user.id, addMethod: 'GLOBAL_DB', inputSourceId: inputSource.id },
-    update: { isSelectedForProcessing: true },
+  return prisma.pipelineRecordRef.create({
+    data: { pipelineRunId: runId, stepId, globalRecordId, addedBy: user.id, addMethod: 'GLOBAL_DB', inputSourceId: inputSource.id, isSelectedForProcessing: true },
   })
 })

@@ -24,9 +24,8 @@ function countsFromOutputData(stepType: string, outputData: unknown) {
   if (!outputData) return null
 
   if (stepType === 'MARKET_SCANNING') {
-    const items = Array.isArray(outputData) ? outputData : []
-    const total = items.length
-    return total > 0 ? { relevant: 0, irrelevant: 0, uncertain: total, total } : null
+    const total = Array.isArray(outputData) ? outputData.length : 0
+    return total > 0 ? { total } : null
   }
 
   if (stepType === 'PARTNER_IDENTIFICATION') {
@@ -37,19 +36,18 @@ function countsFromOutputData(stepType: string, outputData: unknown) {
       for (const p of partners) if (p.partnerId) partnerIds.add(p.partnerId)
     }
     const total = partnerIds.size
-    return total > 0 ? { relevant: 0, irrelevant: 0, uncertain: total, total } : null
+    return total > 0 ? { total } : null
   }
 
   if (stepType === 'PARTNER_PROFILING' || stepType === 'VALUE_ALIGNMENT' || stepType === 'OUTREACH_PREPARATION') {
-    const arr = Array.isArray(outputData) ? outputData : []
-    const total = arr.length
-    return total > 0 ? { relevant: 0, irrelevant: 0, uncertain: total, total } : null
+    const total = Array.isArray(outputData) ? outputData.length : 0
+    return total > 0 ? { total } : null
   }
 
   if (stepType === 'OUTREACH_EXECUTION') {
     const obj = outputData as Record<string, unknown> | null
     const total = (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.gmailDraftId) ? 1 : 0
-    return total > 0 ? { relevant: 0, irrelevant: 0, uncertain: 0, total } : null
+    return total > 0 ? { total } : null
   }
 
   return null
@@ -59,6 +57,13 @@ function selectedCountFromOutputData(stepType: string, outputData: unknown): num
   const counts = countsFromOutputData(stepType, outputData)
   return counts?.total ?? 0
 }
+
+const MS_EXTRA_METHODS = [
+  { method: 'IMPORTED',   label: 'Importované' },
+  { method: 'GLOBAL_DB',  label: 'Z databáze' },
+] as const
+
+const Y_SPACING = 180
 
 export default defineEventHandler(async (event) => {
   await requireAuth(event)
@@ -71,9 +76,7 @@ export default defineEventHandler(async (event) => {
         orderBy: { createdAt: 'desc' },
         include: {
           inputSources: true,
-          recordRefs: {
-            include: { globalRecord: { select: { id: true, relevanceStatus: true } } },
-          },
+          recordRefs: true,
         },
       },
     },
@@ -86,24 +89,35 @@ export default defineEventHandler(async (event) => {
     if (!latestByType.has(step.stepType)) latestByType.set(step.stepType, step)
   }
 
+  // Pre-compute MS extra nodes (IMPORTED / GLOBAL_DB) — always emit both regardless of record count
+  const msStep = latestByType.get('MARKET_SCANNING')
+  const msExtras = MS_EXTRA_METHODS.map(({ method, label }) => {
+    const matching = msStep?.recordRefs.filter(r => r.addMethod === method) ?? []
+    return { method, label, total: matching.length, selected: matching.filter(r => r.isSelectedForProcessing).length }
+  })
+
+  // Shift the main flow down so it's vertically centred beside the MS column
+  const centerY = Math.round((msExtras.length * Y_SPACING) / 2)
+
   const nodes = STEP_ORDER.map((stepType, i) => {
     const step = latestByType.get(stepType)
-    const refs = step?.recordRefs ?? []
+    // Exclude IMPORTED/GLOBAL_DB from the main MS node — those get their own nodes
+    const allRefs = step?.recordRefs ?? []
+    const refs = stepType === 'MARKET_SCANNING'
+      ? allRefs.filter(r => r.addMethod !== 'IMPORTED' && r.addMethod !== 'GLOBAL_DB')
+      : allRefs
 
-    let recordCounts: { relevant: number; irrelevant: number; uncertain: number; total: number }
+    let recordCounts: { total: number }
     let sources = step?.inputSources ?? []
+    let selectedCount = 0
 
     if (refs.length > 0) {
-      recordCounts = {
-        relevant: refs.filter(r => r.globalRecord.relevanceStatus === 'RELEVANT').length,
-        irrelevant: refs.filter(r => r.globalRecord.relevanceStatus === 'IRRELEVANT').length,
-        uncertain: refs.filter(r => r.globalRecord.relevanceStatus === 'UNCERTAIN').length,
-        total: refs.length,
-      }
+      selectedCount = refs.filter(r => r.isSelectedForProcessing).length
+      recordCounts = { total: refs.length }
     } else {
-      // Fallback: derive counts from outputData for legacy runs
-      const legacy = step ? countsFromOutputData(stepType, step.outputData) : null
-      recordCounts = legacy ?? { relevant: 0, irrelevant: 0, uncertain: 0, total: 0 }
+      // Fallback: derive counts from outputData for legacy runs (MS skipped — requires real refs)
+      const legacy = (stepType !== 'MARKET_SCANNING' && step) ? countsFromOutputData(stepType, step.outputData) : null
+      recordCounts = legacy ?? { total: 0 }
 
       // Synthetic source label so the node doesn't look empty
       if (legacy && sources.length === 0) {
@@ -116,17 +130,24 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // For the main MS node, show only AI-run sources; AI_IMPORT sources belong to the IMPORTED extra node
+    if (stepType === 'MARKET_SCANNING') {
+      sources = sources.filter(s => s.type === 'MINI_DEEP_RESEARCH') as typeof sources
+    }
+
     const isCanvas = stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_IDENTIFICATION'
     return {
       id: `step-${stepType}`,
       type: isCanvas ? (stepType === 'MARKET_SCANNING' ? 'marketScanning' : 'partnerIdentification') : 'placeholder',
-      position: { x: i * 340, y: 0 },
+      // MS always at y=0; everything else vertically centred beside it
+      position: { x: i * 340, y: stepType === 'MARKET_SCANNING' ? 0 : centerY },
       data: {
         stepId: step?.id ?? null,
         stepType,
         label: STEP_LABELS[stepType] ?? stepType,
         status: step?.status ?? 'PENDING',
         recordCounts,
+        selected: selectedCount,
         sources,
       },
     }
@@ -144,29 +165,68 @@ export default defineEventHandler(async (event) => {
     const nextType = STEP_ORDER[i + 1]
     const step = latestByType.get(stepType)
     const nextStep = latestByType.get(nextType)
-    const refs = step?.recordRefs ?? []
+    // Same IMPORTED/GLOBAL_DB exclusion for the MS→PI edge label
+    const allRefs = step?.recordRefs ?? []
+    const refs = stepType === 'MARKET_SCANNING'
+      ? allRefs.filter(r => r.addMethod !== 'IMPORTED' && r.addMethod !== 'GLOBAL_DB')
+      : allRefs
 
     let flowCount = 0
     if (refs.length > 0) {
-      // Modern GlobalRecord flow: selected refs from source step
       flowCount = refs.filter(r => r.isSelectedForProcessing).length
-    } else if (step) {
-      const isEarly = stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_IDENTIFICATION'
+    } else if (step && stepType !== 'MARKET_SCANNING') {
+      const isEarly = stepType === 'PARTNER_IDENTIFICATION'
       if (isEarly) {
-        // Steps 1-2: derive from source's own outputData
         flowCount = selectedCountFromOutputData(stepType, step.outputData)
       } else if (nextStep) {
-        // Steps 3-5: best proxy is target step's output count (what actually got processed)
         flowCount = selectedCountFromOutputData(nextType, nextStep.outputData)
       }
+    }
+
+    let label: string
+    if (stepType === 'MARKET_SCANNING') {
+      label = refs.length > 0 ? `${flowCount} / ${refs.length} soutěží` : ''
+    } else {
+      label = flowCount > 0 ? `${flowCount} ${EDGE_FLOW_LABELS[stepType] ?? 'záznamů'}` : ''
     }
 
     return {
       id: `e-${stepType}-${nextType}`,
       source: `step-${stepType}`,
       target: `step-${nextType}`,
-      label: flowCount > 0 ? `${flowCount} ${EDGE_FLOW_LABELS[stepType] ?? 'záznamů'}` : '',
+      label,
     }
+  })
+
+  // Extra input-source nodes for MS IMPORTED / GLOBAL_DB records — always emitted (even with 0 records)
+  msExtras.forEach((extra, j) => {
+    const nodeId = `ms-${extra.method === 'IMPORTED' ? 'imported' : 'globaldb'}`
+    // AI_IMPORT InputSources (one per import run) power the clickable items on the IMPORTED node
+    const extraSources = extra.method === 'IMPORTED'
+      ? (msStep?.inputSources ?? []).filter(s => s.type === 'AI_IMPORT')
+      : []
+    nodes.push({
+      id: nodeId,
+      type: 'msInputSource',
+      position: { x: 0, y: (j + 1) * Y_SPACING },
+      data: {
+        stepId: msStep?.id ?? null,
+        stepType: 'MARKET_SCANNING',
+        label: extra.label,
+        status: 'COMPLETED',
+        recordCounts: { total: extra.total },
+        sources: extraSources,
+        addMethod: extra.method,
+        total: extra.total,
+        selected: extra.selected,
+      },
+    })
+    edges.push({
+      id: `e-${nodeId}-pi`,
+      source: nodeId,
+      target: 'step-PARTNER_IDENTIFICATION',
+      label: extra.total > 0 ? `${extra.selected} / ${extra.total} soutěží` : '',
+    })
   })
 
   return { nodes, edges }

@@ -17,12 +17,11 @@ export default defineEventHandler(async (event) => {
   const candidates = await prisma.globalRecord.findMany({
     where: {
       ...(type ? { type: type as 'COMPETITION' | 'PARTNER' } : {}),
-      relevanceStatus: { not: 'IRRELEVANT' },
       ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
     },
     orderBy: { createdAt: 'desc' },
     take: 80,
-    select: { id: true, canonicalName: true, type: true, relevanceStatus: true },
+    select: { id: true, canonicalName: true, type: true },
   })
   if (!candidates.length) return []
 

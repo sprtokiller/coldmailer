@@ -50,8 +50,6 @@ async function upsertGlobalRecord(params: {
       canonicalName: params.name,
       normalizedName,
       payload: params.payload,
-      relevanceStatus: 'UNCERTAIN',
-      relevanceNotes: 'Migrováno z původní verze aplikace',
       createdBy: params.userId,
     },
   })
@@ -235,7 +233,7 @@ async function main() {
     ${totalLinked} existujících GlobalRecord záznamů propojeno
     ${totalSkipped} položek přeskočeno (prázdný název apod.)
 
-Všechny záznamy mají stav UNCERTAIN — otevřete graf a otagujte je jako Relevantní / Irelevantní.
+Migrace dokončena — záznamy jsou dostupné v grafu pipeline.
 `)
 }
 

@@ -457,7 +457,7 @@ export default defineEventHandler(async (event) => {
                 await findOrCreateGlobalRecord(
                   { name, url, type: 'COMPETITION', payload: item },
                   user.id, runId, step.id, inputSource.id, 'GENERATED'
-                ).catch(() => {})
+                ).catch((err) => console.error('[MS execute] GlobalRecord link failed for "%s":', name, err))
               }
             }
           } else {

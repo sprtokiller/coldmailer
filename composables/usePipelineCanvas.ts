@@ -9,8 +9,12 @@ export interface CanvasNode {
     stepType: string
     label: string
     status: string
-    recordCounts: { relevant: number; irrelevant: number; uncertain: number; total: number }
-    sources: Array<{ id: string; label: string; type: string; createdAt: string | Date }>
+    recordCounts: { total: number }
+    sources: Array<{ id: string; label: string; type: string; pipelineRunId: string; createdAt: string | Date }>
+    // msInputSource extra fields
+    addMethod?: string
+    total?: number
+    selected?: number
   }
 }
 
@@ -27,14 +31,12 @@ export interface StepRecord {
   isSelectedForProcessing: boolean
   addMethod: string
   localNote: string | null
-  localStatus: string | null
   addedAt: string
   adder: { name: string | null } | null
   globalRecord: {
     id: string
     canonicalName: string
     type: string
-    relevanceStatus: string
     payload: Record<string, unknown>
     pipelineRefs: Array<{ pipelineRunId: string; pipelineRun: { name: string } | null }>
   }
@@ -45,7 +47,6 @@ export interface GlobalRecord {
   id: string
   canonicalName: string
   type: string
-  relevanceStatus: string
   payload: Record<string, unknown>
   createdAt: string
 }
@@ -63,6 +64,7 @@ export function usePipelineCanvas(runId: string) {
   // Active overlay
   const activeOverlayNode = ref<{ stepId: string | null; stepType: string } | null>(null)
   const activeSourceFilter = ref<string | null>(null)
+  const expandedSourceIds = ref(new Set<string>())
 
   // Records per step
   const stepRecords = ref<Record<string, StepRecord[]>>({})
@@ -154,20 +156,6 @@ export function usePipelineCanvas(runId: string) {
     if (stepId) fetchStepRecords(stepId)
   }
 
-  async function setRelevanceStatus(globalRecordId: string, status: string) {
-    await $fetch(`/api/records/${globalRecordId}/status`, {
-      method: 'PATCH',
-      body: { status, pipelineRunId: runId },
-    })
-    // Optimistic in-place update — avoids scroll jump from re-fetch
-    for (const sid in stepRecords.value) {
-      for (const rec of stepRecords.value[sid]) {
-        if (rec.globalRecord.id === globalRecordId) rec.globalRecord.relevanceStatus = status
-      }
-    }
-    await fetchCanvasData()
-  }
-
   async function removeRecord(stepId: string, refId: string) {
     await $fetch(`/api/pipeline/${runId}/steps/${stepId}/records/${refId}`, { method: 'DELETE' })
     const recs = stepRecords.value[stepId]
@@ -249,7 +237,7 @@ export function usePipelineCanvas(runId: string) {
   }
 
   async function aiSuggestRecords(stepId: string, query: string, type?: string) {
-    return $fetch<Array<{ id: string; canonicalName: string; type: string; relevanceStatus: string }>>('/api/records/ai-suggest', {
+    return $fetch<Array<{ id: string; canonicalName: string; type: string }>>('/api/records/ai-suggest', {
       method: 'POST',
       body: { stepId, query, type },
     })
@@ -264,7 +252,7 @@ export function usePipelineCanvas(runId: string) {
     globalBrowserOpen, globalBrowserStepId, globalBrowserSearch, globalBrowserResults, globalBrowserLoading,
     fetchCanvasData, fetchStepRecords,
     openOverlay, selectEdge, closeOverlay, openSourceFilter,
-    setRelevanceStatus, toggleSelection,
+    expandedSourceIds, toggleSelection,
     searchGlobalDB, addFromGlobalDB,
     openGlobalBrowser, closeGlobalBrowser,
     importAI, addManualRecord, aiSuggestRecords,

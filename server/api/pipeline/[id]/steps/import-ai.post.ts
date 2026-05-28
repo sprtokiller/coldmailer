@@ -410,7 +410,7 @@ async function extractMSGlobalRecords(
       await findOrCreateGlobalRecord(
         { name, url, type: 'COMPETITION', payload: item },
         userId, pipelineRunId, stepId, inputSource.id, 'IMPORTED'
-      ).catch(() => {})
+      ).catch((err) => console.error('[import-ai] GlobalRecord link failed for "%s":', name, err))
     }
   } catch {
     // Non-fatal
