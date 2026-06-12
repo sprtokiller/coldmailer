@@ -12,12 +12,12 @@ export const OPENROUTER = {
 // ── Model identifiers ─────────────────────────────────────────────────────────
 export const MODELS = {
   DEEP_RESEARCH: 'openai/o4-mini-deep-research',
-  CLAUDE_SONNET: 'anthropic/claude-sonnet-4-5',
-  CLAUDE_HAIKU:  'anthropic/claude-3-5-haiku',
+  CLAUDE_SONNET: 'anthropic/claude-sonnet-4.6',
+  CLAUDE_HAIKU:  'anthropic/claude-haiku-4.5',
   PIPELINE:      'pipeline',  // SerpAPI + Playwright + AI (display only)
   GMAIL:         'gmail',     // Gmail API          (display only)
 } as const
-
+ 
 // ── Step → model mapping ──────────────────────────────────────────────────────
 export const STEP_MODEL: Record<string, string> = {
   MARKET_SCANNING:        MODELS.DEEP_RESEARCH,

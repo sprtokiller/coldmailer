@@ -16,20 +16,23 @@ AI-powered cold outreach pipeline for identifying and contacting event/competiti
 # 1. Install dependencies (also runs nuxt prepare + prisma generate)
 bun install
 
-# 2. Set up environment
+# 2. install playwright browser
+npx playwright install --with-deps
+
+# 3. Set up environment
 cp .env.example .env
 # → fill in values (see below)
 
-# 3. Start the database
+# 4. Start the database
 docker compose up db -d
 
-# 4. Push the schema to the database
+# 5. Push the schema to the database
 bun run db:push
 
-# 5. Seed system prompts
+# 6. Seed system prompts
 bun run db:seed
 
-# 6. Start the dev server
+# 7. Start the dev server
 bun run dev
 # → http://localhost:3000
 ```
