@@ -56,12 +56,30 @@ export function useOverlay() {
     return items
   })
 
+  // Resolves which node ID gets the active border (config tab only, MS/PI follow sub-section)
+  function syncBorder() {
+    if (activeTab.value !== 'config' || !stepType.value) { canvas.selectedNodeBorderId.value = null; return }
+    if (stepType.value === 'MARKET_SCANNING') {
+      const sub = records.configSubSection.value
+      canvas.selectedNodeBorderId.value = sub === 'import' ? 'ms-imported' : sub === 'db' ? 'ms-globaldb' : 'step-MARKET_SCANNING'
+    } else if (stepType.value === 'PARTNER_IDENTIFICATION') {
+      const sub = records.configSubSection.value
+      canvas.selectedNodeBorderId.value = sub === 'import' ? 'pi-imported' : sub === 'db' ? 'pi-globaldb' : 'step-PARTNER_IDENTIFICATION'
+    } else {
+      canvas.selectedNodeBorderId.value = canvas.selectedNodeId.value
+    }
+  }
+  watch([activeTab, () => records.configSubSection.value], syncBorder)
+
   // Main watcher: reset state when active node changes
   watch(activeNode, (node) => {
-    if (!node) { canvas.expandedSourceIds.value = new Set(); return }
+    if (!node) { canvas.expandedSourceIds.value = new Set(); canvas.selectedNodeBorderId.value = null; return }
     const hasSourceFilter = !!canvas.activeSourceFilter.value
+    const isPiExtraNode = canvas.selectedNodeId.value === 'pi-imported' || canvas.selectedNodeId.value === 'pi-globaldb'
     const stepsWithInput = ['PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
-    activeTab.value = hasSourceFilter ? 'result' : node.stepType === 'MARKET_SCANNING' ? 'config' : stepsWithInput.includes(node.stepType) ? 'input' : 'result'
+    activeTab.value = hasSourceFilter ? 'result'
+      : node.stepType === 'MARKET_SCANNING' || isPiExtraNode ? 'config'
+      : stepsWithInput.includes(node.stepType) ? 'input' : 'result'
     if (node.stepType === 'PARTNER_PROFILING' && pl) pl.initStep3Selection?.()
     else if (node.stepType === 'VALUE_ALIGNMENT' && pl) pl.initStep4Selection?.()
     else if (node.stepType === 'OUTREACH_PREPARATION' && pl) pl.initStep5Selection?.()
@@ -69,10 +87,14 @@ export function useOverlay() {
     stepsInput.expandedPiPartners.value = new Set()
     stepsInput.piRunFilter.value = 'all'
     records.activeAddPanel.value = null
-    records.configSubSection.value = 'run'
+    records.configSubSection.value = canvas.selectedNodeId.value === 'ms-imported' || canvas.selectedNodeId.value === 'pi-imported' ? 'import'
+      : canvas.selectedNodeId.value === 'ms-globaldb' || canvas.selectedNodeId.value === 'pi-globaldb' ? 'db'
+      : 'run'
+    records.importPrefillText.value = ''
     records.editingRefId.value = null
     records.confirmingDeleteSource.value = null
     core.expandedCardIdx.value = null
+    syncBorder()
     // Pre-load PI records for cross-pipeline indicator in steps 3-6
     if (['PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(node.stepType)) {
       if (stepsInput.piStepId.value && !canvas.stepRecords.value[stepsInput.piStepId.value]) {

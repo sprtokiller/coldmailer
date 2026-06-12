@@ -30,6 +30,8 @@ const { stepType, s3Candidates, s4Partners, s5Alignments, s6Emails, oeResult,
             <div class="flex items-center gap-1.5 flex-wrap">
               <span :class="['text-sm font-medium', isProcessed(c.name) ? 'text-green-800' : 'text-gray-800']">{{ c.name }}</span>
               <span v-if="isProcessed(c.name)" class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">✓ Hotovo</span>
+              <span v-if="c.source === 'imported'" class="text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">↑ Import</span>
+              <span v-else-if="c.source === 'db'" class="text-xs px-1.5 py-0.5 rounded bg-rose-50 text-rose-600">⊕ Z databáze</span>
               <span v-if="partnerRunCount(c.name) > 1" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ partnerRunCount(c.name) }}× pipeline</span>
             </div>
             <div v-if="c.frequency > 1" class="text-xs text-gray-400 mt-0.5">Nalezen {{ c.frequency }}× ({{ c.itemNames.slice(0, 2).join(', ') }})</div>

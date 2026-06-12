@@ -225,6 +225,25 @@ export default defineEventHandler(async (event) => {
             })
             const dbMap = new Map(dbPartners.map(p => [p.id, p]))
 
+            // Imported / DB-selected partners reference a GlobalRecord instead of a Partner row
+            const missingIds = partnerIds.filter(id => !dbMap.has(id))
+            if (missingIds.length > 0) {
+              const globalRecords = await prisma.globalRecord.findMany({
+                where: { id: { in: missingIds } },
+                select: { id: true, canonicalName: true, payload: true },
+              })
+              for (const gr of globalRecords) {
+                const p = gr.payload as Record<string, unknown>
+                dbMap.set(gr.id, {
+                  id: gr.id,
+                  name: gr.canonicalName,
+                  website: (p.website ?? p.url ?? null) as string | null,
+                  description: (p.description ?? null) as string | null,
+                  type: (p.type ?? null) as string | null,
+                })
+              }
+            }
+
             const allProfiles: unknown[] = []
 
             for (let i = 0; i < inputPartners.length; i++) {
@@ -448,6 +467,14 @@ export default defineEventHandler(async (event) => {
                   stepId: step.id,
                   label: `Market Scanning – ${new Date().toLocaleString('cs-CZ')}`,
                   createdBy: user.id,
+                  metadata: {
+                    config: {
+                      systemPromptId: body.systemPromptId ?? null,
+                      contextPartIds: body.contextPartIds ?? [],
+                      manualContext: body.manualContext ?? '',
+                      inputData: (body.inputData ?? {}) as Prisma.InputJsonValue,
+                    },
+                  } as Prisma.InputJsonValue,
                 },
               })
               for (const item of msItems) {

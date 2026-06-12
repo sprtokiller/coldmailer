@@ -42,7 +42,7 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
   <div
     :class="[
       'bg-white border rounded-xl shadow-sm w-64 cursor-pointer transition-all duration-150',
-      isSelected ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-indigo-300',
+      canvas.selectedNodeBorderId.value === props.id ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-indigo-300',
       isDimmed ? 'opacity-40' : '',
     ]"
   >

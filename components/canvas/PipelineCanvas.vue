@@ -18,6 +18,7 @@ const nodeTypes = {
   partnerIdentification: markRaw(PartnerIdentificationNode),
   placeholder: markRaw(PlaceholderStepNode),
   msInputSource: markRaw(MsInputSourceNode),
+  piInputSource: markRaw(MsInputSourceNode),
 }
 
 const { setViewport } = useVueFlow()

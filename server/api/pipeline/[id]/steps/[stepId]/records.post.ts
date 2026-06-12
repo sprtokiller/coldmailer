@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
         type: 'GLOBAL_DB_SELECT',
         pipelineRunId: runId,
         stepId,
-        label: 'Z databáze',
+        label: 'Ručně vybrané',
         createdBy: user.id,
       },
     })

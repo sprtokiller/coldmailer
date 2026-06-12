@@ -9,9 +9,9 @@ export const STEP_ORDER = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER
 
 export const SOURCE_CONFIG: Record<string, { label: string; cls: string }> = {
   MINI_DEEP_RESEARCH: { label: 'AI Výsledek', cls: 'bg-blue-100 text-blue-700' },
-  AI_IMPORT:          { label: 'AI Import',   cls: 'bg-purple-100 text-purple-700' },
+  AI_IMPORT:          { label: 'AI Import',   cls: 'bg-emerald-100 text-emerald-700' },
   MANUAL_ADD:         { label: 'Ručně',        cls: 'bg-gray-100 text-gray-600' },
-  GLOBAL_DB_SELECT:   { label: 'Z databáze',  cls: 'bg-indigo-100 text-indigo-600' },
+  GLOBAL_DB_SELECT:   { label: 'Z databáze',  cls: 'bg-rose-100 text-rose-700' },
   legacy:             { label: 'Legacy',       cls: 'bg-amber-100 text-amber-700' },
 }
 export const LEVEL_LABELS: Record<string, string> = {
@@ -85,9 +85,16 @@ export function useOverlayCore() {
   )
   const activeTab = ref<'input' | 'result' | 'config'>('result')
   const allRecords = computed<StepRecord[]>(() => stepId.value ? canvas.stepRecords.value[stepId.value] ?? [] : [])
-  const currentNodeSources = computed(() =>
-    canvas.nodes.value.find(n => n.id === canvas.selectedNodeId.value)?.data.sources ?? []
-  )
+  const currentNodeSources = computed(() => {
+    const selected = canvas.nodes.value.find(n => n.id === canvas.selectedNodeId.value)
+    if (!selected) return []
+    if (selected.data.stepType === 'MARKET_SCANNING' || selected.data.stepType === 'PARTNER_IDENTIFICATION') {
+      return canvas.nodes.value
+        .filter(n => n.data.stepType === selected.data.stepType)
+        .flatMap(n => n.data.sources ?? [])
+    }
+    return selected.data.sources ?? []
+  })
   const totalRecords = computed(() => allRecords.value.length)
   const recordsLoading = computed(() => stepId.value ? canvas.stepRecordsLoading.value[stepId.value] : false)
   const expandedCardIdx = ref<number | null>(null)

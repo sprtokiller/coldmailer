@@ -126,7 +126,7 @@ export async function getStepRecords(stepId: string, filters: StepRecordFilters 
           },
         },
       },
-      inputSource: { select: { id: true, label: true, type: true, pipelineRunId: true } },
+      inputSource: { select: { id: true, label: true, type: true, pipelineRunId: true, metadata: true } },
     },
     orderBy: { addedAt: 'desc' },
   })

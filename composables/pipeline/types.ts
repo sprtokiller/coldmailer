@@ -43,7 +43,15 @@ export interface Step3Candidate {
   name: string
   frequency: number
   itemNames: string[]
-  source: 'step2' | 'direct'
+  source: 'step2' | 'direct' | 'imported' | 'db'
+}
+
+// PI record ref added via AI import or global DB select — extra partner source for step 3
+export interface PiExtraRef {
+  globalRecordId: string
+  name: string
+  addMethod: string
+  isSelectedForProcessing: boolean
 }
 
 export type PromptOption = {
@@ -113,6 +121,7 @@ export interface PipelineRunContext {
   step3SelectedIds: Record<string, boolean>
   step3FreqFilter: number
   step3Initialized: boolean
+  piExtraRefs: PiExtraRef[]
   step4SelectedIds: Record<string, boolean>
   step4Initialized: boolean
   step5SelectedIds: Record<string, boolean>

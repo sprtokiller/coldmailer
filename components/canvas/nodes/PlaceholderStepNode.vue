@@ -9,7 +9,7 @@ const props = defineProps<{
     stepType: string
     label: string
     status: string
-    recordCounts: { relevant: number; irrelevant: number; uncertain: number; total: number }
+    recordCounts: { total: number }
     sources: Array<unknown>
   }
 }>()
@@ -49,7 +49,7 @@ const isLast = computed(() => props.data.stepType === 'OUTREACH_EXECUTION')
   <div
     :class="[
       'bg-white border rounded-xl shadow-sm w-64 cursor-pointer transition-all duration-150',
-      isSelected ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-gray-300',
+      canvas.selectedNodeBorderId.value === props.id ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-gray-300',
       isDimmed ? 'opacity-40' : '',
     ]"
   >

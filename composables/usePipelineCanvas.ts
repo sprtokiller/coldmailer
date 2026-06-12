@@ -10,7 +10,7 @@ export interface CanvasNode {
     label: string
     status: string
     recordCounts: { total: number }
-    sources: Array<{ id: string; label: string; type: string; pipelineRunId: string; createdAt: string | Date }>
+    sources: Array<{ id: string; label: string; type: string; pipelineRunId: string; createdAt: string | Date; metadata?: Record<string, unknown> | null }>
     // msInputSource extra fields
     addMethod?: string
     total?: number
@@ -40,7 +40,7 @@ export interface StepRecord {
     payload: Record<string, unknown>
     pipelineRefs: Array<{ pipelineRunId: string; pipelineRun: { name: string } | null }>
   }
-  inputSource: { id: string; label: string; type: string; pipelineRunId: string } | null
+  inputSource: { id: string; label: string; type: string; pipelineRunId: string; metadata?: Record<string, unknown> | null } | null
 }
 
 export interface GlobalRecord {
@@ -77,18 +77,17 @@ export function usePipelineCanvas(runId: string) {
   const globalBrowserResults = ref<GlobalRecord[]>([])
   const globalBrowserLoading = ref(false)
 
+  // ID of the canvas node that should show the active border (config-tab only)
+  const selectedNodeBorderId = ref<string | null>(null)
+
   // Computed: which node IDs are dimmed when something is selected
+  // All nodes sharing the same stepType as the selected node stay active
   const dimmedNodeIds = computed<Set<string>>(() => {
     if (!selectedNodeId.value) return new Set()
-    const sel = selectedNodeId.value
-    const connected = new Set([sel])
-    for (const e of edges.value) {
-      if (e.source === sel || e.target === sel) {
-        connected.add(e.source)
-        connected.add(e.target)
-      }
-    }
-    return new Set(nodes.value.map(n => n.id).filter(id => !connected.has(id)))
+    const selectedNode = nodes.value.find(n => n.id === selectedNodeId.value)
+    if (!selectedNode) return new Set()
+    const activeStepType = selectedNode.data.stepType
+    return new Set(nodes.value.filter(n => n.data.stepType !== activeStepType).map(n => n.id))
   })
 
   // Computed: which edge IDs are highlighted
@@ -97,9 +96,12 @@ export function usePipelineCanvas(runId: string) {
     const result = new Set<string>()
     if (selectedEdgeId.value) {
       result.add(selectedEdgeId.value)
-    } else if (selectedNodeId.value) {
-      for (const e of edges.value) {
-        if (e.source === selectedNodeId.value || e.target === selectedNodeId.value) result.add(e.id)
+    } else {
+      const activeId = selectedNodeBorderId.value ?? selectedNodeId.value
+      if (activeId) {
+        for (const e of edges.value) {
+          if (e.source === activeId || e.target === activeId) result.add(e.id)
+        }
       }
     }
     return result
@@ -248,6 +250,7 @@ export function usePipelineCanvas(runId: string) {
     selectedNodeId, selectedEdgeId, hoveredNodeId,
     activeOverlayNode, activeSourceFilter,
     stepRecords, stepRecordsLoading,
+    selectedNodeBorderId,
     dimmedNodeIds, highlightedEdgeIds,
     globalBrowserOpen, globalBrowserStepId, globalBrowserSearch, globalBrowserResults, globalBrowserLoading,
     fetchCanvasData, fetchStepRecords,

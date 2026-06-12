@@ -4,8 +4,9 @@ import { getStr } from './useOverlayCore'
 
 // Combined cast type for pipeline composable methods used by steps 3-6
 interface PipelineStepsCtx {
-  step3FilteredCandidates?: () => Array<{ partnerId: string; name: string; frequency: number; itemNames: string[] }>
+  step3FilteredCandidates?: () => Array<{ partnerId: string; name: string; frequency: number; itemNames: string[]; source?: string }>
   step3SelectedIds: Record<string, boolean>
+  piExtraRefs?: Array<{ globalRecordId: string; name: string; addMethod: string; isSelectedForProcessing: boolean }>
   initStep3Selection?: () => void
   step3SelectAll?: () => void; step3DeselectAll?: () => void; step3SelectUnprocessed?: () => void
   step3SelectedCount?: () => number
@@ -99,6 +100,26 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
     }
     return map
   })
+  // Sync imported / DB-selected PI refs into pipeline state so step3Candidates sees them
+  watch(piRecords, (recs) => {
+    if (!pl) return
+    const extras = recs
+      .filter(r => r.addMethod === 'IMPORTED' || r.addMethod === 'GLOBAL_DB')
+      .map(r => ({
+        globalRecordId: r.globalRecordId,
+        name: r.globalRecord.canonicalName,
+        addMethod: r.addMethod,
+        isSelectedForProcessing: r.isSelectedForProcessing,
+      }))
+    pl.piExtraRefs = extras
+    // Default-select newly appearing candidates (PI panel selection is the default)
+    for (const e of extras) {
+      if (e.isSelectedForProcessing && !(e.globalRecordId in pl.step3SelectedIds)) {
+        pl.step3SelectedIds[e.globalRecordId] = true
+      }
+    }
+  }, { deep: true, immediate: true })
+
   function partnerRunCount(name: string): number { return piPartnerMap.value.get(name.toLowerCase().trim()) ?? 0 }
   function piPipelineCount(rec: StepRecord): number {
     return new Set(rec.globalRecord.pipelineRefs.map(r => r.pipelineRunId)).size || 1

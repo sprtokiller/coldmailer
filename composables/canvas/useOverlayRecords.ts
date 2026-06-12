@@ -9,7 +9,7 @@ export interface SourcePanel {
 }
 
 export function useOverlayRecords(core: OverlayCoreState) {
-  const { canvas, allRecords, stepId, stepType, currentRunId, currentNodeSources } = core
+  const { canvas, pipeline, allRecords, stepId, stepType, currentRunId, currentNodeSources, activeTab } = core
 
   const sourcePanels = computed((): SourcePanel[] => {
     const map = new Map<string, SourcePanel>()
@@ -125,6 +125,41 @@ export function useOverlayRecords(core: OverlayCoreState) {
   type AddPanel = 'import' | 'db' | 'manual' | null
   const activeAddPanel = ref<AddPanel>(null)
   const configSubSection = ref<'run' | 'import' | 'db'>('run')
+  const importPrefillText = ref('')
+
+  // Reuse the configuration a source was created with (MS: AI run / AI import)
+  interface SourceConfigMeta {
+    systemPromptId?: string | null
+    contextPartIds?: string[]
+    manualContext?: string
+    inputData?: Record<string, unknown>
+    rawInputText?: string
+  }
+  function sourceConfigMeta(source: StepRecord['inputSource']): SourceConfigMeta | null {
+    const cfg = (source?.metadata as { config?: SourceConfigMeta } | null)?.config
+    return cfg && typeof cfg === 'object' ? cfg : null
+  }
+  function canRehydrate(source: StepRecord['inputSource']): boolean {
+    return (source?.type === 'MINI_DEEP_RESEARCH' || source?.type === 'AI_IMPORT') && !!sourceConfigMeta(source)
+  }
+  function rehydrateConfiguration(source: StepRecord['inputSource']) {
+    const meta = sourceConfigMeta(source)
+    if (!meta || !stepType.value) return
+    if (source!.type === 'AI_IMPORT') {
+      importPrefillText.value = meta.rawInputText ?? ''
+      configSubSection.value = 'import'
+    } else {
+      const cfg = pipeline?.getConfig(stepType.value)
+      if (cfg) {
+        if (meta.systemPromptId) cfg.systemPromptId = meta.systemPromptId
+        cfg.contextPartIds = [...(meta.contextPartIds ?? [])]
+        cfg.manualContext = meta.manualContext ?? ''
+        cfg.inputData = JSON.stringify(meta.inputData ?? {}, null, 2)
+      }
+      configSubSection.value = 'run'
+    }
+    activeTab.value = 'config'
+  }
   const manualName = ref(''); const manualUrl = ref('')
   const manualLoading = ref(false); const manualError = ref('')
   const manualType = computed(() => stepType.value === 'PARTNER_IDENTIFICATION' ? 'PARTNER' : 'COMPETITION')
@@ -147,6 +182,7 @@ export function useOverlayRecords(core: OverlayCoreState) {
     editUrl, editType, editLevel, editTargetGroup, editOrganizer, editFrequency, editCompStatus,
     MS_LEVEL_OPTIONS, MS_FREQ_OPTIONS, MS_STATUS_OPTIONS,
     startEdit, cancelEdit, saveEdit,
-    activeAddPanel, configSubSection, manualName, manualUrl, manualLoading, manualError, manualType, doManual,
+    activeAddPanel, configSubSection, importPrefillText, canRehydrate, rehydrateConfiguration,
+    manualName, manualUrl, manualLoading, manualError, manualType, doManual,
   }
 }

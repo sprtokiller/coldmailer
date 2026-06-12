@@ -6,7 +6,7 @@ import { useSelectionState } from './pipeline/useSelectionState'
 import { useAiImport } from './pipeline/useAiImport'
 import { usePromptBuilding } from './pipeline/usePromptBuilding'
 import { useStepExecution } from './pipeline/useStepExecution'
-import type { PipelineRunContext, PipelineRunResponse, RunStepResult, StepConfigState } from './pipeline/types'
+import type { PipelineRunContext, PipelineRunResponse, RunStepResult, StepConfigState, PiExtraRef } from './pipeline/types'
 
 export { type PipelineRunContext } from './pipeline/types'
 
@@ -153,12 +153,16 @@ export async function usePipelineRunPage() {
     outputUtils.profilingOutputProfiles,
   )
 
+  // PI record refs added via Import / global DB — synced from canvas step records (useOverlayStepsInput)
+  const piExtraRefs = ref<PiExtraRef[]>([])
+
   const selection = useSelectionState(
     getStepResult,
     outputUtils.profilingOutputProfiles,
     outputUtils.alignmentOutputAlignments,
     outputUtils.outreachEmails,
     outputUtils.partnerItems,
+    () => piExtraRefs.value,
   )
 
   const aiImport = useAiImport(route, refresh, getConfig)
@@ -299,6 +303,7 @@ export async function usePipelineRunPage() {
     step2SelectAll: selection.step2SelectAll,
     step2DeselectAll: selection.step2DeselectAll,
     step2SelectedCount: selection.step2SelectedCount,
+    piExtraRefs,
     step3SelectedIds: selection.step3SelectedIds,
     step3FreqFilter: selection.step3FreqFilter,
     step3Initialized: selection.step3Initialized,

@@ -3,7 +3,7 @@ import { overlayKey } from '~/composables/canvas/useOverlay'
 import { isLegacyRef, sourceConfig, LEVEL_LABELS, COMP_STATUS_COLORS, COMP_STATUS_LABELS } from '~/composables/canvas/useOverlayCore'
 const o = inject(overlayKey)!
 const { stepType, canvas, currentRunId, sourcePanels, expandedSources, toggleExpand, panelRecords, msPayload,
-  confirmingDeleteSource, deleteSourceLoading, deleteSource,
+  confirmingDeleteSource, deleteSourceLoading, deleteSource, canRehydrate, rehydrateConfiguration,
   toggleSel, deleteRecord, deleteUnselected, selectAllInSource,
   editingRefId, editSaving, editName, editUrl, editDescription, editIndustry,
   editType, editLevel, editTargetGroup, editOrganizer, editFrequency, editCompStatus,
@@ -26,6 +26,16 @@ const { stepType, canvas, currentRunId, sourcePanels, expandedSources, toggleExp
         </button>
         <NuxtLink v-if="panel.source?.pipelineRunId && panel.source.pipelineRunId !== currentRunId" :to="`/pipeline/${panel.source.pipelineRunId}`" class="text-xs text-indigo-500 hover:text-indigo-700 underline flex-shrink-0" @click.stop>↗ Zobrazit</NuxtLink>
         <span class="text-xs text-gray-300 flex-shrink-0">{{ panel.records.length }} celkem</span>
+        <button
+          v-if="canRehydrate(panel.source)"
+          class="p-1 text-gray-300 hover:text-indigo-500 transition-colors flex-shrink-0"
+          title="Znovu použít konfiguraci"
+          @click.stop="rehydrateConfiguration(panel.source)"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+          </svg>
+        </button>
         <button
           v-if="panel.source?.id"
           class="p-1 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"

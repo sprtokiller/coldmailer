@@ -44,7 +44,7 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
   <div
     :class="[
       'bg-white border rounded-xl shadow-sm w-64 cursor-pointer transition-all duration-150',
-      isSelected ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-indigo-300',
+      canvas.selectedNodeBorderId.value === props.id ? 'border-indigo-400 ring-2 ring-indigo-300 shadow-md' : 'border-gray-200 hover:border-indigo-300',
       isDimmed ? 'opacity-40' : '',
     ]"
   >
@@ -54,7 +54,7 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
         <span v-if="STATUS_RUNNING_FAILED[data.status]" :class="['text-xs px-2 py-0.5 rounded-full font-medium', STATUS_RUNNING_FAILED[data.status].cls]">
           {{ STATUS_RUNNING_FAILED[data.status].label }}
         </span>
-        <span v-else class="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-600">
+        <span v-else class="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">
           {{ total }} soutěží
         </span>
       </div>
@@ -66,10 +66,10 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
       <button
         v-for="src in data.sources"
         :key="src.id"
-        :class="['w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1 transition-colors text-left', isSourceExpanded(src.id) ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50']"
+        :class="['w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1 transition-colors text-left', isSourceExpanded(src.id) ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50']"
         @click="onSourceClick($event, src.id)"
       >
-        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0"></span>
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></span>
         <span class="truncate">{{ src.label }}</span>
       </button>
     </div>
@@ -81,6 +81,6 @@ function onSourceClick(e: MouseEvent, sourceId: string) {
       >▶ Spustit krok</button>
     </div>
 
-    <Handle type="source" :position="Position.Right" class="!bg-indigo-400" />
+    <Handle type="source" :position="Position.Right" class="!bg-blue-400" />
   </div>
 </template>

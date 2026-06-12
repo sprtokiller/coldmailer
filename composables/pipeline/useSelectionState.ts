@@ -1,4 +1,4 @@
-import type { RunStepResult, Step3Candidate } from './types'
+import type { RunStepResult, Step3Candidate, PiExtraRef } from './types'
 
 export function useSelectionState(
   getStepResult: (key: string) => RunStepResult | undefined,
@@ -6,6 +6,7 @@ export function useSelectionState(
   alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>,
   outreachEmails: () => Array<Record<string, unknown>>,
   partnerItems: (stepKey: string) => Array<{ itemName: string; partners?: Array<{ partnerId: string; name: string; isNew: boolean }> }>,
+  piExtraRefs: () => PiExtraRef[],
 ) {
   // Step 2 (PARTNER_IDENTIFICATION)
   const step2SelectedItems = ref<Record<string, boolean>>({})
@@ -75,8 +76,24 @@ export function useSelectionState(
       }
     }
 
-    // Include partners that exist in step 3's output but were not identified in step 2
     const existingNames = new Set([...map.values()].map(c => c.name.toLowerCase().trim()))
+
+    // Partners imported or selected from the global DB (PipelineRecordRef on the PI step)
+    for (const ref of piExtraRefs()) {
+      if (!ref.isSelectedForProcessing) continue
+      const key = ref.name.toLowerCase().trim()
+      if (!key || existingNames.has(key)) continue
+      map.set(ref.globalRecordId, {
+        partnerId: ref.globalRecordId,
+        name: ref.name,
+        frequency: 0,
+        itemNames: [],
+        source: ref.addMethod === 'IMPORTED' ? 'imported' : 'db',
+      })
+      existingNames.add(key)
+    }
+
+    // Include partners that exist in step 3's output but were not identified in step 2
     for (const profile of profilingOutputProfiles('PARTNER_PROFILING')) {
       const name = String(profile.name ?? '')
       if (!name) continue
@@ -92,7 +109,7 @@ export function useSelectionState(
 
   function step3FilteredCandidates() {
     return step3Candidates().filter(candidate =>
-      candidate.source === 'direct' || candidate.frequency >= step3FreqFilter.value,
+      candidate.source !== 'step2' || candidate.frequency >= step3FreqFilter.value,
     )
   }
 
@@ -115,7 +132,7 @@ export function useSelectionState(
   function step3SelectAll() {
     const selected = { ...step3SelectedIds.value }
     for (const candidate of step3Candidates()) {
-      if (candidate.frequency >= step3FreqFilter.value) selected[candidate.partnerId] = true
+      if (candidate.source !== 'step2' || candidate.frequency >= step3FreqFilter.value) selected[candidate.partnerId] = true
     }
     step3SelectedIds.value = selected
   }

@@ -58,11 +58,6 @@ function selectedCountFromOutputData(stepType: string, outputData: unknown): num
   return counts?.total ?? 0
 }
 
-const MS_EXTRA_METHODS = [
-  { method: 'IMPORTED',   label: 'Importované' },
-  { method: 'GLOBAL_DB',  label: 'Z databáze' },
-] as const
-
 const Y_SPACING = 180
 
 export default defineEventHandler(async (event) => {
@@ -89,21 +84,80 @@ export default defineEventHandler(async (event) => {
     if (!latestByType.has(step.stepType)) latestByType.set(step.stepType, step)
   }
 
-  // Pre-compute MS extra nodes (IMPORTED / GLOBAL_DB) — always emit both regardless of record count
+  // Pre-compute MS extra nodes — always emit both regardless of record count
   const msStep = latestByType.get('MARKET_SCANNING')
-  const msExtras = MS_EXTRA_METHODS.map(({ method, label }) => {
-    const matching = msStep?.recordRefs.filter(r => r.addMethod === method) ?? []
-    return { method, label, total: matching.length, selected: matching.filter(r => r.isSelectedForProcessing).length }
-  })
+  const allMsRefs = msStep?.recordRefs ?? []
+  const allMsSources = msStep?.inputSources ?? []
 
-  // Shift the main flow down so it's vertically centred beside the MS column
-  const centerY = Math.round((msExtras.length * Y_SPACING) / 2)
+  // IMPORTED: count by addMethod (each AI import run has its own AI_IMPORT InputSource)
+  const importedRefs = allMsRefs.filter(r => r.addMethod === 'IMPORTED')
+  const importedSources = allMsSources.filter(s => s.type === 'AI_IMPORT')
+
+  // GLOBAL_DB: count by InputSource to stay in sync with how the overlay groups records
+  const globalDbSource = allMsSources.find(s => s.type === 'GLOBAL_DB_SELECT')
+  const globalDbRefs = globalDbSource
+    ? allMsRefs.filter(r => r.inputSourceId === globalDbSource.id)
+    : []
+
+  const msExtras = [
+    {
+      nodeId: 'ms-imported',
+      label: 'Importované',
+      method: 'IMPORTED',
+      sources: importedSources,
+      total: importedRefs.length,
+      selected: importedRefs.filter(r => r.isSelectedForProcessing).length,
+    },
+    {
+      nodeId: 'ms-globaldb',
+      label: 'Z databáze',
+      method: 'GLOBAL_DB',
+      sources: globalDbSource ? [globalDbSource] : [],
+      total: globalDbRefs.length,
+      selected: globalDbRefs.filter(r => r.isSelectedForProcessing).length,
+    },
+  ]
+
+  // Pre-compute PI extra nodes — same pattern as MS
+  const piStep = latestByType.get('PARTNER_IDENTIFICATION')
+  const allPiRefs = piStep?.recordRefs ?? []
+  const allPiSources = piStep?.inputSources ?? []
+
+  const piImportedRefs = allPiRefs.filter(r => r.addMethod === 'IMPORTED')
+  const piImportedSources = allPiSources.filter(s => s.type === 'AI_IMPORT')
+
+  const piGlobalDbSource = allPiSources.find(s => s.type === 'GLOBAL_DB_SELECT')
+  const piGlobalDbRefs = piGlobalDbSource
+    ? allPiRefs.filter(r => r.inputSourceId === piGlobalDbSource.id)
+    : []
+
+  const piExtras = [
+    {
+      nodeId: 'pi-imported',
+      label: 'Importované',
+      method: 'IMPORTED',
+      sources: piImportedSources,
+      total: piImportedRefs.length,
+      selected: piImportedRefs.filter(r => r.isSelectedForProcessing).length,
+    },
+    {
+      nodeId: 'pi-globaldb',
+      label: 'Z databáze',
+      method: 'GLOBAL_DB',
+      sources: piGlobalDbSource ? [piGlobalDbSource] : [],
+      total: piGlobalDbRefs.length,
+      selected: piGlobalDbRefs.filter(r => r.isSelectedForProcessing).length,
+    },
+  ]
+
+  // MS and PI head their own input-source columns at y=0; the rest of the flow sits one row below
+  const flowY = Y_SPACING
 
   const nodes = STEP_ORDER.map((stepType, i) => {
     const step = latestByType.get(stepType)
-    // Exclude IMPORTED/GLOBAL_DB from the main MS node — those get their own nodes
+    // Exclude IMPORTED/GLOBAL_DB from the main MS/PI node — those get their own nodes
     const allRefs = step?.recordRefs ?? []
-    const refs = stepType === 'MARKET_SCANNING'
+    const refs = (stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_IDENTIFICATION')
       ? allRefs.filter(r => r.addMethod !== 'IMPORTED' && r.addMethod !== 'GLOBAL_DB')
       : allRefs
 
@@ -133,14 +187,26 @@ export default defineEventHandler(async (event) => {
     // For the main MS node, show only AI-run sources; AI_IMPORT sources belong to the IMPORTED extra node
     if (stepType === 'MARKET_SCANNING') {
       sources = sources.filter(s => s.type === 'MINI_DEEP_RESEARCH') as typeof sources
+      // Badge: unique AI-identified competitions across ALL MS runs (each run = its own PipelineStep)
+      const allMsGeneratedRefs = run.steps
+        .filter(s => s.stepType === 'MARKET_SCANNING')
+        .flatMap(s => s.recordRefs.filter(r => r.addMethod !== 'IMPORTED' && r.addMethod !== 'GLOBAL_DB'))
+      if (allMsGeneratedRefs.length > 0) {
+        recordCounts = { total: allMsGeneratedRefs.length }
+      }
+    }
+
+    // For the main PI node, show only AI-run sources; AI_IMPORT / GLOBAL_DB_SELECT belong to extra nodes
+    if (stepType === 'PARTNER_IDENTIFICATION') {
+      sources = sources.filter(s => s.type === 'MINI_DEEP_RESEARCH') as typeof sources
     }
 
     const isCanvas = stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_IDENTIFICATION'
     return {
       id: `step-${stepType}`,
       type: isCanvas ? (stepType === 'MARKET_SCANNING' ? 'marketScanning' : 'partnerIdentification') : 'placeholder',
-      // MS always at y=0; everything else vertically centred beside it
-      position: { x: i * 340, y: stepType === 'MARKET_SCANNING' ? 0 : centerY },
+      // MS and PI at y=0 (top row); following steps offset below by one source-row gap
+      position: { x: i * 340, y: isCanvas ? 0 : flowY },
       data: {
         stepId: step?.id ?? null,
         stepType,
@@ -165,9 +231,9 @@ export default defineEventHandler(async (event) => {
     const nextType = STEP_ORDER[i + 1]
     const step = latestByType.get(stepType)
     const nextStep = latestByType.get(nextType)
-    // Same IMPORTED/GLOBAL_DB exclusion for the MS→PI edge label
+    // Same IMPORTED/GLOBAL_DB exclusion for the MS→PI and PI→PP edge labels
     const allRefs = step?.recordRefs ?? []
-    const refs = stepType === 'MARKET_SCANNING'
+    const refs = (stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_IDENTIFICATION')
       ? allRefs.filter(r => r.addMethod !== 'IMPORTED' && r.addMethod !== 'GLOBAL_DB')
       : allRefs
 
@@ -186,6 +252,8 @@ export default defineEventHandler(async (event) => {
     let label: string
     if (stepType === 'MARKET_SCANNING') {
       label = refs.length > 0 ? `${flowCount} / ${refs.length} soutěží` : ''
+    } else if (stepType === 'PARTNER_IDENTIFICATION' && refs.length > 0) {
+      label = `${flowCount} / ${refs.length} partnerů`
     } else {
       label = flowCount > 0 ? `${flowCount} ${EDGE_FLOW_LABELS[stepType] ?? 'záznamů'}` : ''
     }
@@ -200,13 +268,8 @@ export default defineEventHandler(async (event) => {
 
   // Extra input-source nodes for MS IMPORTED / GLOBAL_DB records — always emitted (even with 0 records)
   msExtras.forEach((extra, j) => {
-    const nodeId = `ms-${extra.method === 'IMPORTED' ? 'imported' : 'globaldb'}`
-    // AI_IMPORT InputSources (one per import run) power the clickable items on the IMPORTED node
-    const extraSources = extra.method === 'IMPORTED'
-      ? (msStep?.inputSources ?? []).filter(s => s.type === 'AI_IMPORT')
-      : []
     nodes.push({
-      id: nodeId,
+      id: extra.nodeId,
       type: 'msInputSource',
       position: { x: 0, y: (j + 1) * Y_SPACING },
       data: {
@@ -215,17 +278,43 @@ export default defineEventHandler(async (event) => {
         label: extra.label,
         status: 'COMPLETED',
         recordCounts: { total: extra.total },
-        sources: extraSources,
+        sources: extra.sources,
         addMethod: extra.method,
         total: extra.total,
         selected: extra.selected,
       },
     })
     edges.push({
-      id: `e-${nodeId}-pi`,
-      source: nodeId,
+      id: `e-${extra.nodeId}-pi`,
+      source: extra.nodeId,
       target: 'step-PARTNER_IDENTIFICATION',
       label: extra.total > 0 ? `${extra.selected} / ${extra.total} soutěží` : '',
+    })
+  })
+
+  // Extra input-source nodes for PI IMPORTED / GLOBAL_DB records — feed directly into PARTNER_PROFILING
+  piExtras.forEach((extra, j) => {
+    nodes.push({
+      id: extra.nodeId,
+      type: 'piInputSource',
+      position: { x: 340, y: (j + 1) * Y_SPACING },
+      data: {
+        stepId: piStep?.id ?? null,
+        stepType: 'PARTNER_IDENTIFICATION',
+        label: extra.label,
+        status: 'COMPLETED',
+        recordCounts: { total: extra.total },
+        sources: extra.sources,
+        addMethod: extra.method,
+        total: extra.total,
+        selected: extra.selected,
+      },
+    })
+    edges.push({
+      id: `e-${extra.nodeId}-pp`,
+      source: extra.nodeId,
+      target: 'step-PARTNER_PROFILING',
+      label: extra.total > 0 ? `${extra.selected} / ${extra.total} partnerů` : '',
     })
   })
 

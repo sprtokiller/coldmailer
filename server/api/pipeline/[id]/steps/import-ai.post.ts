@@ -321,7 +321,7 @@ export default defineEventHandler(async (event) => {
     console.log('[import-ai] input is already valid JSON — skipping AI, merging %d item(s) directly', itemCount)
     const mergedData = mergeOutputData(existingData, preDetected, body.stepType)
     const stepId = await saveStep(existingStep, runId, body, mergedData, user.id)
-    await extractMSGlobalRecords(body.stepType, mergedData, user.id, runId, stepId)
+    await extractMSGlobalRecords(body, mergedData, user.id, runId, stepId)
     return { success: true, mergedData }
   }
 
@@ -379,20 +379,49 @@ PRAVIDLA:
 
   const mergedData = mergeOutputData(existingData, newData, body.stepType)
   const stepId = await saveStep(existingStep, runId, body, mergedData, user.id)
-  await extractMSGlobalRecords(body.stepType, mergedData, user.id, runId, stepId)
+  await extractMSGlobalRecords(body, mergedData, user.id, runId, stepId)
   return { success: true, mergedData }
 })
 
 async function extractMSGlobalRecords(
-  stepType: string,
+  body: ImportBody,
   mergedData: unknown,
   userId: string,
   pipelineRunId: string,
   stepId: string,
 ): Promise<void> {
-  if (stepType !== 'MARKET_SCANNING') return
-  const items = Array.isArray(mergedData) ? mergedData as Record<string, unknown>[] : []
-  if (items.length === 0) return
+  if (body.stepType !== 'MARKET_SCANNING' && body.stepType !== 'PARTNER_IDENTIFICATION') return
+
+  // Candidates to link: MS = top-level items, PI = unique partners across items
+  let candidates: Array<{ name: string; url?: string; payload: Record<string, unknown> }> = []
+  if (body.stepType === 'MARKET_SCANNING') {
+    const items = Array.isArray(mergedData) ? mergedData as Record<string, unknown>[] : []
+    candidates = items
+      .map(item => ({
+        name: String(item.name ?? item.nazev ?? item.itemName ?? ''),
+        url: String(item.url ?? item.website ?? item.web ?? '') || undefined,
+        payload: item,
+      }))
+      .filter(c => c.name)
+  } else {
+    const items = ((mergedData as { items?: unknown[] } | null)?.items ?? []) as Record<string, unknown>[]
+    const byName = new Map<string, { name: string; url?: string; payload: Record<string, unknown> }>()
+    for (const item of items) {
+      for (const p of ((item.partners as Record<string, unknown>[] | undefined) ?? [])) {
+        const name = String(p.name ?? '')
+        if (!name || byName.has(name.toLowerCase())) continue
+        byName.set(name.toLowerCase(), {
+          name,
+          url: String(p.website ?? p.url ?? '') || undefined,
+          payload: p,
+        })
+      }
+    }
+    candidates = [...byName.values()]
+  }
+  if (candidates.length === 0) return
+
+  const recordType = body.stepType === 'MARKET_SCANNING' ? 'COMPETITION' as const : 'PARTNER' as const
   try {
     const inputSource = await prisma.inputSource.create({
       data: {
@@ -401,16 +430,19 @@ async function extractMSGlobalRecords(
         stepId,
         label: `AI Import – ${new Date().toLocaleString('cs-CZ')}`,
         createdBy: userId,
+        metadata: {
+          config: {
+            systemPromptId: body.systemPromptId ?? null,
+            rawInputText: body.rawInputText,
+          },
+        },
       },
     })
-    for (const item of items) {
-      const name = String(item.name ?? item.nazev ?? item.itemName ?? '')
-      if (!name) continue
-      const url = String(item.url ?? item.website ?? item.web ?? '') || undefined
+    for (const c of candidates) {
       await findOrCreateGlobalRecord(
-        { name, url, type: 'COMPETITION', payload: item },
+        { name: c.name, url: c.url, type: recordType, payload: c.payload },
         userId, pipelineRunId, stepId, inputSource.id, 'IMPORTED'
-      ).catch((err) => console.error('[import-ai] GlobalRecord link failed for "%s":', name, err))
+      ).catch((err) => console.error('[import-ai] GlobalRecord link failed for "%s":', c.name, err))
     }
   } catch {
     // Non-fatal
