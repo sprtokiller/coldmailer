@@ -1,3 +1,5 @@
+import { trackSerpUsage } from '~/server/utils/usage-tracker'
+
 export interface SerpResult {
   title: string
   url: string
@@ -7,16 +9,8 @@ export interface SerpResult {
 // ---------------------------------------------------------------------------
 // Round-robin key rotation
 // ---------------------------------------------------------------------------
-// This counter lives at module scope, so it persists for the entire lifetime
-// of the server process and is shared across all concurrent requests.
-// ---------------------------------------------------------------------------
 let _keyIndex = 0
 
-/**
- * Returns the next SerpAPI key in round-robin order.
- * Reads the key list from Nuxt runtimeConfig (SERPAPI_KEYS env var).
- * Throws if no keys are configured.
- */
 function getNextApiKey(): string {
   const config = useRuntimeConfig()
   const keys: string[] = Array.isArray(config.serpApiKeys) ? config.serpApiKeys : []
@@ -34,7 +28,16 @@ function getNextApiKey(): string {
 // Search function
 // ---------------------------------------------------------------------------
 
-export async function serpSearch(query: string): Promise<SerpResult[]> {
+export interface SerpSearchContext {
+  userId?: string
+  pipelineStepId?: string
+  stepType?: string
+}
+
+export async function serpSearch(
+  query: string,
+  ctx: SerpSearchContext = {},
+): Promise<SerpResult[]> {
   const apiKey = getNextApiKey()
 
   const params = new URLSearchParams({
@@ -51,6 +54,15 @@ export async function serpSearch(query: string): Promise<SerpResult[]> {
 
   const data = await res.json() as {
     organic_results?: Array<{ title?: string; link?: string; snippet?: string }>
+  }
+
+  // Track usage asynchronously — never blocks the search result
+  if (ctx.userId) {
+    trackSerpUsage({
+      userId:         ctx.userId,
+      pipelineStepId: ctx.pipelineStepId,
+      stepType:       ctx.stepType,
+    }).catch(() => {})
   }
 
   return (data.organic_results ?? [])

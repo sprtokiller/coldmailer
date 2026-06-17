@@ -7,6 +7,7 @@ import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
+import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
@@ -49,10 +50,10 @@ export default defineEventHandler(async (event) => {
     await requirePermission(event, stepPerm)
   }
 
-  // Budget enforcement: reject if user has exceeded their limit
-  const budget = await prisma.userBudget.findUnique({ where: { userId: user.id } })
-  if (budget?.limitUsd != null && budget.usedUsd >= budget.limitUsd) {
-    throw createError({ statusCode: 402, statusMessage: `Překročen budget limit ($${budget.limitUsd.toFixed(2)} USD)` })
+  // Budget enforcement: reject if user has exceeded their limit (with lazy period reset)
+  const { over, limitUsd } = await isOverBudget(user.id)
+  if (over) {
+    throw createError({ statusCode: 402, statusMessage: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
   }
 
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
@@ -151,6 +152,8 @@ export default defineEventHandler(async (event) => {
               inputData: piInputData,
               extractPrompt: systemPromptText,
               stepId: step.id,
+              pipelineRunId: runId,
+              userId: user.id,
             })
             let finalOutput: unknown = {}
             let partnerIdCostUsd = 0
@@ -160,49 +163,18 @@ export default defineEventHandler(async (event) => {
               else if (ev.type === 'output') { finalOutput = ev.data; partnerIdCostUsd = ev.totalCostUsd }
             }
             if (partnerIdCostUsd > 0) {
-              await prisma.userBudget.upsert({
-                where: { userId: user.id },
-                create: { userId: user.id, usedUsd: partnerIdCostUsd },
-                update: { usedUsd: { increment: partnerIdCostUsd } },
+              await trackAIUsage({
+                userId:         user.id,
+                model:          'pipeline/partner-identification',
+                costUsd:        partnerIdCostUsd,
+                pipelineStepId: step.id,
+                stepType:       body.stepType,
               })
             }
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date() },
             })
-
-            // GlobalRecord extraction for discovered partners — non-fatal
-            const piItems = (finalOutput as { items?: unknown[] } | null)?.items ?? []
-            const allPartnerIds = piItems.flatMap(item => {
-              const it = item as { partners?: Array<{ partnerId: string }> }
-              return (it.partners ?? []).map(p => p.partnerId)
-            }).filter(Boolean)
-            if (allPartnerIds.length > 0) {
-              const dbPartners = await prisma.partner.findMany({
-                where: { id: { in: allPartnerIds } },
-                select: { id: true, name: true, website: true, description: true, type: true, rawData: true },
-              })
-              const inputSource = await prisma.inputSource.create({
-                data: {
-                  type: 'MINI_DEEP_RESEARCH',
-                  pipelineRunId: runId,
-                  stepId: step.id,
-                  label: `Partner Identification – ${new Date().toLocaleString('cs-CZ')}`,
-                  createdBy: user.id,
-                },
-              })
-              for (const p of dbPartners) {
-                await findOrCreateGlobalRecord(
-                  {
-                    name: p.name,
-                    url: p.website ?? undefined,
-                    type: 'PARTNER',
-                    payload: { name: p.name, website: p.website, description: p.description, type: p.type, ...(p.rawData as Record<string, unknown> ?? {}) },
-                  },
-                  user.id, runId, step.id, inputSource.id, 'GENERATED'
-                ).catch(() => {})
-              }
-            }
           } else if (body.stepType === 'PARTNER_PROFILING') {
             // inputData: { partners: [{ partnerId?, name, frequency?, itemNames? }] }
             const inputPartners = (() => {
@@ -217,32 +189,22 @@ export default defineEventHandler(async (event) => {
               throw new Error('Žádní partneři k prozkoumání. Vyberte je z výsledků Kroku 2.')
             }
 
-            // Enrich each partner with DB details (website, description, type)
+            // Enrich each partner with GlobalRecord details
             const partnerIds = inputPartners.filter(p => p.partnerId).map(p => p.partnerId!)
-            const dbPartners = await prisma.partner.findMany({
+            const globalRecords = await prisma.globalRecord.findMany({
               where: { id: { in: partnerIds } },
-              select: { id: true, name: true, website: true, description: true, type: true },
+              select: { id: true, canonicalName: true, payload: true },
             })
-            const dbMap = new Map(dbPartners.map(p => [p.id, p]))
-
-            // Imported / DB-selected partners reference a GlobalRecord instead of a Partner row
-            const missingIds = partnerIds.filter(id => !dbMap.has(id))
-            if (missingIds.length > 0) {
-              const globalRecords = await prisma.globalRecord.findMany({
-                where: { id: { in: missingIds } },
-                select: { id: true, canonicalName: true, payload: true },
-              })
-              for (const gr of globalRecords) {
-                const p = gr.payload as Record<string, unknown>
-                dbMap.set(gr.id, {
-                  id: gr.id,
-                  name: gr.canonicalName,
-                  website: (p.website ?? p.url ?? null) as string | null,
-                  description: (p.description ?? null) as string | null,
-                  type: (p.type ?? null) as string | null,
-                })
-              }
-            }
+            const dbMap = new Map(globalRecords.map(gr => {
+              const p = gr.payload as Record<string, unknown>
+              return [gr.id, {
+                id: gr.id,
+                name: gr.canonicalName,
+                website: (p.website ?? p.url ?? null) as string | null,
+                description: (p.description ?? null) as string | null,
+                type: (p.type ?? null) as string | null,
+              }] as const
+            }))
 
             const allProfiles: unknown[] = []
 
@@ -275,7 +237,7 @@ export default defineEventHandler(async (event) => {
                   partnerOutput += chunk
                   write({ chunk })
                 }
-                await trackCost(getCost, user.id)
+                await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
                 const parsed = parseAIOutput(partnerOutput)
                 const profile = {
                   partnerId: ip.partnerId,
@@ -342,7 +304,7 @@ export default defineEventHandler(async (event) => {
                   alignmentOutput += chunk
                   write({ chunk })
                 }
-                await trackCost(getCost, user.id)
+                await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
                 const parsed = parseAIOutput(alignmentOutput)
                 const alignment = {
                   partnerId: ip.partnerId,
@@ -416,7 +378,7 @@ export default defineEventHandler(async (event) => {
                   emailOutput += chunk
                   write({ chunk })
                 }
-                await trackCost(getCost, user.id)
+                await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
                 const parsed = parseAIOutput(emailOutput)
                 const emailData = {
                   partnerName: String(ip.name ?? ''),
@@ -450,7 +412,7 @@ export default defineEventHandler(async (event) => {
               fullOutput += chunk
               write({ chunk })
             }
-            await trackCost(getCost, user.id)
+            await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
             const outputData = parseAIOutput(fullOutput)
             await prisma.pipelineStep.update({
               where: { id: step.id },
@@ -499,7 +461,7 @@ export default defineEventHandler(async (event) => {
               fullOutput += chunk
               write({ chunk })
             }
-            await trackCost(getCost, user.id)
+            await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
             const outputData = parseAIOutput(fullOutput)
             await prisma.pipelineStep.update({
               where: { id: step.id },
@@ -529,18 +491,16 @@ export default defineEventHandler(async (event) => {
   return sendStream(event, stream)
 })
 
-async function trackCost(getCost: () => Promise<number>, userId: string): Promise<void> {
+async function trackCost(
+  getCost: () => Promise<number>,
+  userId: string,
+  opts: { model: string; pipelineStepId: string; stepType: string },
+): Promise<void> {
   try {
     const costUsd = await getCost()
-    if (costUsd > 0) {
-      await prisma.userBudget.upsert({
-        where: { userId },
-        create: { userId, usedUsd: costUsd },
-        update: { usedUsd: { increment: costUsd } },
-      })
-    }
+    await trackAIUsage({ userId, costUsd, ...opts })
   } catch {
-    // Non-fatal: cost tracking failure should not break the pipeline
+    // Non-fatal
   }
 }
 

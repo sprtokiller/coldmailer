@@ -2,10 +2,10 @@ import OpenAI from 'openai'
 import { serpSearch } from './serpapi'
 import { fetchPages } from './page-fetcher'
 import { prisma } from './prisma'
+import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { OPENROUTER, MODELS } from '~/config/pipeline'
 
 const PIPELINE_MODEL = MODELS.CLAUDE_SONNET
-const DEDUP_MODEL    = MODELS.CLAUDE_HAIKU
 
 function createClient() {
   return new OpenAI({
@@ -71,12 +71,14 @@ export interface PartnerIdOptions {
   inputData: Record<string, unknown>
   extractPrompt: string
   stepId: string
+  pipelineRunId: string
+  userId: string
 }
 
 export async function* runPartnerIdentification(
   opts: PartnerIdOptions,
 ): AsyncGenerator<PartnerIdEvent> {
-  const { inputData, extractPrompt, stepId } = opts
+  const { inputData, extractPrompt, stepId, pipelineRunId, userId } = opts
   const client = createClient()
 
   const found = findItemArray(inputData)
@@ -86,7 +88,15 @@ export async function* runPartnerIdentification(
 
   yield { type: 'progress', text: `✓ Nalezeno ${items.length} položek. Spouštím pipeline…\n` }
 
-  let existingPartners = await prisma.partner.findMany({ select: { id: true, name: true, website: true } })
+  const inputSource = await prisma.inputSource.create({
+    data: {
+      type: 'MINI_DEEP_RESEARCH',
+      pipelineRunId,
+      stepId,
+      label: `Partner Identification – ${new Date().toLocaleString('cs-CZ')}`,
+      createdBy: userId,
+    },
+  })
   const allResults: unknown[] = []
   let totalCostUsd = 0
 
@@ -103,8 +113,12 @@ export async function* runPartnerIdentification(
       yield { type: 'progress', text: `  ✓ search term: "${searchTerm}"\n` }
 
       // b) SerpAPI
-      yield { type: 'progress', text: `  ⟳ Hledám v Google…\n` }
-      const serpResults = await serpSearch(searchTerm)
+      yield { type: 'progress', text: `  ⧳ Hledám v Google…\n` }
+      const serpResults = await serpSearch(searchTerm, {
+        userId,
+        pipelineStepId: stepId,
+        stepType: 'PARTNER_IDENTIFICATION',
+      })
       yield { type: 'progress', text: `  ✓ ${serpResults.length} výsledků\n` }
 
       if (serpResults.length === 0) {
@@ -143,58 +157,28 @@ export async function* runPartnerIdentification(
       }
       yield { type: 'progress', text: `  ✓ ${foundPartners.length} potenciálních partnerů\n` }
 
-      // f-g) Dedup + save to DB
+      // f-g) Dedup + save to GlobalRecord
       let newCount = 0; let existingCount = 0
       const savedPartners: Array<{ partnerId: string; name: string; isNew: boolean }> = []
-      // Per-item set: prevents the same partner being linked multiple times to the
-      // same item when several scraped pages all mention that partner (e.g. APPLIFTING 3×).
-      const linkedPartnerIds = new Set<string>()
+      const linkedIds = new Set<string>()
 
       for (const fp of foundPartners) {
         if (!fp.name?.trim()) continue
-        let partnerId: string; let isNew = true
-
-        // 1. Fast exact match (name or website) — no AI needed
-        const exact = existingPartners.find(ep =>
-          ep.name.toLowerCase() === fp.name.toLowerCase() ||
-          (fp.website && ep.website?.toLowerCase() === fp.website.toLowerCase()),
-        )
-        if (exact) {
-          partnerId = exact.id; isNew = false
-        } else {
-          // 2. AI fuzzy dedup via cheap Haiku model
-          try {
-            const res = await client.chat.completions.create({
-              model: DEDUP_MODEL,
-              messages: [
-                { role: 'system', content: 'Check if the new partner already exists in the list. Return JSON only: {"exists":false} or {"exists":true,"existingId":"<id>"}' },
-                { role: 'user', content: `New: ${JSON.stringify(fp)}\n\nExisting: ${JSON.stringify(existingPartners.slice(0, 80))}` },
-              ],
-              max_tokens: 60,
-            })
-            if (res.id) totalCostUsd += await fetchGenerationCost(res.id)
-            const dedup = parseJson(res.choices[0]?.message?.content ?? '{"exists":false}') as { exists: boolean; existingId?: string }
-            if (dedup.exists && dedup.existingId) { partnerId = dedup.existingId; isNew = false; }
-            else throw new Error('new')
-          } catch {
-            const created = await prisma.partner.create({
-              data: { name: fp.name, website: fp.website ?? null, description: fp.description ?? null, type: fp.type ?? null, rawData: fp as never },
-            })
-            partnerId = created.id
-            existingPartners = [...existingPartners, { id: partnerId, name: fp.name, website: fp.website ?? null }]
-          }
-        }
-
-        // Skip if this partner was already linked to this item in this pass
-        // (same partner extracted from multiple pages of the same search).
-        if (linkedPartnerIds.has(partnerId)) continue
-        linkedPartnerIds.add(partnerId)
-
-        await prisma.candidatePartner.create({
-          data: { itemName, itemUrl: String(item.url ?? ''), partnerId, pipelineStepId: stepId },
-        })
-        if (isNew) newCount++; else existingCount++
-        savedPartners.push({ partnerId, name: fp.name, isNew })
+        try {
+          const { globalRecordId, wasCreated } = await findOrCreateGlobalRecord(
+            {
+              name: fp.name,
+              url: fp.website ?? undefined,
+              type: 'PARTNER',
+              payload: { name: fp.name, website: fp.website ?? null, description: fp.description ?? null, type: fp.type ?? null },
+            },
+            userId, pipelineRunId, stepId, inputSource.id, 'GENERATED'
+          )
+          if (linkedIds.has(globalRecordId)) continue
+          linkedIds.add(globalRecordId)
+          if (wasCreated) newCount++; else existingCount++
+          savedPartners.push({ partnerId: globalRecordId, name: fp.name, isNew: wasCreated })
+        } catch {}
       }
 
       yield { type: 'progress', text: `  ✓ Uloženo: ${newCount} nových, ${existingCount} existujících\n` }

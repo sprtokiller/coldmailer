@@ -37,6 +37,7 @@ model User {
   partnerAssignments   PartnerAssignment[]
   partnerMailEvents    PartnerMailEvent[]
   partnerNotes         PartnerNote[]
+  usageEvents          UsageEvent[]
 }
 
 model Role {
@@ -68,11 +69,20 @@ model UserPermission {
   @@unique([userId, key])
 }
 
+enum BudgetResetPeriod {
+  never
+  daily
+  weekly
+  monthly
+}
+
 model UserBudget {
-  userId   String @id
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  limitUsd Float?
-  usedUsd  Float  @default(0)
+  userId          String            @id
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  limitUsd        Float?
+  usedUsd         Float             @default(0)
+  resetPeriod     BudgetResetPeriod @default(never)
+  periodStartAt   DateTime?         // start of the current billing window
 }
 
 model Signature {
@@ -193,6 +203,7 @@ model PipelineStep {
   completedAt       DateTime?
   inputSources      InputSource[]
   recordRefs        PipelineRecordRef[]
+  usageEvents       UsageEvent[]
 }
 
 model Partner {
@@ -270,6 +281,41 @@ model GlobalRecord {
   fulfillment     PartnerFulfillment?
 
   @@index([normalizedName])
+}
+
+// ── Usage tracking ────────────────────────────────────────────────────────────
+
+enum UsageEventType {
+  ai_completion
+  serp_search
+}
+
+model UsageEvent {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+
+  eventType      UsageEventType
+  model          String?         // e.g. "anthropic/claude-sonnet-4.6" or "serpapi"
+  costUsd        Float           @default(0)
+  generationId   String?         // OpenRouter generation ID for AI calls
+
+  pipelineStepId String?
+  step           PipelineStep?   @relation(fields: [pipelineStepId], references: [id], onDelete: SetNull)
+  stepType       String?         // e.g. "MARKET_SCANNING"
+
+  @@index([userId, createdAt])
+  @@index([userId, eventType])
+}
+
+// ── System-wide configuration ─────────────────────────────────────────────────
+
+model SystemConfig {
+  key       String   @id        // e.g. "budget.defaultLimitUsd"
+  value     Json                // arbitrary JSON value
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
 
 model InputSource {

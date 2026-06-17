@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
+const router = useRouter()
 const id = route.params.id as string
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -36,7 +37,14 @@ const { user: me } = useUserSession()
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 
-const activeTab = ref<'communication' | 'notes' | 'fulfillment'>('communication')
+type PartnerTab = 'communication' | 'notes' | 'fulfillment'
+const VALID_PARTNER_TABS: PartnerTab[] = ['communication', 'notes', 'fulfillment']
+const initialTab = VALID_PARTNER_TABS.includes(route.query.tab as PartnerTab) ? (route.query.tab as PartnerTab) : 'communication'
+const activeTab = ref<PartnerTab>(initialTab)
+
+watch(activeTab, (newTab) => {
+  router.replace({ query: { ...route.query, tab: newTab } })
+})
 const showContactsPanel = ref(false)
 const showProfileModal = ref(false)
 const expandedEvents = ref(new Set<string>())

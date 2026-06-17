@@ -1,6 +1,9 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
+const route = useRoute()
+const router = useRouter()
+
 const TABS = [
   { key: 'COMPETITION',  label: 'Soutěže' },
   { key: 'PARTNER',      label: 'Partneři' },
@@ -48,7 +51,9 @@ interface GlobalRecord {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const activeTab = ref<TabKey>('COMPETITION')
+const VALID_TABS = TABS.map(t => t.key) as unknown as TabKey[]
+const initialTab = VALID_TABS.includes(route.query.tab as TabKey) ? (route.query.tab as TabKey) : 'COMPETITION'
+const activeTab = ref<TabKey>(initialTab)
 const records   = ref<GlobalRecord[]>([])
 const loading   = ref(false)
 const offset    = ref(0)
@@ -67,7 +72,11 @@ async function fetchRecords(reset = false) {
   }
 }
 
-watch(activeTab, () => { resetFilters(); fetchRecords(true) })
+watch(activeTab, (newTab) => {
+  router.replace({ query: { ...route.query, tab: newTab } })
+  resetFilters()
+  fetchRecords(true)
+})
 onMounted(() => fetchRecords(true))
 
 const hasMore = computed(() => records.value.length > 0 && records.value.length === offset.value + limit)
