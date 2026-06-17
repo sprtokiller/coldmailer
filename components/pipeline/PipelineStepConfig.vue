@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { pipelineRunKey, type StepDefinition, type usePipelineRunPage } from '~/composables/usePipelineRunPage'
-import type { Step3Candidate } from '~/composables/pipeline/types'
 
 const props = defineProps<{
   step: StepDefinition
@@ -46,21 +45,6 @@ function onSearchBlur() {
   setTimeout(() => { showContextDropdown.value = false }, 150)
 }
 
-// ── Signature selector (Step 6) ───────────────────────────────────────────────
-const sigs = computed(() => Array.isArray(pipeline.signatures) ? pipeline.signatures : [])
-const selectedSignatureId = ref(
-  sigs.value.find(s => s.isDefault)?.id ?? '',
-)
-
-function onSignatureChange(id: string) {
-  selectedSignatureId.value = id
-  pipeline.applySignature(id)
-}
-
-// ── Partner provenance modal (Step 3) ─────────────────────────────────────────
-const provenanceCandidate = ref<Step3Candidate | null>(null)
-const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.itemNames ?? [])])
-
 // ── Step execution with local validation ─────────────────────────────────────
 const submitAttempted = ref(false)
 
@@ -74,6 +58,23 @@ const saveModalOpen = ref(false)
 const saveModalName = ref('')
 const savingToLibrary = ref(false)
 const saveModalInput = ref<HTMLInputElement | null>(null)
+
+function openSaveModal() {
+  saveModalName.value = ''
+  saveModalOpen.value = true
+  nextTick(() => saveModalInput.value?.focus())
+}
+
+async function confirmSaveToLibrary() {
+  if (!saveModalName.value.trim() || savingToLibrary.value) return
+  savingToLibrary.value = true
+  try {
+    await pipeline.saveContextPartToLibrary(props.step.key, saveModalName.value.trim())
+    saveModalOpen.value = false
+  } finally {
+    savingToLibrary.value = false
+  }
+}
 
 // ── Edit context part modal ───────────────────────────────────────────────────
 const editModalOpen = ref(false)
@@ -106,27 +107,11 @@ async function confirmEditContextPart() {
     savingEdit.value = false
   }
 }
-
-function openSaveModal() {
-  saveModalName.value = ''
-  saveModalOpen.value = true
-  nextTick(() => saveModalInput.value?.focus())
-}
-
-async function confirmSaveToLibrary() {
-  if (!saveModalName.value.trim() || savingToLibrary.value) return
-  savingToLibrary.value = true
-  try {
-    await pipeline.saveContextPartToLibrary(props.step.key, saveModalName.value.trim())
-    saveModalOpen.value = false
-  } finally {
-    savingToLibrary.value = false
-  }
-}
 </script>
 
 <template>
   <div>
+    <!-- ── System prompt selector ─────────────────────────────────────────── -->
     <div>
       <label class="block text-xs font-medium text-gray-500 mb-1">Systémový prompt</label>
       <div class="flex items-center gap-2">
@@ -205,10 +190,10 @@ async function confirmSaveToLibrary() {
       </div>
     </div>
 
+    <!-- ── Context parts ──────────────────────────────────────────────────── -->
     <div class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">Kontextové části</label>
 
-      <!-- Selected chips -->
       <div v-if="selectedContextParts.length" class="flex flex-wrap gap-1 mb-2">
         <span
           v-for="cp in selectedContextParts"
@@ -234,7 +219,6 @@ async function confirmSaveToLibrary() {
         </span>
       </div>
 
-      <!-- Combobox -->
       <div class="relative">
         <input
           v-model="contextSearch"
@@ -268,7 +252,6 @@ async function confirmSaveToLibrary() {
         </div>
       </div>
 
-      <!-- Manual context -->
       <div class="mt-3">
         <div class="flex items-center justify-between mb-1">
           <label class="text-xs font-medium text-gray-500">
@@ -296,7 +279,7 @@ async function confirmSaveToLibrary() {
       </div>
     </div>
 
-    <!-- Save-to-library modal -->
+    <!-- ── Modals ─────────────────────────────────────────────────────────── -->
     <Teleport to="body">
       <div
         v-if="saveModalOpen"
@@ -317,11 +300,7 @@ async function confirmSaveToLibrary() {
             @keydown.escape="saveModalOpen = false"
           />
           <div class="flex gap-2 mt-4 justify-end">
-            <button
-              type="button"
-              class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2"
-              @click="saveModalOpen = false"
-            >Zrušit</button>
+            <button type="button" class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2" @click="saveModalOpen = false">Zrušit</button>
             <button
               type="button"
               class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -333,7 +312,6 @@ async function confirmSaveToLibrary() {
       </div>
     </Teleport>
 
-    <!-- Edit context part modal -->
     <Teleport to="body">
       <div
         v-if="editModalOpen"
@@ -361,11 +339,7 @@ async function confirmSaveToLibrary() {
             @keydown.escape="editModalOpen = false"
           />
           <div class="flex gap-2 mt-4 justify-end">
-            <button
-              type="button"
-              class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2"
-              @click="editModalOpen = false"
-            >Zrušit</button>
+            <button type="button" class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2" @click="editModalOpen = false">Zrušit</button>
             <button
               type="button"
               class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -377,200 +351,17 @@ async function confirmSaveToLibrary() {
       </div>
     </Teleport>
 
-    <!-- Partner provenance modal -->
-    <Teleport to="body">
-      <div
-        v-if="provenanceCandidate"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-        @click.self="provenanceCandidate = null"
-      >
-        <div class="bg-white rounded-2xl shadow-2xl p-6 w-96 max-w-[calc(100vw-2rem)]">
-          <h3 class="font-semibold text-gray-800 mb-1">{{ provenanceCandidate.name }}</h3>
-          <p class="text-xs text-gray-400 mb-4">Kde byl partner nalezen</p>
-          <div class="text-xs text-gray-600 space-y-1.5 max-h-64 overflow-y-auto">
-            <p v-if="provenanceCandidate.source === 'direct'">Přímo importováno do kroku 3 — nenalezen v Kroku 2.</p>
-            <p v-else-if="provenanceCandidate.source === 'imported'">↑ Přidán importem do Kroku 2.</p>
-            <p v-else-if="provenanceCandidate.source === 'db'">⊕ Vybrán z globální databáze.</p>
-            <template v-if="provenanceSources.length > 0">
-              <p class="font-medium text-gray-500">Nalezen {{ provenanceCandidate.frequency }}× v:</p>
-              <ul class="list-disc pl-4 space-y-0.5">
-                <li v-for="src in provenanceSources" :key="src">{{ src }}</li>
-              </ul>
-            </template>
-            <p v-else-if="provenanceCandidate.source === 'step2'" class="text-gray-400">Bez záznamu o zdroji.</p>
-          </div>
-          <div class="flex justify-end mt-4">
-            <button
-              type="button"
-              class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2"
-              @click="provenanceCandidate = null"
-            >Zavřít</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- ── Step-specific config sections ───────────────────────────────────── -->
+    <ValueAlignmentConfig
+      v-if="step.key === 'VALUE_ALIGNMENT'"
+      :step="step"
+      :submit-attempted="submitAttempted"
+    />
 
-    <div v-if="step.key === 'VALUE_ALIGNMENT'" class="mt-4">
-      <label class="block text-xs font-medium text-gray-500 mb-1">
-        Prodejní argument
-        <span class="text-danger ml-1">*</span>
-      </label>
-      <select
-        v-model="pipeline.getConfig(step.key).sellingPointId"
-        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-colors"
-        :class="submitAttempted && !pipeline.getConfig(step.key).sellingPointId
-          ? 'border-danger/50 focus:ring-danger/30 bg-danger/5'
-          : 'border-gray-200 focus:ring-primary/30'"
-      >
-        <option value="">— vyberte argument —</option>
-        <option v-for="sp in pipeline.sellingPoints" :key="sp.id" :value="sp.id">
-          {{ sp.name }}
-        </option>
-      </select>
-      <p
-        class="mt-1 text-xs text-danger"
-        :class="{ invisible: !(submitAttempted && !pipeline.getConfig(step.key).sellingPointId) }"
-      >
-        Prodejní argument je povinný – bez něj AI nezná vaše argumenty a analýza shody nedává smysl.
-      </p>
-    </div>
-
-    <div v-if="step.key === 'VALUE_ALIGNMENT'" class="mt-4">
-      <div v-if="pipeline.step4Partners().length === 0" class="text-xs text-gray-400 py-2">
-        Nejprve spusťte Krok 3 (Partner Profiling), abyste získali kandidáty.
-      </div>
-      <template v-else>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-medium text-gray-500">
-            Partneři z Kroku 3
-            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step4SelectedCount() }} / {{ pipeline.step4Partners().length }} vybráno)</span>
-          </label>
-          <div class="flex items-center gap-3">
-            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step4SelectAll()">Vše</button>
-            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step4SelectUnprocessed()">Neanalyzované</button>
-            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step4DeselectAll()">Žádné</button>
-          </div>
-        </div>
-        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
-          <div class="grid grid-cols-[1.5rem_1fr_6rem_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-            <span></span><span>Partner</span><span>Odvětví</span><span>Web</span><span></span>
-          </div>
-          <label
-            v-for="p in pipeline.step4Partners()"
-            :key="p.name"
-            class="grid grid-cols-[1.5rem_1fr_6rem_4rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
-            :class="pipeline.step4SelectedIds[p.name] ? '' : 'opacity-50'"
-          >
-            <input type="checkbox" v-model="pipeline.step4SelectedIds[p.name]" class="accent-primary" />
-            <span class="font-medium text-gray-700 truncate flex items-center gap-1" :title="p.name">
-              <span v-if="pipeline.step4IsPartnerProcessed(p)" class="shrink-0 text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded font-semibold">✓ Hotovo</span>
-              {{ p.name }}
-            </span>
-            <span class="text-gray-400 truncate text-[10px]" :title="String(p.industry ?? '')">{{ p.industry ?? '–' }}</span>
-            <a
-              v-if="p.website"
-              :href="p.website"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-primary text-[10px] hover:underline truncate"
-              @click.stop
-            >Web ↗</a>
-            <span v-else class="text-gray-300 text-[10px]">–</span>
-            <button
-              type="button"
-              class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
-              :title="pipeline.copiedPromptKey === step.key + '_' + p.name ? 'Zkopírováno!' : 'Kopírovat prompt pro ' + p.name"
-              @click.stop.prevent="pipeline.copyDeepResearchPrompt(step.key + '_' + p.name, pipeline.step4PartnerCopyPrompt(step.key, p.name))"
-            >
-              <svg v-if="pipeline.copiedPromptKey !== step.key + '_' + p.name" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <svg v-else class="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-            </button>
-          </label>
-        </div>
-      </template>
-    </div>
-
-    <div v-if="step.key === 'PARTNER_PROFILING'" class="mt-4">
-      <div v-if="pipeline.step3Candidates().length === 0" class="text-xs text-gray-400 py-2">
-        Nejprve spusťte Krok 2 (Partner Identification), abyste získali kandidáty.
-      </div>
-      <template v-else>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-medium text-gray-500">
-            Kandidáti z Kroku 2
-            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step3SelectedCount() }} / {{ pipeline.step3FilteredCandidates().length }} vybráno)</span>
-          </label>
-          <div class="flex items-center gap-3">
-            <label class="flex items-center gap-1.5 text-xs text-gray-500">
-              Min. výskytů:
-              <input
-                v-model.number="pipeline.step3FreqFilter"
-                type="number"
-                min="1"
-                :max="pipeline.step3Candidates()[0]?.frequency ?? 1"
-                class="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
-            </label>
-            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step3SelectAll()">Vše</button>
-            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step3SelectUnprocessed()">Nevypracované</button>
-            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step3DeselectAll()">Žádné</button>
-          </div>
-        </div>
-        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
-          <div class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-            <span></span><span>Partner</span><span class="text-center">Výskytů</span><span></span><span></span>
-          </div>
-          <label
-            v-for="c in pipeline.step3FilteredCandidates()"
-            :key="c.partnerId"
-            class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
-            :class="[
-              pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50',
-              c.source === 'direct' ? 'bg-amber-50/40' : '',
-            ]"
-          >
-            <input type="checkbox" v-model="pipeline.step3SelectedIds[c.partnerId]" class="accent-primary" />
-            <span class="font-medium text-gray-700 truncate flex items-center gap-1" :title="c.name">
-              <span v-if="pipeline.step3IsCandidateProcessed(c)" class="shrink-0 text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded font-semibold">✓ Hotovo</span>
-              <span v-else-if="c.source === 'direct'" class="shrink-0 text-[9px] bg-amber-100 text-amber-600 px-1 py-0.5 rounded font-semibold">přímý import</span>
-              {{ c.name }}
-            </span>
-            <span
-              class="text-center font-semibold"
-              :class="c.source === 'direct' ? 'text-amber-400' : c.frequency > 1 ? 'text-primary' : 'text-gray-400'"
-            >{{ c.source === 'direct' ? '–' : c.frequency + '×' }}</span>
-            <button
-              type="button"
-              class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
-              :title="'Zobrazit zdroje pro ' + c.name"
-              @click.stop.prevent="provenanceCandidate = c"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
-              :title="pipeline.copiedPromptKey === step.key + '_' + c.partnerId ? 'Zkopírováno!' : 'Kopírovat prompt pro ' + c.name"
-              @click.stop.prevent="pipeline.copyDeepResearchPrompt(step.key + '_' + c.partnerId, pipeline.step3PartnerCopyPrompt(step.key, c))"
-            >
-              <svg v-if="pipeline.copiedPromptKey !== step.key + '_' + c.partnerId" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              <svg v-else class="w-3.5 h-3.5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-            </button>
-          </label>
-        </div>
-      </template>
-    </div>
+    <PartnerProfilingConfig
+      v-if="step.key === 'PARTNER_PROFILING'"
+      :step="step"
+    />
 
     <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
@@ -587,145 +378,18 @@ async function confirmSaveToLibrary() {
       />
     </div>
 
-    <!-- ── Step 5: OUTREACH_PREPARATION ──────────────────────────────────────── -->
-    <div v-if="step.key === 'OUTREACH_PREPARATION'" class="mt-4 space-y-4">
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">
-          E-mailová šablona
-          <span class="text-danger ml-1">*</span>
-        </label>
-        <select
-          v-model="pipeline.getConfig(step.key).emailDraftId"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-colors"
-          :class="submitAttempted && !pipeline.getConfig(step.key).emailDraftId
-            ? 'border-danger/50 focus:ring-danger/30 bg-danger/5'
-            : 'border-gray-200 focus:ring-primary/30'"
-        >
-          <option value="">— vyberte šablonu z knihovny —</option>
-          <option v-for="d in pipeline.emailDrafts" :key="d.id" :value="d.id">
-            {{ d.name }} · {{ d.subject }}
-          </option>
-        </select>
-        <p
-          class="mt-1 text-xs text-danger"
-          :class="{ invisible: !(submitAttempted && !pipeline.getConfig(step.key).emailDraftId) }"
-        >
-          E-mailová šablona je povinná – AI ji použije jako základ pro personalizaci.
-        </p>
-      </div>
+    <OutreachPrepConfig
+      v-if="step.key === 'OUTREACH_PREPARATION'"
+      :step="step"
+      :submit-attempted="submitAttempted"
+    />
 
-      <div v-if="pipeline.step5Alignments().length === 0" class="text-xs text-gray-400 py-2">
-        Nejprve spusťte Krok 4 (Value Alignment), abyste získali partnery pro oslovení.
-      </div>
-      <template v-else>
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-medium text-gray-500">
-            Partneři z Kroku 4
-            <span class="ml-1 font-normal text-gray-400">({{ pipeline.step5SelectedCount() }} / {{ pipeline.step5Alignments().length }} vybráno)</span>
-          </label>
-          <div class="flex items-center gap-3">
-            <button type="button" class="text-xs text-primary hover:underline" @click="pipeline.step5SelectAll()">Vše</button>
-            <button type="button" class="text-xs text-amber-500 hover:underline" @click="pipeline.step5SelectUnprocessed()">Nevypracované</button>
-            <button type="button" class="text-xs text-gray-400 hover:underline" @click="pipeline.step5DeselectAll()">Žádné</button>
-          </div>
-        </div>
-        <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
-          <div class="grid grid-cols-[1.5rem_1fr_10rem_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-            <span></span><span>Partner</span><span>Celková shoda</span><span>Top argument</span>
-          </div>
-          <label
-            v-for="a in pipeline.step5Alignments()"
-            :key="String(a.name ?? '')"
-            class="grid grid-cols-[1.5rem_1fr_10rem_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
-            :class="pipeline.step5SelectedIds[String(a.name ?? '')] ? '' : 'opacity-50'"
-          >
-            <input type="checkbox" v-model="pipeline.step5SelectedIds[String(a.name ?? '')]" class="accent-primary" />
-            <span class="font-medium text-gray-700 truncate" :title="String(a.name ?? '')">{{ a.name }}</span>
-            <span
-              class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full w-fit"
-              :class="a.overallFitScore === 'Vysoký' ? 'text-success bg-success/10' : a.overallFitScore === 'Střední' ? 'text-amber-600 bg-amber-50' : 'text-gray-400 bg-gray-100'"
-            >{{ a.overallFitScore ?? '–' }}</span>
-            <span class="text-gray-400 truncate text-[10px]">
-              {{ Array.isArray(a.top3Arguments) && (a.top3Arguments as Record<string, unknown>[]).length
-                ? String((a.top3Arguments as Record<string, unknown>[])[0].argumentId ?? '')
-                : '–' }}
-            </span>
-          </label>
-        </div>
-      </template>
-    </div>
+    <OutreachExecConfig
+      v-if="step.key === 'OUTREACH_EXECUTION'"
+      :step="step"
+    />
 
-    <!-- ── Step 6: OUTREACH_EXECUTION ─────────────────────────────────────────── -->
-    <div v-if="step.key === 'OUTREACH_EXECUTION'" class="mt-4 space-y-4">
-      <div v-if="pipeline.outreachEmails().length === 0" class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-        Nejprve spusťte Krok 5 (Outreach Preparation) pro vygenerování e-mailů.
-      </div>
-      <template v-else>
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1">
-            Vyberte partnera k odeslání
-            <span class="text-danger ml-1">*</span>
-          </label>
-          <select
-            v-model="pipeline.step6SelectedPartnerName"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            @change="pipeline.step6SelectedPartnerName && pipeline.initStep6Preview(pipeline.step6SelectedPartnerName)"
-          >
-            <option value="">— vyberte partnera —</option>
-            <option
-              v-for="email in pipeline.outreachEmails().filter(e => !e.error)"
-              :key="String(email.partnerName ?? '')"
-              :value="String(email.partnerName ?? '')"
-            >
-              {{ email.partnerName }}
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1">Podpis</label>
-          <select
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            :value="selectedSignatureId"
-            @change="onSignatureChange(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">— bez podpisu —</option>
-            <option v-for="sig in sigs" :key="sig.id" :value="sig.id">
-              {{ sig.name }}{{ sig.isDefault ? ' (výchozí)' : '' }}
-            </option>
-          </select>
-        </div>
-
-        <template v-if="pipeline.step6SelectedPartnerName">
-          <div class="space-y-3 rounded-xl border border-primary/20 bg-primary/3 p-4">
-            <p class="text-xs font-semibold text-primary mb-1">Náhled e-mailu · upravte před odesláním</p>
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Příjemce (To)</label>
-              <input
-                v-model="pipeline.step6PreviewTo"
-                type="email"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="jmeno@firma.cz"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Předmět</label>
-              <input
-                v-model="pipeline.step6PreviewSubject"
-                type="text"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu</label>
-              <RichTextEditor v-model="pipeline.step6PreviewBody" />
-            </div>
-            <p class="text-[11px] text-gray-400">Kliknutím na „Spustit krok" vytvoříte draft přímo v Gmailu s výše uvedenými daty.</p>
-          </div>
-        </template>
-      </template>
-    </div>
-
+    <!-- ── Execute button ──────────────────────────────────────────────────── -->
     <div class="flex items-center gap-2 flex-wrap mt-4">
       <button
         :disabled="pipeline.executingStep !== null || (step.key === 'OUTREACH_EXECUTION' && (!pipeline.step6SelectedPartnerName || !pipeline.step6PreviewTo || !pipeline.step6PreviewSubject || !pipeline.step6PreviewBody))"
@@ -753,88 +417,9 @@ async function confirmSaveToLibrary() {
         </svg>
         {{ pipeline.copiedPromptKey === step.key ? 'Zkopírováno!' : 'Kopírovat prompt' }}
       </button>
-
     </div>
 
-    <div v-if="pipeline.executingStep === step.key && pipeline.streamOutputs[step.key]" class="mt-4">
-      <p class="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block" />
-        Živý výstup
-      </p>
-      <pre class="bg-gray-50 border border-primary/20 rounded-lg p-3 text-xs overflow-x-auto max-h-80 whitespace-pre-wrap">{{ pipeline.streamOutputs[step.key] }}</pre>
-    </div>
-
-    <div v-if="step.key === 'PARTNER_PROFILING' && pipeline.profilingProgress[step.key]?.length" class="mt-2">
-      <p class="text-xs font-medium text-gray-500 mb-2">Průběh profilování</p>
-      <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[2rem_1fr_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Partner</span><span class="text-center">Status</span>
-        </div>
-        <div
-          v-for="pi in pipeline.profilingProgress[step.key]"
-          :key="pi.index"
-          class="grid grid-cols-[2rem_1fr_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
-          :class="pi.status === 'error' ? 'bg-red-50' : pi.status === 'done' ? 'bg-white' : 'bg-blue-50/40'"
-        >
-          <span class="text-gray-400">{{ pi.index }}</span>
-          <span class="truncate font-medium text-gray-700" :title="pi.name">{{ pi.name }}</span>
-          <span class="text-center">
-            <span v-if="pi.status === 'processing'" class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span v-else-if="pi.status === 'done'" class="text-success">✓</span>
-            <span v-else class="text-danger text-[10px]" :title="pi.error">✗ {{ pi.error?.slice(0, 30) }}</span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="step.key === 'VALUE_ALIGNMENT' && pipeline.alignmentProgress[step.key]?.length" class="mt-2">
-      <p class="text-xs font-medium text-gray-500 mb-2">Průběh analýzy</p>
-      <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[2rem_1fr_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Partner</span><span class="text-center">Status</span>
-        </div>
-        <div
-          v-for="ai in pipeline.alignmentProgress[step.key]"
-          :key="ai.index"
-          class="grid grid-cols-[2rem_1fr_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
-          :class="ai.status === 'error' ? 'bg-red-50' : ai.status === 'done' ? 'bg-white' : 'bg-blue-50/40'"
-        >
-          <span class="text-gray-400">{{ ai.index }}</span>
-          <span class="truncate font-medium text-gray-700" :title="ai.name">{{ ai.name }}</span>
-          <span class="text-center">
-            <span v-if="ai.status === 'processing'" class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span v-else-if="ai.status === 'done'" class="text-success">✓</span>
-            <span v-else class="text-danger text-[10px]" :title="ai.error">✗ {{ ai.error?.slice(0, 30) }}</span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="step.key === 'PARTNER_IDENTIFICATION' && pipeline.partnerProgress[step.key]?.length" class="mt-2">
-      <p class="text-xs font-medium text-gray-500 mb-2">Průběh položek</p>
-      <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>#</span><span>Položka</span><span>Hledaný výraz</span><span class="text-center">Výsledků</span><span class="text-center">Stránek</span><span class="text-center">Partnerů</span><span class="text-center">Stav</span>
-        </div>
-        <div
-          v-for="pi in pipeline.partnerProgress[step.key]"
-          :key="pi.index"
-          class="grid grid-cols-[2rem_1fr_5rem_4rem_4rem_4rem_5rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center"
-          :class="pi.status === 'error' ? 'bg-red-50' : pi.status === 'done' ? 'bg-white' : 'bg-blue-50/40'"
-        >
-          <span class="text-gray-400">{{ pi.index }}</span>
-          <span class="truncate font-medium text-gray-700" :title="pi.itemName">{{ pi.itemName }}</span>
-          <span class="truncate text-gray-400 text-[10px]" :title="pi.searchTerm">{{ pi.searchTerm ?? '…' }}</span>
-          <span class="text-center text-gray-500">{{ pi.serpResults ?? '–' }}</span>
-          <span class="text-center text-gray-500">{{ pi.pagesLoaded ?? '–' }}</span>
-          <span class="text-center font-semibold" :class="pi.partnersFound ? 'text-success' : 'text-gray-400'">{{ pi.partnersFound ?? '–' }}</span>
-          <span class="text-center">
-            <span v-if="pi.status === 'processing'" class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span v-else-if="pi.status === 'done'" class="text-success">✓</span>
-            <span v-else class="text-danger" :title="pi.error">✗</span>
-          </span>
-        </div>
-      </div>
-    </div>
+    <!-- ── Progress display ────────────────────────────────────────────────── -->
+    <StepProgressDisplay :step="step" />
   </div>
 </template>
