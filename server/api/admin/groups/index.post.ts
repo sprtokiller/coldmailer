@@ -1,0 +1,15 @@
+import { prisma } from '~/server/utils/prisma'
+import { requirePermission } from '~/server/utils/permissions'
+
+export default defineEventHandler(async (event) => {
+  await requirePermission(event, 'admin.roles')
+  const body = await readBody<{ name: string; slug: string; color?: string }>(event)
+
+  if (!body.name?.trim() || !body.slug?.trim()) {
+    throw createError({ statusCode: 400, statusMessage: 'Název a slug jsou povinné' })
+  }
+
+  return prisma.group.create({
+    data: { name: body.name.trim(), slug: body.slug.trim().toLowerCase(), color: body.color ?? '#6366f1' },
+  })
+})

@@ -114,7 +114,56 @@ async function seedRoles() {
   console.log('  ✓ Role: Běžný uživatel')
 }
 
+const GROUPS = [
+  { name: 'TdA', slug: 'tda', color: '#EF8A17' },
+  { name: 'PPT', slug: 'ppt', color: '#A6CE39' },
+  { name: 'XO',  slug: 'xo',  color: '#e31837' },
+]
+
+async function seedGroups() {
+  for (const g of GROUPS) {
+    await prisma.group.upsert({
+      where: { slug: g.slug },
+      create: g,
+      update: { name: g.name, color: g.color },
+    })
+    console.log(`  ✓ Group: ${g.name}`)
+  }
+
+  const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
+  if (!tdaGroup) return
+
+  const realUsers = await prisma.user.findMany({
+    where: { googleId: { not: 'system' } },
+  })
+  for (const u of realUsers) {
+    await prisma.userGroup.upsert({
+      where: { userId_groupId: { userId: u.id, groupId: tdaGroup.id } },
+      create: { userId: u.id, groupId: tdaGroup.id },
+      update: {},
+    })
+    console.log(`  ✓ User ${u.email} → TdA`)
+  }
+
+  const tables = [
+    { model: 'systemPrompt', extra: { isSystem: false } },
+    { model: 'contextPart', extra: {} },
+    { model: 'sellingPoint', extra: {} },
+    { model: 'emailDraft', extra: {} },
+    { model: 'pipelineRun', extra: {} },
+  ] as const
+
+  for (const t of tables) {
+    const result = await (prisma[t.model] as any).updateMany({
+      where: { groupId: null, ...t.extra },
+      data: { groupId: tdaGroup.id },
+    })
+    if (result.count > 0) console.log(`  ✓ Migrated ${result.count} ${t.model} → TdA`)
+  }
+}
+
 main()
   .then(() => seedRoles())
+  .then(() => seedGroups())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

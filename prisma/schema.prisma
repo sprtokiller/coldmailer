@@ -29,6 +29,7 @@ model User {
   roles         UserRole[]
   permOverrides UserPermission[]
   budget        UserBudget?
+  groups        UserGroup[]
 
   globalRecords        GlobalRecord[]
   inputSources         InputSource[]
@@ -67,6 +68,32 @@ model UserPermission {
   key     String
   granted Boolean
   @@unique([userId, key])
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+
+  members            UserGroup[]
+  systemPrompts      SystemPrompt[]
+  contextParts       ContextPart[]
+  sellingPoints      SellingPoint[]
+  emailDrafts        EmailDraft[]
+  pipelineRuns       PipelineRun[]
+  partnerNotes       PartnerNote[]
+  partnerFulfillments PartnerFulfillment[]
+}
+
+model UserGroup {
+  userId   String
+  groupId  String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+  @@id([userId, groupId])
 }
 
 enum BudgetResetPeriod {
@@ -122,6 +149,8 @@ model SystemPrompt {
   isSystem      Boolean       @default(false)
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
+  groupId       String?
+  group         Group?        @relation(fields: [groupId], references: [id])
   createdAt     DateTime      @default(now())
   derivedFromId String?
   derivedFrom   SystemPrompt? @relation("PromptLineage", fields: [derivedFromId], references: [id])
@@ -136,6 +165,8 @@ model ContextPart {
   stepKeys      String[]      @default([])
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
+  groupId       String?
+  group         Group?        @relation(fields: [groupId], references: [id])
   createdAt     DateTime      @default(now())
   derivedFromId String?
   derivedFrom   ContextPart?  @relation("ContextLineage", fields: [derivedFromId], references: [id])
@@ -148,6 +179,8 @@ model SellingPoint {
   content       String
   authorId      String
   author        User           @relation(fields: [authorId], references: [id])
+  groupId       String?
+  group         Group?         @relation(fields: [groupId], references: [id])
   createdAt     DateTime       @default(now())
   derivedFromId String?
   derivedFrom   SellingPoint?  @relation("SellingLineage", fields: [derivedFromId], references: [id])
@@ -162,6 +195,8 @@ model EmailDraft {
   body          String
   authorId      String
   author        User         @relation(fields: [authorId], references: [id])
+  groupId       String?
+  group         Group?       @relation(fields: [groupId], references: [id])
   createdAt     DateTime     @default(now())
   derivedFromId String?
   derivedFrom   EmailDraft?  @relation("DraftLineage", fields: [derivedFromId], references: [id])
@@ -174,6 +209,8 @@ model PipelineRun {
   name      String
   authorId  String
   author    User           @relation(fields: [authorId], references: [id])
+  groupId      String?
+  group        Group?         @relation(fields: [groupId], references: [id])
   createdAt    DateTime       @default(now())
   steps        PipelineStep[]
   inputSources InputSource[]
@@ -278,7 +315,7 @@ model GlobalRecord {
   assignments     PartnerAssignment[]
   mailEvents      PartnerMailEvent[]
   partnerNotes    PartnerNote[]
-  fulfillment     PartnerFulfillment?
+  fulfillments    PartnerFulfillment[]
 
   @@index([normalizedName])
 }
@@ -422,6 +459,8 @@ model PartnerNote {
   content        String
   authorId       String
   author         User         @relation(fields: [authorId], references: [id])
+  groupId        String?
+  group          Group?       @relation(fields: [groupId], references: [id])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -429,9 +468,14 @@ model PartnerNote {
 }
 
 model PartnerFulfillment {
-  globalRecordId String       @id
+  id             String       @id @default(cuid())
+  globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  groupId        String?
+  group          Group?       @relation(fields: [groupId], references: [id])
   myToThem       String?
   themToUs       String?
   updatedAt      DateTime     @updatedAt
+
+  @@unique([globalRecordId, groupId])
 }

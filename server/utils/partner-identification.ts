@@ -29,18 +29,21 @@ export function findItemArray(
 }
 
 async function fetchGenerationCost(generationId: string): Promise<number> {
-  try {
-    const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
-    const res = await fetch(
-      `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    )
-    if (!res.ok) return 0
-    const json = await res.json() as { data?: { total_cost?: number } }
-    return json.data?.total_cost ?? 0
-  } catch {
-    return 0
+  const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000))
+    try {
+      const res = await fetch(
+        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      )
+      if (!res.ok) continue
+      const json = await res.json() as { data?: { total_cost?: number } }
+      const cost = json.data?.total_cost ?? 0
+      if (cost > 0) return cost
+    } catch { /* retry */ }
   }
+  return 0
 }
 
 function parseJson(text: string): unknown {

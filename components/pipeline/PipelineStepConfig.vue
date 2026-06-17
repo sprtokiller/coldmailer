@@ -47,8 +47,9 @@ function onSearchBlur() {
 }
 
 // ── Signature selector (Step 6) ───────────────────────────────────────────────
+const sigs = computed(() => Array.isArray(pipeline.signatures) ? pipeline.signatures : [])
 const selectedSignatureId = ref(
-  pipeline.signatures?.find(s => s.isDefault)?.id ?? '',
+  sigs.value.find(s => s.isDefault)?.id ?? '',
 )
 
 function onSignatureChange(id: string) {
@@ -689,7 +690,7 @@ async function confirmSaveToLibrary() {
             @change="onSignatureChange(($event.target as HTMLSelectElement).value)"
           >
             <option value="">— bez podpisu —</option>
-            <option v-for="sig in pipeline.signatures" :key="sig.id" :value="sig.id">
+            <option v-for="sig in sigs" :key="sig.id" :value="sig.id">
               {{ sig.name }}{{ sig.isDefault ? ' (výchozí)' : '' }}
             </option>
           </select>

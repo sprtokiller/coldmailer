@@ -44,15 +44,20 @@ onMounted(() => {
   onUnmounted(() => window.removeEventListener('keydown', handler))
 })
 
+let skipPaneClick = false
+
 function onNodeClick({ node }: NodeMouseEvent) {
+  skipPaneClick = true
   canvas.openOverlay(node.id, node.data.stepId as string | null, node.data.stepType as string)
 }
 
 function onPaneClick() {
+  if (skipPaneClick) { skipPaneClick = false; return }
   canvas.closeOverlay()
 }
 
 function onEdgeClick({ edge }: EdgeMouseEvent) {
+  skipPaneClick = true
   canvas.selectEdge(edge.id)
 }
 
@@ -84,7 +89,7 @@ const styledEdges = computed(() =>
       :pan-on-drag="true"
       :nodes-draggable="false"
       :nodes-connectable="false"
-      :elements-selectable="false"
+      :elements-selectable="true"
       @node-click="onNodeClick"
       @edge-click="onEdgeClick"
       @pane-click="onPaneClick"

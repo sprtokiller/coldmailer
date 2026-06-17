@@ -1,18 +1,14 @@
-import { type Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { getEffectivePermissions } from '~/server/utils/permissions'
+import { getActiveGroupId } from '~/server/utils/activeGroup'
 
 export default defineEventHandler(async (event) => {
-  const session = await requireAuth(event)
-  const perms = await getEffectivePermissions(session.id)
-  const OR: Prisma.ContextPartWhereInput[] = []
-  if (perms.includes('context.own.read'))    OR.push({ authorId: session.id })
-  if (perms.includes('context.others.read')) OR.push({ authorId: { not: session.id } })
-  if (OR.length === 0) return []
+  await requireAuth(event)
+  const groupId = await getActiveGroupId(event)
+  if (!groupId) return []
 
   return prisma.contextPart.findMany({
-    where: { OR },
+    where: { groupId },
     include: { author: { select: { id: true, name: true, image: true } } },
     orderBy: { createdAt: 'desc' },
   })

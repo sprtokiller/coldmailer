@@ -14,5 +14,5 @@ export default defineEventHandler(async (event) => {
       orderBy: { createdAt: 'desc' },
     }),
   ])
-  return { templates, personal }
+  return [...templates, ...personal]
 })

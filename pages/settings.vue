@@ -3,6 +3,7 @@ definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const router = useRouter()
+const { refreshGroups } = useActiveGroup()
 
 // ── Credits ──────────────────────────────────────────────────────────────────
 const { data: credits, pending: creditsPending, error: creditsError, refresh: refreshCredits } = await useFetch('/api/settings/credits')
@@ -84,10 +85,11 @@ const PERMISSION_LABELS: Record<string, string> = {
 }
 
 // ── Admin: Users ──────────────────────────────────────────────────────────────
+type GroupInfo = { id: string; name: string; slug: string; color: string }
 type AdminUser = {
   id: string; email: string; name: string; image: string | null
   isSuperAdmin: boolean; createdAt: string
-  roles: Role[]; permOverrides: PermOverride[]
+  roles: Role[]; groups: GroupInfo[]; permOverrides: PermOverride[]
   budget: Budget | null; effectivePermissions: string[]
 }
 
@@ -98,6 +100,10 @@ const { data: adminUsers, refresh: refreshUsers } = canManageRoles.value
 const { data: adminRoles, refresh: refreshRoles } = canManageRoles.value
   ? await useFetch<Role[]>('/api/admin/roles')
   : { data: ref<Role[] | null>(null), refresh: async () => {} }
+
+const { data: adminGroups, refresh: refreshAdminGroups } = canManageRoles.value
+  ? await useFetch<GroupInfo[]>('/api/admin/groups')
+  : { data: ref<GroupInfo[] | null>(null), refresh: async () => {} }
 
 // ── Selected user panel ───────────────────────────────────────────────────────
 const selectedUserId = ref<string | null>(null)
@@ -115,6 +121,16 @@ async function assignRole(userId: string, roleId: string) {
 async function removeRole(userId: string, roleId: string) {
   await $fetch(`/api/admin/users/${userId}/roles/${roleId}`, { method: 'DELETE' })
   await refreshUsers()
+}
+
+// ── Assign / remove group ────────────────────────────────────────────────────
+async function assignGroup(userId: string, groupId: string) {
+  await $fetch(`/api/admin/users/${userId}/groups`, { method: 'POST', body: { groupId } })
+  await Promise.all([refreshUsers(), refreshGroups()])
+}
+async function removeGroup(userId: string, groupId: string) {
+  await $fetch(`/api/admin/users/${userId}/groups/${groupId}`, { method: 'DELETE' })
+  await Promise.all([refreshUsers(), refreshGroups()])
 }
 
 // ── Permission overrides ──────────────────────────────────────────────────────
@@ -728,7 +744,13 @@ const visibleNav = computed(() =>
                           class="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
                           :style="`background-color: ${role.color}18; border-color: ${role.color}44; color: ${role.color}`"
                         >{{ role.name }}</span>
-                        <span v-if="!u.isSuperAdmin && u.roles.length === 0" class="text-xs text-gray-300">—</span>
+                        <span
+                          v-for="g in u.groups"
+                          :key="g.id"
+                          class="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
+                          :style="`background-color: ${g.color}18; border-color: ${g.color}44; color: ${g.color}`"
+                        >{{ g.name }}</span>
+                        <span v-if="!u.isSuperAdmin && u.roles.length === 0 && u.groups.length === 0" class="text-xs text-gray-300">—</span>
                       </div>
 
                       <!-- Budget -->
@@ -752,7 +774,7 @@ const visibleNav = computed(() =>
 
                   <!-- ── Expanded panel ── -->
                   <div v-if="selectedUserId === u.id" class="bg-gray-50/60 border-t border-indigo-100/50 px-5 py-5">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
                       <!-- Roles -->
                       <div class="bg-white rounded-xl border border-gray-100 p-4">
@@ -797,6 +819,35 @@ const visibleNav = computed(() =>
                           <p v-if="u.isSuperAdmin && superadminCount <= 1" class="text-[10px] text-amber-600 mt-1.5 text-center">
                             Nelze odebrat — jediný superadmin v systému.
                           </p>
+                        </div>
+                      </div>
+
+                      <!-- Groups -->
+                      <div class="bg-white rounded-xl border border-gray-100 p-4">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Skupiny</div>
+                        <div class="flex flex-wrap gap-1.5 mb-4 min-h-[28px]">
+                          <span
+                            v-for="g in u.groups"
+                            :key="g.id"
+                            class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-70 transition-opacity"
+                            :style="`background-color: ${g.color}18; border-color: ${g.color}44; color: ${g.color}`"
+                            title="Kliknutím odeberete ze skupiny"
+                            @click.stop="removeGroup(u.id, g.id)"
+                          >
+                            {{ g.name }}
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </span>
+                          <span v-if="u.groups.length === 0" class="text-xs text-gray-400">Žádné skupiny</span>
+                        </div>
+                        <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přidat do skupiny</div>
+                        <div class="flex flex-wrap gap-1">
+                          <button
+                            v-for="g in adminGroups?.filter(ag => !u.groups.some(ug => ug.id === ag.id))"
+                            :key="g.id"
+                            class="text-xs px-2 py-0.5 rounded-full border hover:opacity-80 transition-opacity"
+                            :style="`background-color: ${g.color}10; border-color: ${g.color}33; color: ${g.color}`"
+                            @click.stop="assignGroup(u.id, g.id)"
+                          >+ {{ g.name }}</button>
                         </div>
                       </div>
 

@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
       roles: { include: { role: true } },
       permOverrides: true,
       budget: true,
+      groups: { include: { group: true } },
     },
     orderBy: { createdAt: 'asc' },
   })
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     isSuperAdmin: u.isSuperAdmin,
     createdAt: u.createdAt,
     roles: u.roles.map(ur => ur.role),
+    groups: u.groups.map(ug => ug.group),
     permOverrides: u.permOverrides,
     budget: u.budget,
     effectivePermissions: await getEffectivePermissions(u.id),

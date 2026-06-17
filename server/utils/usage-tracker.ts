@@ -73,25 +73,27 @@ export async function isOverBudget(userId: string): Promise<{ over: boolean; lim
  */
 export async function trackAIUsage(opts: TrackAIOptions): Promise<void> {
   try {
-    if (opts.costUsd <= 0) return
-    await prisma.$transaction([
-      prisma.usageEvent.create({
+    const cost = Math.max(0, opts.costUsd)
+    await prisma.$transaction(async (tx) => {
+      await tx.usageEvent.create({
         data: {
           userId:         opts.userId,
           eventType:      'ai_completion',
           model:          opts.model,
-          costUsd:        opts.costUsd,
+          costUsd:        cost,
           generationId:   opts.generationId ?? null,
           pipelineStepId: opts.pipelineStepId ?? null,
           stepType:       opts.stepType ?? null,
         },
-      }),
-      prisma.userBudget.upsert({
-        where:  { userId: opts.userId },
-        create: { userId: opts.userId, usedUsd: opts.costUsd },
-        update: { usedUsd: { increment: opts.costUsd } },
-      }),
-    ])
+      })
+      if (cost > 0) {
+        await tx.userBudget.upsert({
+          where:  { userId: opts.userId },
+          create: { userId: opts.userId, usedUsd: cost },
+          update: { usedUsd: { increment: cost } },
+        })
+      }
+    })
   } catch (err) {
     console.error('[usage-tracker] trackAIUsage error:', err)
   }

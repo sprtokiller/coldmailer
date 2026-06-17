@@ -1,21 +1,21 @@
 import { StepType, type Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { getEffectivePermissions } from '~/server/utils/permissions'
+import { getActiveGroupId } from '~/server/utils/activeGroup'
 
 export default defineEventHandler(async (event) => {
-  const session = await requireAuth(event)
+  await requireAuth(event)
   const { stepType } = getQuery(event)
   const requestedStepType = typeof stepType === 'string' && stepType in StepType
     ? stepType as StepType
     : undefined
 
-  const perms = await getEffectivePermissions(session.id)
-  const OR: Prisma.SystemPromptWhereInput[] = []
-  if (perms.includes('prompts.system.read')) OR.push({ isSystem: true })
-  if (perms.includes('prompts.own.read'))    OR.push({ authorId: session.id, isSystem: false })
-  if (perms.includes('prompts.others.read')) OR.push({ authorId: { not: session.id }, isSystem: false })
-  if (OR.length === 0) return []
+  const groupId = await getActiveGroupId(event)
+
+  const OR: Prisma.SystemPromptWhereInput[] = [
+    { isSystem: true },
+  ]
+  if (groupId) OR.push({ groupId, isSystem: false })
 
   const baseWhere: Prisma.SystemPromptWhereInput = { OR }
   if (requestedStepType) baseWhere.stepType = requestedStepType

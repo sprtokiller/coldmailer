@@ -4,6 +4,7 @@ import { requireAuth } from '~/server/utils/requireAuth'
 import { getEffectivePermissions } from '~/server/utils/permissions'
 import { OPENROUTER, MODELS, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
+import { trackAIUsage } from '~/server/utils/usage-tracker'
 
 interface ImportBody {
   stepType: string
@@ -364,6 +365,32 @@ PRAVIDLA:
       { role: 'user', content: userMessage },
     ],
   })
+
+  // Track AI usage (non-fatal)
+  try {
+    let costUsd = 0
+    if (response.id) {
+      const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+      const costRes = await fetch(
+        `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(response.id)}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      )
+      if (costRes.ok) {
+        const costJson = await costRes.json() as { data?: { total_cost?: number } }
+        costUsd = costJson.data?.total_cost ?? 0
+      }
+    }
+    await trackAIUsage({
+      userId: user.id,
+      model: MODELS.CLAUDE_HAIKU,
+      costUsd,
+      generationId: response.id ?? null,
+      pipelineStepId: existingStep?.id,
+      stepType: body.stepType,
+    })
+  } catch (err) {
+    console.error('[import-ai] usage tracking failed:', err)
+  }
 
   const finishReason = response.choices[0]?.finish_reason
   const rawOutput = response.choices[0]?.message?.content ?? ''

@@ -1,5 +1,6 @@
 import { exchangeCode, getUserInfo } from '~/server/utils/google'
 import { prisma } from '~/server/utils/prisma'
+import { applyDefaultBudgetToUser } from '~/server/utils/usage-tracker'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -36,6 +37,8 @@ export default defineEventHandler(async (event) => {
       tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
     },
   })
+
+  await applyDefaultBudgetToUser(user.id)
 
   // If no superadmin exists in the system yet, promote the logging-in user
   const superadminCount = await prisma.user.count({ where: { isSuperAdmin: true } })
