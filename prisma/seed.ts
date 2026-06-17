@@ -162,8 +162,39 @@ async function seedGroups() {
   }
 }
 
+const DEFAULT_INDUSTRY_TAGS = [
+  'IT a technologie',
+  'Kybernetická bezpečnost',
+  'EdTech a vzdělávací technologie',
+  'Vzdělávání a akademie',
+  'Veřejná správa',
+  'Průmysl a výroba',
+  'Energetika a utility',
+  'Komunita a neziskový sektor',
+  'Kultura a paměťové instituce',
+  'Média a komunikace',
+  'Služby a poradenství',
+  'Finance a investice',
+  'Zábava a volný čas',
+]
+
+async function seedTags() {
+  console.log('Seeding industry tags…')
+  const key = 'tags.partnerIndustry'
+  const existing = await prisma.systemConfig.findUnique({ where: { key } })
+  const currentTags: string[] = Array.isArray(existing?.value) ? existing!.value as string[] : []
+  const merged = [...new Set([...currentTags, ...DEFAULT_INDUSTRY_TAGS])].sort((a, b) => a.localeCompare(b, 'cs'))
+  await prisma.systemConfig.upsert({
+    where: { key },
+    create: { key, value: merged as never },
+    update: { value: merged as never },
+  })
+  console.log(`  ✓ ${merged.length} tags (${merged.length - currentTags.length} new)`)
+}
+
 main()
   .then(() => seedRoles())
   .then(() => seedGroups())
+  .then(() => seedTags())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

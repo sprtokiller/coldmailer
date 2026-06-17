@@ -111,7 +111,12 @@ export function useOverlayCore() {
   const overlayTitle = computed(() => {
     if (activeEdgeId.value) {
       const edge = canvas.edges.value.find(e => e.id === activeEdgeId.value)
-      return edge?.label ? `Tok: ${edge.label}` : 'Tok mezi kroky'
+      if (edge) {
+        const targetNode = canvas.nodes.value.find(n => n.id === edge.target)
+        const label = targetNode ? STEP_LABELS[targetNode.data.stepType] : null
+        return label ? `Vstup do: ${label}` : 'Tok mezi kroky'
+      }
+      return 'Tok mezi kroky'
     }
     return stepType.value ? STEP_LABELS[stepType.value] ?? stepType.value : ''
   })

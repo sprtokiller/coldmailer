@@ -8,6 +8,7 @@ import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
+import { parseAIOutput } from '~/server/utils/parse-ai-output'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
@@ -85,10 +86,21 @@ export default defineEventHandler(async (event) => {
     STEP_SYSTEM_PROMPTS[body.stepType] ??
     'You are a helpful assistant.'
 
+  // Inject canonical partner industry tags for PARTNER_PROFILING
+  let industryTagsContext: string[] = []
+  if (body.stepType === 'PARTNER_PROFILING') {
+    const tagRow = await prisma.systemConfig.findUnique({ where: { key: 'tags.partnerIndustry' } })
+    const tags = Array.isArray(tagRow?.value) ? tagRow!.value as string[] : []
+    if (tags.length > 0) {
+      industryTagsContext = [`Povolené hodnoty pro pole "industry" (vyber JEDNU z tohoto seznamu):\n${tags.join(', ')}`]
+    }
+  }
+
   const allContextParts = [
     ...contextParts.map(c => `${c.name}:\n${c.content}`),
     ...(sellingPoint ? [`Prodejní argumenty (${sellingPoint.name}):\n${sellingPoint.content}`] : []),
     ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
+    ...industryTagsContext,
   ]
 
   const step = await prisma.pipelineStep.create({
@@ -238,13 +250,13 @@ export default defineEventHandler(async (event) => {
                   write({ chunk })
                 }
                 await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-                const parsed = parseAIOutput(partnerOutput)
+                const parsedResult = parseAIOutput(partnerOutput)
                 const profile = {
                   partnerId: ip.partnerId,
                   name: ip.name,
-                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
-                    ? parsed
-                    : { raw: parsed }),
+                  ...((typeof parsedResult.data === 'object' && parsedResult.data !== null && !Array.isArray(parsedResult.data))
+                    ? parsedResult.data
+                    : { raw: partnerOutput }),
                 }
                 allProfiles.push(profile)
                 write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'done', profile } })
@@ -261,6 +273,17 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date() },
             })
+
+            // Persist profile data back to GlobalRecord so the Database page can display it
+            for (const profile of allProfiles as Array<Record<string, unknown>>) {
+              const pid = profile.partnerId as string | undefined
+              if (!pid || profile.error) continue
+              const { partnerId: _, error: __, raw: ___, ...profileData } = profile
+              await prisma.globalRecord.update({
+                where: { id: pid },
+                data: { payload: profileData as never },
+              }).catch(() => {})
+            }
           } else if (body.stepType === 'VALUE_ALIGNMENT') {
             // inputData: { partners: [<full profile objects from PARTNER_PROFILING>] }
             const inputPartners = (() => {
@@ -305,13 +328,13 @@ export default defineEventHandler(async (event) => {
                   write({ chunk })
                 }
                 await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-                const parsed = parseAIOutput(alignmentOutput)
+                const parsedResult = parseAIOutput(alignmentOutput)
                 const alignment = {
                   partnerId: ip.partnerId,
                   name: ip.name,
-                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
-                    ? parsed
-                    : { raw: parsed }),
+                  ...((typeof parsedResult.data === 'object' && parsedResult.data !== null && !Array.isArray(parsedResult.data))
+                    ? parsedResult.data
+                    : { raw: alignmentOutput }),
                 }
                 allAlignments.push(alignment)
                 write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'done', alignment } })
@@ -379,13 +402,13 @@ export default defineEventHandler(async (event) => {
                   write({ chunk })
                 }
                 await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-                const parsed = parseAIOutput(emailOutput)
+                const parsedResult = parseAIOutput(emailOutput)
                 const emailData = {
                   partnerName: String(ip.name ?? ''),
                   partnerId: ip.partnerId,
-                  ...((typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed))
-                    ? parsed
-                    : { raw: parsed }),
+                  ...((typeof parsedResult.data === 'object' && parsedResult.data !== null && !Array.isArray(parsedResult.data))
+                    ? parsedResult.data
+                    : { raw: emailOutput }),
                 }
                 allEmails.push(emailData)
               } catch (err) {
@@ -413,7 +436,7 @@ export default defineEventHandler(async (event) => {
               write({ chunk })
             }
             await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-            const outputData = parseAIOutput(fullOutput)
+            const outputData = parseAIOutput(fullOutput).data ?? { raw: fullOutput }
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: outputData as never, completedAt: new Date() },
@@ -462,7 +485,7 @@ export default defineEventHandler(async (event) => {
               write({ chunk })
             }
             await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-            const outputData = parseAIOutput(fullOutput)
+            const outputData = parseAIOutput(fullOutput).data ?? { raw: fullOutput }
             await prisma.pipelineStep.update({
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: outputData as never, completedAt: new Date() },
@@ -501,16 +524,6 @@ async function trackCost(
     await trackAIUsage({ userId, costUsd, ...opts })
   } catch {
     // Non-fatal
-  }
-}
-
-function parseAIOutput(text: string): unknown {
-  const match = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/)
-  const raw = match ? match[1] : text.trim()
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return { raw: text }
   }
 }
 

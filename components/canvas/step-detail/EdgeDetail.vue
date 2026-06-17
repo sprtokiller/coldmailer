@@ -7,7 +7,7 @@ const { edgeDetail, edgeChartData } = o
 <template>
   <div v-if="edgeDetail" class="p-6 flex flex-col items-center gap-6">
     <p class="text-xs text-gray-400 self-start">
-      Složení vstupu z <strong class="text-gray-600">{{ edgeDetail.sourceNode?.data.label }}</strong>
+      Složení vstupu pro <strong class="text-gray-600">{{ edgeDetail.targetNode?.data.label }}</strong>
     </p>
     <div v-if="!edgeChartData" class="text-sm text-gray-400 py-8">Žádné záznamy</div>
     <template v-else>

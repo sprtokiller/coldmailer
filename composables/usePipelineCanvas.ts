@@ -23,6 +23,12 @@ export interface CanvasEdge {
   source: string
   target: string
   label?: string
+  progressData?: {
+    total: number
+    completed: number
+    completedLabel: string
+    remainingLabel: string
+  }
 }
 
 export interface StepRecord {
@@ -95,7 +101,12 @@ export function usePipelineCanvas(runId: string) {
     if (!selectedNodeId.value && !selectedEdgeId.value) return new Set()
     const result = new Set<string>()
     if (selectedEdgeId.value) {
-      result.add(selectedEdgeId.value)
+      const edge = edges.value.find(e => e.id === selectedEdgeId.value)
+      if (edge) {
+        for (const e of edges.value) {
+          if (e.target === edge.target) result.add(e.id)
+        }
+      }
     } else {
       const activeId = selectedNodeBorderId.value ?? selectedNodeId.value
       if (activeId) {

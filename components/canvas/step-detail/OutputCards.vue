@@ -75,6 +75,9 @@ const { stepType, ppProfiles, vaAlignments, opEmails, oeResult, expandedCardIdx,
         </div>
         <button class="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 px-1" @click="toggleCard(i)">{{ expandedCardIdx === i ? '▲' : '▼' }}</button>
       </div>
+      <div v-if="getArr(alignment, 'top3Arguments').length > 0 && expandedCardIdx !== i" class="flex flex-wrap gap-1">
+        <span v-for="(arg, ai) in getArr(alignment, 'top3Arguments')" :key="ai" class="text-xs px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500">{{ getStr(arg, 'argumentLabel') || getStr(arg, 'argumentId') }}</span>
+      </div>
       <template v-if="expandedCardIdx === i">
         <p v-if="getStr(alignment, 'hookHypothesis')" class="text-xs text-indigo-700 bg-indigo-50 rounded px-3 py-2 italic leading-relaxed mb-3">{{ getStr(alignment, 'hookHypothesis') }}</p>
         <div v-if="getArr(alignment, 'top3Arguments').length > 0" class="mt-3">

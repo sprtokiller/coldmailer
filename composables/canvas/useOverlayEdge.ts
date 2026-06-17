@@ -19,14 +19,41 @@ export function useOverlayEdge(core: OverlayCoreState) {
     if (!activeEdgeId.value) return null
     const edge = canvas.edges.value.find(e => e.id === activeEdgeId.value)
     if (!edge) return null
-    const sourceNode = canvas.nodes.value.find(n => n.id === edge.source)
-    const sid = sourceNode?.data.stepId as string | null
-    const sourceRecords = sid ? (canvas.stepRecords.value[sid] ?? []) : []
-    return { edge, sourceNode, sourceRecords }
+    const targetNode = canvas.nodes.value.find(n => n.id === edge.target)
+    const groupEdges = canvas.edges.value.filter(e => e.target === edge.target)
+    const stepIds = new Set<string>()
+    for (const ge of groupEdges) {
+      const sn = canvas.nodes.value.find(n => n.id === ge.source)
+      const sid = sn?.data.stepId as string | null
+      if (sid) stepIds.add(sid)
+    }
+    const seen = new Set<string>()
+    const sourceRecords = [...stepIds].flatMap(sid => canvas.stepRecords.value[sid] ?? []).filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true })
+    return { edge, targetNode, sourceRecords }
   })
 
   const edgeChartData = computed(() => {
     if (!edgeDetail.value) return null
+    const edge = edgeDetail.value.edge
+
+    if (edge.progressData) {
+      const { total, completed, completedLabel, remainingLabel } = edge.progressData
+      if (total === 0) return null
+      const segments: DonutSegment[] = []
+      let cumulative = 0
+      if (completed > 0) {
+        const dash = (completed / total) * DONUT_C
+        segments.push({ key: '__completed', label: completedLabel, color: '#6366f1', count: completed, total: completed, dash, gap: DONUT_C - dash, offset: DONUT_C - cumulative })
+        cumulative += dash
+      }
+      const remaining = total - completed
+      if (remaining > 0) {
+        const dash = (remaining / total) * DONUT_C
+        segments.push({ key: '__remaining', label: remainingLabel, color: '#e5e7eb', count: remaining, total: remaining, dash, gap: DONUT_C - dash, offset: DONUT_C - cumulative })
+      }
+      return { segments, totalSelected: completed, total }
+    }
+
     const recs = edgeDetail.value.sourceRecords
     const total = recs.length
     if (total === 0) return null
@@ -61,9 +88,12 @@ export function useOverlayEdge(core: OverlayCoreState) {
     if (!id) return
     const edge = canvas.edges.value.find(e => e.id === id)
     if (!edge) return
-    const sourceNode = canvas.nodes.value.find(n => n.id === edge.source)
-    const sid = sourceNode?.data.stepId as string | null
-    if (sid && !canvas.stepRecords.value[sid]) await canvas.fetchStepRecords(sid)
+    const groupEdges = canvas.edges.value.filter(e => e.target === edge.target)
+    for (const ge of groupEdges) {
+      const sn = canvas.nodes.value.find(n => n.id === ge.source)
+      const sid = sn?.data.stepId as string | null
+      if (sid && !canvas.stepRecords.value[sid]) await canvas.fetchStepRecords(sid)
+    }
   })
 
   return { edgeDetail, edgeChartData }

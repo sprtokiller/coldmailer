@@ -2,6 +2,8 @@
 import { Handle, Position } from '@vue-flow/core'
 import { canvasKey } from '~/composables/usePipelineCanvas'
 
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps<{
   id: string
   data: {

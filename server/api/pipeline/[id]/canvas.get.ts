@@ -266,6 +266,35 @@ export default defineEventHandler(async (event) => {
     }
   })
 
+  // PP→VA edge: progress chart (total input partners vs profiled)
+  const ppVaEdge = edges.find(e => e.id === 'e-PARTNER_PROFILING-VALUE_ALIGNMENT')
+  const ppStep = latestByType.get('PARTNER_PROFILING')
+  const ppOutputCount = ppStep && Array.isArray(ppStep.outputData) ? (ppStep.outputData as unknown[]).length : 0
+  if (ppVaEdge) {
+    const piAllSelected = allPiRefs.filter(r => r.isSelectedForProcessing).length
+    ppVaEdge.label = piAllSelected > 0 ? `${ppOutputCount}/${piAllSelected} profilů` : ''
+    ;(ppVaEdge as typeof ppVaEdge & { progressData?: unknown }).progressData = {
+      total: piAllSelected,
+      completed: ppOutputCount,
+      completedLabel: 'Zprofilováno',
+      remainingLabel: 'Čeká na profilování',
+    }
+  }
+
+  // VA→OP edge: progress chart (profiled partners vs aligned)
+  const vaOpEdge = edges.find(e => e.id === 'e-VALUE_ALIGNMENT-OUTREACH_PREPARATION')
+  if (vaOpEdge) {
+    const vaStep = latestByType.get('VALUE_ALIGNMENT')
+    const vaOutputCount = vaStep && Array.isArray(vaStep.outputData) ? (vaStep.outputData as unknown[]).length : 0
+    vaOpEdge.label = ppOutputCount > 0 ? `${vaOutputCount}/${ppOutputCount} alignmentů` : ''
+    ;(vaOpEdge as typeof vaOpEdge & { progressData?: unknown }).progressData = {
+      total: ppOutputCount,
+      completed: vaOutputCount,
+      completedLabel: 'Zpracováno',
+      remainingLabel: 'Čeká na zpracování',
+    }
+  }
+
   // Extra input-source nodes for MS IMPORTED / GLOBAL_DB records — always emitted (even with 0 records)
   msExtras.forEach((extra, j) => {
     nodes.push({

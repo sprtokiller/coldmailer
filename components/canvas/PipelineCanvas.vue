@@ -44,20 +44,20 @@ onMounted(() => {
   onUnmounted(() => window.removeEventListener('keydown', handler))
 })
 
-let skipPaneClick = false
+let lastInteractionAt = 0
 
 function onNodeClick({ node }: NodeMouseEvent) {
-  skipPaneClick = true
+  lastInteractionAt = Date.now()
   canvas.openOverlay(node.id, node.data.stepId as string | null, node.data.stepType as string)
 }
 
 function onPaneClick() {
-  if (skipPaneClick) { skipPaneClick = false; return }
+  if (Date.now() - lastInteractionAt < 50) return
   canvas.closeOverlay()
 }
 
 function onEdgeClick({ edge }: EdgeMouseEvent) {
-  skipPaneClick = true
+  lastInteractionAt = Date.now()
   canvas.selectEdge(edge.id)
 }
 
