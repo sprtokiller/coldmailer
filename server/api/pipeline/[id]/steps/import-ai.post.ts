@@ -6,6 +6,7 @@ import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { OPENROUTER, MODELS, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage } from '~/server/utils/usage-tracker'
+import { mergeOutputData } from '~/server/utils/merge-output'
 
 interface ImportBody {
   stepType: string
@@ -25,39 +26,6 @@ const STEP_PERMISSION_MAP: Record<string, string> = {
 // Removes deep-research citation annotations like 【7†L76-L79】 that models copy verbatim.
 function stripCitationMarks(text: string): string {
   return text.replace(/【[^】]*】/g, '')
-}
-
-function mergeScalar(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...existing }
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v !== null && v !== undefined && v !== '') result[k] = v
-  }
-  return result
-}
-
-function contactKey(c: Record<string, unknown>): string {
-  const email = String(c.email ?? '').toLowerCase().trim()
-  if (email) return email
-  const name = [c.firstName, c.lastName].filter(Boolean).join(' ').toLowerCase().trim()
-    || String(c.name ?? '').toLowerCase().trim()
-  return name
-}
-
-function mergeContacts(
-  existing: Record<string, unknown>[],
-  incoming: Record<string, unknown>[],
-): Record<string, unknown>[] {
-  const map = new Map<string, Record<string, unknown>>()
-  for (const c of existing) {
-    const k = contactKey(c)
-    if (k) map.set(k, c)
-  }
-  for (const c of incoming) {
-    const k = contactKey(c)
-    if (!k) continue
-    map.set(k, map.has(k) ? mergeScalar(map.get(k)!, c) : c)
-  }
-  return [...map.values()]
 }
 
 // Strips legal suffixes, parenthetical qualifiers and punctuation so that
