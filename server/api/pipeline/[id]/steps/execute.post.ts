@@ -251,11 +251,12 @@ export default defineEventHandler(async (event) => {
                 }
                 await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
                 const parsedResult = parseAIOutput(partnerOutput)
+                const cleaned = stripMarkdownArtifacts(parsedResult.data)
                 const profile = {
                   partnerId: ip.partnerId,
                   name: ip.name,
-                  ...((typeof parsedResult.data === 'object' && parsedResult.data !== null && !Array.isArray(parsedResult.data))
-                    ? parsedResult.data
+                  ...((typeof cleaned === 'object' && cleaned !== null && !Array.isArray(cleaned))
+                    ? cleaned
                     : { raw: partnerOutput }),
                 }
                 allProfiles.push(profile)
@@ -513,6 +514,21 @@ export default defineEventHandler(async (event) => {
 
   return sendStream(event, stream)
 })
+
+function stripMarkdownArtifacts(val: unknown): unknown {
+  if (typeof val === 'string') {
+    return val
+      .replace(/【[^】]*】/g, '')
+      .replace(/\(?\[([^\[\]\n]+?)\]\s*\(\s*<?https?:\/\/[^\s)>]+>?(?:\s+["'][^)]*["'])?\s*\)\)?/g, '$1')
+  }
+  if (Array.isArray(val)) return val.map(stripMarkdownArtifacts)
+  if (val && typeof val === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = stripMarkdownArtifacts(v)
+    return out
+  }
+  return val
+}
 
 async function trackCost(
   getCost: () => Promise<number>,
