@@ -20,6 +20,13 @@ const COMP_STATUS_COLORS: Record<string, string> = {
 const COMP_STATUS_LABELS: Record<string, string> = {
   active: 'Aktivní', inactive: 'Neaktivní', uncertain: 'Nejistý',
 }
+const STATUS_NORMALIZE: Record<string, string> = {
+  aktivní: 'active', neaktivní: 'inactive', nejistý: 'uncertain',
+}
+function normalizeStatus(raw: string | undefined): string | undefined {
+  if (!raw) return raw
+  return STATUS_NORMALIZE[raw.toLowerCase()] ?? raw
+}
 const STEP_LABELS: Record<string, string> = {
   MARKET_SCANNING: 'Market Scanning', PARTNER_IDENTIFICATION: 'Identifikace partnerů',
   PARTNER_PROFILING: 'Profilování', VALUE_ALIGNMENT: 'Value Alignment',
@@ -81,7 +88,7 @@ function resetFilters() {
 // Unique values derived from loaded records
 const availableTypes      = computed(() => [...new Set(records.value.map(r => r.payload.type).filter(Boolean))].sort())
 const availableLevels     = computed(() => ['school', 'regional', 'national', 'international'].filter(l => records.value.some(r => r.payload.level === l)))
-const availableStatuses   = computed(() => ['active', 'inactive', 'uncertain'].filter(s => records.value.some(r => r.payload.status === s)))
+const availableStatuses   = computed(() => ['active', 'inactive', 'uncertain'].filter(s => records.value.some(r => normalizeStatus(r.payload.status) === s)))
 const availableIndustries = computed(() => [...new Set(records.value.map(r => r.payload.industry || r.payload.type).filter(Boolean))].sort())
 
 // Distinct pipeline count from loaded refs
@@ -96,7 +103,7 @@ const filteredRecords = computed(() => {
     if (q && !rec.canonicalName.toLowerCase().includes(q)) return false
     if (filterType.value     && p.type !== filterType.value)           return false
     if (filterLevel.value    && p.level !== filterLevel.value)         return false
-    if (filterStatus.value   && p.status !== filterStatus.value)       return false
+    if (filterStatus.value   && normalizeStatus(p.status) !== filterStatus.value) return false
     if (filterIndustry.value && (p.industry || p.type) !== filterIndustry.value) return false
     return true
   })
@@ -233,8 +240,8 @@ function toggleExpand(id: string) {
                   </td>
                   <td class="px-4 py-3 text-xs text-gray-600 max-w-48 truncate">{{ rec.payload.organizer || '—' }}</td>
                   <td class="px-4 py-3">
-                    <span v-if="rec.payload.status" :class="['text-xs px-2 py-0.5 rounded', COMP_STATUS_COLORS[rec.payload.status] ?? 'bg-gray-50 text-gray-400']">
-                      {{ COMP_STATUS_LABELS[rec.payload.status] ?? rec.payload.status }}
+                    <span v-if="rec.payload.status" :class="['text-xs px-2 py-0.5 rounded', COMP_STATUS_COLORS[normalizeStatus(rec.payload.status)!] ?? 'bg-gray-50 text-gray-400']">
+                      {{ COMP_STATUS_LABELS[normalizeStatus(rec.payload.status)!] ?? rec.payload.status }}
                     </span>
                     <span v-else class="text-xs text-gray-300">—</span>
                   </td>

@@ -14,7 +14,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "db:migrate-legacy": "bun prisma/migrate-legacy-records.ts"
+    "db:migrate-legacy": "bun prisma/migrate-legacy-records.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"

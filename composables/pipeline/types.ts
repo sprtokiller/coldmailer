@@ -161,6 +161,7 @@ export interface PipelineRunContext {
   step3SelectUnprocessed: () => void
   step3FilteredCandidates: () => Step3Candidate[]
   step3SelectedCount: () => number
+  step3IsCandidateProcessed: (candidate: Step3Candidate) => boolean
   updateProfilingItem: (stepKey: string, item: ProfilingProgressItem) => void
   profilingOutputProfiles: (stepKey: string) => Array<Record<string, unknown>>
   step4Partners: () => Array<{ partnerId?: string; name: string; website?: string; linkedinUrl?: string; industry?: string }>
@@ -169,10 +170,12 @@ export interface PipelineRunContext {
   step4DeselectAll: () => void
   step4SelectUnprocessed: () => void
   step4SelectedCount: () => number
+  step4IsPartnerProcessed: (partner: { partnerId?: string; name: string }) => boolean
   step5Alignments: () => Array<Record<string, unknown>>
   initStep5Selection: () => void
   step5SelectAll: () => void
   step5DeselectAll: () => void
+  step5SelectUnprocessed: () => void
   step5SelectedCount: () => number
   outreachEmails: () => Array<Record<string, unknown>>
   initStep6Preview: (partnerName: string) => void

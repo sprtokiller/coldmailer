@@ -5,6 +5,7 @@ import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -29,10 +30,14 @@ type SignatureItem = {
   name: string
   content: string
   isDefault: boolean
+  isSystem: boolean
   authorId: string
+  author?: { id: string; name: string; image: string | null }
   createdAt: string | Date
   updatedAt: string | Date
 }
+
+type SignaturesResponse = { templates: SignatureItem[]; personal: SignatureItem[] }
 
 const tab = ref<Tab>('prompts')
 
@@ -40,7 +45,16 @@ const { data: prompts, refresh: refreshPrompts } = await useFetch('/api/library/
 const { data: contextParts, refresh: refreshContext } = await useFetch('/api/library/context-parts', { default: () => [] })
 const { data: sellingPoints, refresh: refreshSelling } = await useFetch('/api/library/selling-points', { default: () => [] })
 const { data: emailDrafts, refresh: refreshDrafts } = await useFetch('/api/library/email-drafts', { default: () => [] })
-const { data: signatures, refresh: refreshSignatures } = await useFetch<SignatureItem[]>('/api/library/signatures', { default: () => [] })
+const { data: sigData, refresh: refreshSignatures } = await useFetch<SignaturesResponse>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
+const { data: me } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me', { default: () => ({ effectivePermissions: [] }) })
+
+const signatureTemplates = computed(() => sigData.value?.templates ?? [])
+const signaturePersonal = computed(() => sigData.value?.personal ?? [])
+const canEditSystemSignatures = computed(() => me.value?.effectivePermissions.includes('signatures.system.edit') ?? false)
+
+function safeHtml(html: string): string {
+  return sanitizeHtml(html)
+}
 
 const STEP_TYPES = [
   'MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING',
@@ -96,12 +110,16 @@ const form = ref({
   body: '',
   signatureContent: '',
   signatureIsDefault: false,
+  signatureIsSystem: false,
 })
 
+const showNewSignatureMenu = ref(false)
+
 function resetForm() {
-  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '', signatureContent: '', signatureIsDefault: false }
+  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '', signatureContent: '', signatureIsDefault: false, signatureIsSystem: false }
   editingId.value = null
   showForm.value = false
+  showNewSignatureMenu.value = false
   editor.value?.commands.setContent('')
 }
 
@@ -117,6 +135,9 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'prose prose-sm max-w-none min-h-[10rem] focus:outline-none px-4 py-3 font-[Parkinsans,sans-serif]',
+    },
+    transformPastedHTML(html) {
+      return sanitizeHtml(html)
     },
   },
   onUpdate({ editor: e }) {
@@ -159,6 +180,15 @@ function insertSignature(html: string) {
   editor.value?.chain().focus().insertContent('<p></p>' + html).run()
 }
 
+function closeMenus(e: MouseEvent) {
+  if (showNewSignatureMenu.value) {
+    const target = e.target as HTMLElement
+    if (!target.closest('.relative')) showNewSignatureMenu.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', closeMenus))
+onBeforeUnmount(() => document.removeEventListener('click', closeMenus))
+
 const route = useRoute()
 onMounted(() => {
   if (route.query.action === 'new' && typeof route.query.stepType === 'string') {
@@ -184,6 +214,7 @@ function startEdit(item: LibraryItem) {
   form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
   form.value.signatureContent = item.content ?? ''
   form.value.signatureIsDefault = item.isDefault ?? false
+  form.value.signatureIsSystem = item.isSystem ?? false
   showForm.value = true
   if (tab.value === 'drafts') {
     nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
@@ -214,6 +245,22 @@ function toggleStepKey(key: string) {
   }
 }
 
+function startNewSignature(isSystem: boolean) {
+  resetForm()
+  tab.value = 'signatures'
+  form.value.signatureIsSystem = isSystem
+  showForm.value = true
+  showNewSignatureMenu.value = false
+}
+
+function useTemplateAsBase(sig: SignatureItem) {
+  resetForm()
+  form.value.name = sig.name + ' (kopie)'
+  form.value.signatureContent = sig.content
+  form.value.signatureIsSystem = false
+  showForm.value = true
+}
+
 async function save() {
   if (placeholderError.value) return
   saving.value = true
@@ -240,17 +287,19 @@ async function save() {
       }
       await refreshSelling()
     } else if (tab.value === 'drafts') {
+      const cleanBody = sanitizeAndNormalizeHtml(form.value.body)
       if (editingId.value) {
-        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
+        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: cleanBody } })
       } else {
-        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: form.value.body } })
+        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: cleanBody } })
       }
       await refreshDrafts()
     } else {
+      const cleanContent = sanitizeAndNormalizeHtml(form.value.signatureContent)
       if (editingId.value) {
-        await $fetch(`/api/library/signatures/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.signatureContent, isDefault: form.value.signatureIsDefault } })
+        await $fetch(`/api/library/signatures/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: cleanContent, isDefault: form.value.signatureIsDefault } })
       } else {
-        await $fetch('/api/library/signatures', { method: 'POST', body: { name: form.value.name, content: form.value.signatureContent, isDefault: form.value.signatureIsDefault } })
+        await $fetch('/api/library/signatures', { method: 'POST', body: { name: form.value.name, content: cleanContent, isDefault: form.value.signatureIsDefault, isSystem: form.value.signatureIsSystem } })
       }
       await refreshSignatures()
     }
@@ -328,7 +377,29 @@ const tabs: { key: Tab; label: string }[] = [
         <h1 class="text-2xl font-semibold text-gray-800">Knihovna</h1>
         <p class="text-sm text-gray-400 mt-1">Sdílené prompty, kontext, prodejní argumenty a šablony.</p>
       </div>
+      <div v-if="tab === 'signatures'" class="relative">
+        <button
+          class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          @click="canEditSystemSignatures ? (showNewSignatureMenu = !showNewSignatureMenu) : startNewSignature(false)"
+        >
+          + Nový podpis
+        </button>
+        <div
+          v-if="showNewSignatureMenu && canEditSystemSignatures"
+          class="absolute right-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-52"
+        >
+          <button
+            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="startNewSignature(false)"
+          >Vlastní podpis</button>
+          <button
+            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="startNewSignature(true)"
+          >Nová šablona</button>
+        </div>
+      </div>
       <button
+        v-else
         class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
         @click="showForm = !showForm"
       >
@@ -342,14 +413,18 @@ const tabs: { key: Tab; label: string }[] = [
         :key="t.key"
         class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
         :class="tab === t.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-        @click="tab = t.key; showForm = false"
+        @click="tab = t.key; showForm = false; showNewSignatureMenu = false"
       >
         {{ t.label }}
       </button>
     </div>
 
     <div v-if="showForm" class="bg-white border border-primary/30 rounded-xl p-5 mb-6">
-      <h3 class="font-medium text-gray-800 mb-4">{{ editingId ? 'Upravit' : 'Nový' }} {{ tabs.find(t => t.key === tab)?.label }}</h3>
+      <h3 class="font-medium text-gray-800 mb-4">
+        {{ editingId ? 'Upravit' : 'Nový' }}
+        <template v-if="tab === 'signatures'">{{ form.signatureIsSystem ? 'podpisová šablona' : 'vlastní podpis' }}</template>
+        <template v-else>{{ tabs.find(t => t.key === tab)?.label }}</template>
+      </h3>
       <form class="space-y-3" @submit.prevent="save">
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Název</label>
@@ -387,7 +462,7 @@ const tabs: { key: Tab; label: string }[] = [
             <label class="block text-xs font-medium text-gray-500 mb-1">Obsah podpisu (WYSIWYG)</label>
             <RichTextEditor v-model="form.signatureContent" />
           </div>
-          <div class="flex items-center gap-2">
+          <div v-if="!form.signatureIsSystem" class="flex items-center gap-2">
             <input id="sig-default" v-model="form.signatureIsDefault" type="checkbox" class="accent-primary" />
             <label for="sig-default" class="text-sm text-gray-600 cursor-pointer select-none">Nastavit jako výchozí</label>
           </div>
@@ -511,7 +586,7 @@ const tabs: { key: Tab; label: string }[] = [
     </div>
 
     <!-- Filter bar -->
-    <div v-if="allItems.length > 0" class="flex flex-wrap gap-2 mb-4">
+    <div v-if="tab !== 'signatures' && allItems.length > 0" class="flex flex-wrap gap-2 mb-4">
       <select
         v-if="tab === 'prompts'"
         v-model="filterType"
@@ -532,40 +607,93 @@ const tabs: { key: Tab; label: string }[] = [
 
     <!-- Signatures list -->
     <template v-if="tab === 'signatures'">
-      <div v-if="signatures.length === 0" class="text-center py-16 text-gray-400 text-sm">
-        Zatím žádné podpisy. Vytvořte podpis tlačítkem + Nový.
+      <div v-if="signatureTemplates.length === 0 && signaturePersonal.length === 0" class="text-center py-16 text-gray-400 text-sm">
+        Zatím žádné podpisy. Vytvořte podpis tlačítkem + Nový podpis.
       </div>
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div
-          v-for="sig in signatures"
-          :key="sig.id"
-          class="bg-white rounded-xl border border-gray-100 p-5 transition-colors hover:border-primary/40 hover:shadow-sm"
-          :class="sig.isDefault ? 'border-primary/30 bg-primary/3' : ''"
-        >
-          <div class="flex items-start gap-2 min-w-0 mb-2">
-            <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
-            <span v-if="sig.isDefault" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">výchozí</span>
-          </div>
-          <div class="text-xs text-gray-400 mb-3">{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</div>
-          <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="sig.content" />
-          <div class="flex items-center gap-2">
-            <button
-              class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
-              @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, createdAt: sig.createdAt, derivedFromId: null })"
-            >Upravit</button>
-            <button
-              v-if="!sig.isDefault"
-              class="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
-              @click="$fetch(`/api/library/signatures/${sig.id}`, { method: 'PATCH', body: { isDefault: true } }).then(refreshSignatures)"
-            >Nastavit jako výchozí</button>
-            <button
-              class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
-              :disabled="deletingSignatureId === sig.id"
-              @click="deleteSignature(sig.id)"
-            >{{ deletingSignatureId === sig.id ? '…' : 'Smazat' }}</button>
+      <template v-else>
+        <!-- Podpisové šablony -->
+        <div v-if="signatureTemplates.length > 0" class="mb-8">
+          <h3 class="text-sm font-semibold text-amber-700 mb-3 flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">S</span>
+            Podpisové šablony
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-for="sig in signatureTemplates"
+              :key="sig.id"
+              class="bg-amber-50/30 rounded-xl border border-amber-200 p-5 transition-colors hover:border-amber-300 hover:shadow-sm"
+            >
+              <div class="flex items-start gap-2 min-w-0 mb-2">
+                <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
+                <span class="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0">šablona</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
+                <img v-if="sig.author?.image" :src="sig.author.image" :alt="sig.author.name" class="w-4 h-4 rounded-full shrink-0" referrerpolicy="no-referrer" />
+                <span>{{ sig.author?.name ?? 'Systém' }}</span>
+                <span class="text-gray-300">&middot;</span>
+                <span>{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</span>
+              </div>
+              <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" />
+              <div class="flex items-center gap-2">
+                <button
+                  class="text-xs text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg hover:bg-amber-50 transition-colors"
+                  @click="useTemplateAsBase(sig)"
+                >Použít jako vzor</button>
+                <template v-if="canEditSystemSignatures">
+                  <button
+                    class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
+                    @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, isSystem: true, createdAt: sig.createdAt, derivedFromId: null })"
+                  >Upravit</button>
+                  <button
+                    class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
+                    :disabled="deletingSignatureId === sig.id"
+                    @click="deleteSignature(sig.id)"
+                  >{{ deletingSignatureId === sig.id ? '…' : 'Smazat' }}</button>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+
+        <!-- Moje podpisy -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 mb-3">Moje podpisy</h3>
+          <div v-if="signaturePersonal.length === 0" class="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 rounded-xl">
+            Zatím žádné vlastní podpisy.
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-for="sig in signaturePersonal"
+              :key="sig.id"
+              class="bg-white rounded-xl border border-gray-100 p-5 transition-colors hover:border-primary/40 hover:shadow-sm"
+              :class="sig.isDefault ? 'border-primary/30' : ''"
+            >
+              <div class="flex items-start gap-2 min-w-0 mb-2">
+                <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
+                <span v-if="sig.isDefault" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">výchozí</span>
+              </div>
+              <div class="text-xs text-gray-400 mb-3">{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</div>
+              <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" />
+              <div class="flex items-center gap-2">
+                <button
+                  class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
+                  @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, isSystem: false, createdAt: sig.createdAt, derivedFromId: null })"
+                >Upravit</button>
+                <button
+                  v-if="!sig.isDefault"
+                  class="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+                  @click="$fetch(`/api/library/signatures/${sig.id}`, { method: 'PATCH', body: { isDefault: true } }).then(() => refreshSignatures())"
+                >Nastavit jako výchozí</button>
+                <button
+                  class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
+                  :disabled="deletingSignatureId === sig.id"
+                  @click="deleteSignature(sig.id)"
+                >{{ deletingSignatureId === sig.id ? '…' : 'Smazat' }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </template>
 
     <!-- Other tabs list -->
@@ -638,10 +766,16 @@ const tabs: { key: Tab; label: string }[] = [
   font-weight: 600;
 }
 
-:deep(.ProseMirror ul),
+:deep(.ProseMirror ul) {
+  padding-left: 1.5rem;
+  margin: 0.25rem 0 0.5rem;
+  list-style-type: disc;
+}
+
 :deep(.ProseMirror ol) {
   padding-left: 1.5rem;
   margin: 0.25rem 0 0.5rem;
+  list-style-type: decimal;
 }
 
 :deep(.ProseMirror li) {

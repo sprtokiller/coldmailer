@@ -13,7 +13,7 @@ export function useOverlay() {
   const edge = useOverlayEdge(core)
 
   const { canvas, pipeline, stepType, stepId, activeTab, activeNode, activeEdgeId, isOutputStep, totalRecords } = core
-  const { pl, s3Candidates, s4Partners, s5Alignments, s6Emails, ppProfiles, vaAlignments, opEmails, oeResult } = stepsInput
+  const { pl, s4Partners, s5Alignments, s6Emails, ppProfiles, vaAlignments, opEmails, oeResult } = stepsInput
   const { msTotalSelected, msRecords } = msInput
 
   // PI result records (depends on both stepsInput.piPartnerSources and records.searchFilter)
@@ -35,7 +35,6 @@ export function useOverlay() {
   // Tab labels (requires state from multiple sub-composables)
   const inputTabLabel = computed(() => {
     if (stepType.value === 'PARTNER_IDENTIFICATION') return 'Vstup'
-    if (stepType.value === 'PARTNER_PROFILING') return s3Candidates.value.length > 0 ? `Vstup (${pl?.step3SelectedCount?.() ?? 0}/${s3Candidates.value.length})` : 'Vstup'
     if (stepType.value === 'VALUE_ALIGNMENT') return s4Partners.value.length > 0 ? `Vstup (${pl?.step4SelectedCount?.() ?? 0}/${s4Partners.value.length})` : 'Vstup'
     if (stepType.value === 'OUTREACH_PREPARATION') return s5Alignments.value.length > 0 ? `Vstup (${pl?.step5SelectedCount?.() ?? 0}/${s5Alignments.value.length})` : 'Vstup'
     return s6Emails.value.length > 0 ? `Vstup (${s6Emails.value.length})` : 'Vstup'
@@ -52,7 +51,10 @@ export function useOverlay() {
       { key: 'config', label: 'Konfigurace' },
       { key: 'result', label: resultTabLabel.value },
     ]
-    if (stepType.value === 'PARTNER_IDENTIFICATION' || isOutputStep.value) items.unshift({ key: 'input', label: inputTabLabel.value })
+    // PARTNER_PROFILING and VALUE_ALIGNMENT have no input tab — candidate selection lives in the config tab
+    if (stepType.value === 'PARTNER_IDENTIFICATION' || (isOutputStep.value && stepType.value !== 'PARTNER_PROFILING' && stepType.value !== 'VALUE_ALIGNMENT')) {
+      items.unshift({ key: 'input', label: inputTabLabel.value })
+    }
     return items
   })
 
@@ -76,9 +78,9 @@ export function useOverlay() {
     if (!node) { canvas.expandedSourceIds.value = new Set(); canvas.selectedNodeBorderId.value = null; return }
     const hasSourceFilter = !!canvas.activeSourceFilter.value
     const isPiExtraNode = canvas.selectedNodeId.value === 'pi-imported' || canvas.selectedNodeId.value === 'pi-globaldb'
-    const stepsWithInput = ['PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
+    const stepsWithInput = ['PARTNER_IDENTIFICATION', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
     activeTab.value = hasSourceFilter ? 'result'
-      : node.stepType === 'MARKET_SCANNING' || isPiExtraNode ? 'config'
+      : node.stepType === 'MARKET_SCANNING' || node.stepType === 'PARTNER_PROFILING' || node.stepType === 'VALUE_ALIGNMENT' || isPiExtraNode ? 'config'
       : stepsWithInput.includes(node.stepType) ? 'input' : 'result'
     if (node.stepType === 'PARTNER_PROFILING' && pl) pl.initStep3Selection?.()
     else if (node.stepType === 'VALUE_ALIGNMENT' && pl) pl.initStep4Selection?.()

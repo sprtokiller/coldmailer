@@ -5,15 +5,35 @@ import { Underline } from '@tiptap/extension-underline'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
 import { Highlight } from '@tiptap/extension-highlight'
 import { TextAlign } from '@tiptap/extension-text-align'
+import { Link } from '@tiptap/extension-link'
+import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 // ── State ──────────────────────────────────────────────────────────────────
+const editorWrapperRef = ref<HTMLElement | null>(null)
 const showColorPopover = ref(false)
 const showMoreMenu = ref(false)
 const colorPopoverRef = ref<HTMLElement | null>(null)
 const moreMenuRef = ref<HTMLElement | null>(null)
+const htmlMode = ref(false)
+const htmlSource = ref('')
+
+// Reactivity trigger — incremented on every editor transaction (including selection changes)
+const txCounter = ref(0)
+
+// ── Link state ────────────────────────────────────────────────────────────
+const showLinkPopover = ref(false)
+const linkPopoverRef = ref<HTMLElement | null>(null)
+const linkUrl = ref('')
+const linkText = ref('')
+const linkPopoverPos = ref({ top: '0px', left: '0px' })
+
+const linkTooltip = reactive({ show: false, url: '', x: 0, y: 0 })
+let tooltipTimer: ReturnType<typeof setTimeout> | null = null
+
+const ctrlHeld = ref(false)
 
 // ── Font options ───────────────────────────────────────────────────────────
 const customFonts = [
@@ -47,9 +67,56 @@ const editor = useEditor({
     Color,
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Link.configure({
+      openOnClick: false,
+      autolink: true,
+      linkOnPaste: true,
+      HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
+    }),
   ],
-  onUpdate({ editor }) {
-    emit('update:modelValue', editor.getHTML())
+  editorProps: {
+    transformPastedHTML(html) {
+      return sanitizeHtml(html)
+    },
+    handleKeyDown(_view, event) {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+        event.preventDefault()
+        openLinkPopover()
+        return true
+      }
+      return false
+    },
+    handleClick(_view, _pos, event) {
+      if (event.ctrlKey || event.metaKey) {
+        const link = (event.target as HTMLElement).closest('a')
+        if (link?.getAttribute('href')) {
+          window.open(link.getAttribute('href')!, '_blank', 'noopener,noreferrer')
+          return true
+        }
+      }
+      return false
+    },
+    handleDOMEvents: {
+      mouseover(_view, event) {
+        const link = (event.target as HTMLElement).closest?.('a')
+        if (link?.getAttribute('href')) {
+          scheduleTooltip(link.getAttribute('href')!, event as MouseEvent)
+        }
+        return false
+      },
+      mouseout(_view, event) {
+        const link = (event.target as HTMLElement).closest?.('a')
+        if (link) clearTooltip()
+        return false
+      },
+    },
+  },
+  onUpdate({ editor: e }) {
+    emit('update:modelValue', e.getHTML())
+    txCounter.value++
+  },
+  onSelectionUpdate() {
+    txCounter.value++
   },
 })
 
@@ -67,33 +134,42 @@ watch(
 
 onBeforeUnmount(() => editor.value?.destroy())
 
-// ── Computed current state ─────────────────────────────────────────────────
+// ── Computed current state (reactive via txCounter) ───────────────────────
 const currentFont = computed(() => {
+  txCounter.value
   if (!editor.value) return ''
   const attrs = editor.value.getAttributes('textStyle')
-  return (attrs.fontFamily as string) ?? ''
+  const ff = (attrs.fontFamily as string) ?? ''
+  return ff.replace(/^["']|["']$/g, '')
 })
 
 const currentSize = computed(() => {
+  txCounter.value
   if (!editor.value) return ''
   const attrs = editor.value.getAttributes('textStyle')
   return (attrs.fontSize as string) ?? ''
 })
 
 const currentFgColor = computed(() => {
+  txCounter.value
   if (!editor.value) return '#000000'
   const attrs = editor.value.getAttributes('textStyle')
   return (attrs.color as string) ?? '#000000'
 })
 
+const isLinkActive = computed(() => {
+  txCounter.value
+  return editor.value?.isActive('link') ?? false
+})
+
 function currentFontLabel(fontValue: string) {
-  if (!fontValue) return 'Písmo'
+  if (!fontValue) return ''
   const all = [...customFonts, ...standardFonts]
   return all.find(f => f.value === fontValue)?.label ?? fontValue
 }
 
 function currentSizeLabel(sizeValue: string) {
-  if (!sizeValue) return 'Vel.'
+  if (!sizeValue) return ''
   return sizeValue.replace('px', '')
 }
 
@@ -119,39 +195,254 @@ function setBgColor(color: string) {
 }
 
 function onNativeFgColor(e: Event) {
-  const color = (e.target as HTMLInputElement).value
-  setFgColor(color)
+  setFgColor((e.target as HTMLInputElement).value)
 }
 
 function onNativeBgColor(e: Event) {
-  const color = (e.target as HTMLInputElement).value
-  setBgColor(color)
+  setBgColor((e.target as HTMLInputElement).value)
 }
 
-// Close popovers on outside click
+// ── Link popover ──────────────────────────────────────────────────────────
+function openLinkPopover() {
+  if (!editor.value) return
+
+  const { from, to } = editor.value.state.selection
+  const selectedText = editor.value.state.doc.textBetween(from, to, ' ')
+  const linkAttrs = editor.value.getAttributes('link')
+
+  linkText.value = selectedText || ''
+  linkUrl.value = (linkAttrs.href as string) || ''
+
+  // Position near the selection, relative to the editor wrapper
+  const wrapperEl = editorWrapperRef.value
+  if (wrapperEl) {
+    const coords = editor.value.view.coordsAtPos(from)
+    const rect = wrapperEl.getBoundingClientRect()
+    linkPopoverPos.value = {
+      top: `${coords.bottom - rect.top + 6}px`,
+      left: `${Math.min(Math.max(0, coords.left - rect.left), rect.width - 300)}px`,
+    }
+  }
+
+  showLinkPopover.value = true
+  showColorPopover.value = false
+  showMoreMenu.value = false
+
+  nextTick(() => {
+    (linkPopoverRef.value?.querySelector('input[name="link-url"]') as HTMLInputElement)?.focus()
+  })
+}
+
+function applyLink() {
+  if (!editor.value) return
+
+  let url = linkUrl.value.trim()
+  if (!url) { removeLink(); return }
+
+  if (!/^https?:\/\//i.test(url) && !url.startsWith('mailto:')) {
+    url = 'https://' + url
+  }
+
+  const { from, to } = editor.value.state.selection
+  const currentText = editor.value.state.doc.textBetween(from, to, ' ')
+  const newText = linkText.value.trim()
+
+  if (newText && newText !== currentText) {
+    editor.value.chain()
+      .focus()
+      .deleteSelection()
+      .insertContent({ type: 'text', text: newText, marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer' } }] })
+      .run()
+  } else if (from === to && newText) {
+    editor.value.chain()
+      .focus()
+      .insertContent({ type: 'text', text: newText, marks: [{ type: 'link', attrs: { href: url, target: '_blank', rel: 'noopener noreferrer' } }] })
+      .run()
+  } else {
+    editor.value.chain()
+      .focus()
+      .setLink({ href: url, target: '_blank' })
+      .run()
+  }
+
+  showLinkPopover.value = false
+}
+
+function removeLink() {
+  editor.value?.chain().focus().unsetLink().run()
+  showLinkPopover.value = false
+}
+
+function onLinkKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') { e.preventDefault(); applyLink() }
+  if (e.key === 'Escape') { showLinkPopover.value = false; editor.value?.commands.focus() }
+}
+
+// ── Link tooltip ──────────────────────────────────────────────────────────
+function scheduleTooltip(url: string, event: MouseEvent) {
+  clearTooltip()
+  tooltipTimer = setTimeout(() => {
+    const wrapperEl = editorWrapperRef.value
+    if (!wrapperEl) return
+    const rect = wrapperEl.getBoundingClientRect()
+    linkTooltip.url = url
+    linkTooltip.x = event.clientX - rect.left
+    linkTooltip.y = event.clientY - rect.top + 20
+    linkTooltip.show = true
+  }, 500)
+}
+
+function clearTooltip() {
+  if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null }
+  linkTooltip.show = false
+}
+
+// ── Ctrl key tracking (for pointer cursor on links) ──────────────────────
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Control' || e.key === 'Meta') ctrlHeld.value = true
+}
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === 'Control' || e.key === 'Meta') ctrlHeld.value = false
+}
+function onWindowBlur() { ctrlHeld.value = false }
+
+// ── Close popovers on outside click ──────────────────────────────────────
 function onDocumentClick(e: MouseEvent) {
-  if (colorPopoverRef.value && !colorPopoverRef.value.contains(e.target as Node)) {
+  if (colorPopoverRef.value && !colorPopoverRef.value.contains(e.target as Node))
     showColorPopover.value = false
-  }
-  if (moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node)) {
+  if (moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node))
     showMoreMenu.value = false
+  if (showLinkPopover.value && linkPopoverRef.value && !linkPopoverRef.value.contains(e.target as Node))
+    showLinkPopover.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick, true)
+  document.addEventListener('keydown', onKeyDown)
+  document.addEventListener('keyup', onKeyUp)
+  window.addEventListener('blur', onWindowBlur)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick, true)
+  document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('blur', onWindowBlur)
+  clearTooltip()
+})
+
+// ── HTML source mode ──────────────────────────────────────────────────────
+function toggleHtmlMode() {
+  if (!htmlMode.value) {
+    htmlSource.value = editor.value?.getHTML() ?? ''
+    htmlMode.value = true
+  } else {
+    const safe = sanitizeAndNormalizeHtml(htmlSource.value)
+    editor.value?.commands.setContent(safe, false)
+    emit('update:modelValue', safe)
+    htmlMode.value = false
   }
 }
 
-onMounted(() => document.addEventListener('click', onDocumentClick, true))
-onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, true))
+function onHtmlSourceInput(e: Event) {
+  htmlSource.value = (e.target as HTMLTextAreaElement).value
+  emit('update:modelValue', htmlSource.value)
+}
+
+defineExpose({
+  normalize() {
+    if (!editor.value) return
+    const normalized = sanitizeAndNormalizeHtml(editor.value.getHTML())
+    editor.value.commands.setContent(normalized, false)
+    emit('update:modelValue', normalized)
+  },
+})
 </script>
 
 <template>
-  <div class="border border-gray-200 rounded-xl overflow-hidden">
+  <div ref="editorWrapperRef" class="relative border border-gray-200 rounded-xl overflow-hidden">
     <!-- Content area -->
-    <EditorContent :editor="editor" class="bg-white" />
+    <EditorContent
+      v-show="!htmlMode"
+      :editor="editor"
+      class="bg-white"
+      :class="{ 'ctrl-held': ctrlHeld }"
+    />
+    <textarea
+      v-if="htmlMode"
+      :value="htmlSource"
+      class="w-full bg-white text-sm font-mono text-gray-700 resize-y focus:outline-none"
+      style="min-height: 200px; padding: 12px 16px;"
+      @input="onHtmlSourceInput"
+    />
+
+    <!-- Link edit popover -->
+    <div
+      v-if="showLinkPopover"
+      ref="linkPopoverRef"
+      class="absolute z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-[300px]"
+      :style="linkPopoverPos"
+      @click.stop
+    >
+      <div class="space-y-2">
+        <div>
+          <label class="block text-[10px] font-medium text-gray-500 mb-0.5">Text</label>
+          <input
+            v-model="linkText"
+            name="link-text"
+            type="text"
+            class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="Zobrazený text"
+            @keydown="onLinkKeydown"
+          />
+        </div>
+        <div>
+          <label class="block text-[10px] font-medium text-gray-500 mb-0.5">Odkaz</label>
+          <input
+            v-model="linkUrl"
+            name="link-url"
+            type="text"
+            class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="https://…"
+            @keydown="onLinkKeydown"
+          />
+        </div>
+        <div class="flex items-center gap-2 pt-0.5">
+          <button
+            type="button"
+            class="px-3 py-1 text-xs font-medium text-white bg-primary rounded-lg hover:opacity-90 transition-opacity"
+            @click="applyLink"
+          >Použít</button>
+          <button
+            v-if="isLinkActive"
+            type="button"
+            class="px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+            @click="removeLink"
+          >Odebrat odkaz</button>
+          <button
+            type="button"
+            class="ml-auto px-2 py-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            @click="showLinkPopover = false; editor?.commands.focus()"
+          >Zrušit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Link hover tooltip -->
+    <div
+      v-if="linkTooltip.show"
+      class="absolute z-40 px-2 py-1 text-[11px] text-gray-500 bg-white border border-gray-200 rounded-lg shadow-sm max-w-[250px] truncate pointer-events-none"
+      :style="{ top: linkTooltip.y + 'px', left: linkTooltip.x + 'px' }"
+    >
+      {{ linkTooltip.url }}
+      <span class="text-gray-300 ml-1">Ctrl+klik</span>
+    </div>
 
     <!-- Toolbar -->
     <div class="border-t border-gray-200 bg-gray-50 px-2 py-1.5 flex items-center gap-0.5 flex-wrap">
 
       <!-- Group 1: Undo / Redo -->
       <button
+        type="button"
         title="Zpět"
         class="toolbar-btn"
         :class="{ 'opacity-40 cursor-not-allowed': !editor?.can().undo() }"
@@ -163,6 +454,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
       <button
+        type="button"
         title="Vpřed"
         class="toolbar-btn"
         :class="{ 'opacity-40 cursor-not-allowed': !editor?.can().redo() }"
@@ -183,7 +475,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         :value="currentFont"
         @change="setFont(($event.target as HTMLSelectElement).value)"
       >
-        <option value="" disabled>{{ currentFontLabel(currentFont) || 'Písmo' }}</option>
+        <option value="">{{ currentFontLabel(currentFont) || 'Písmo' }}</option>
         <optgroup label="Vlastní">
           <option v-for="f in customFonts" :key="f.value" :value="f.value">{{ f.label }}</option>
         </optgroup>
@@ -199,7 +491,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         :value="currentSize"
         @change="setSize(($event.target as HTMLSelectElement).value)"
       >
-        <option value="" disabled>{{ currentSizeLabel(currentSize) || 'Vel.' }}</option>
+        <option value="">{{ currentSizeLabel(currentSize) || 'Vel.' }}</option>
         <option v-for="s in fontSizes" :key="s" :value="s">{{ s.replace('px', '') }}</option>
       </select>
 
@@ -207,18 +499,21 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
 
       <!-- Group 3: Bold / Italic / Underline -->
       <button
+        type="button"
         title="Tučné"
         class="toolbar-btn font-bold"
         :class="{ 'bg-gray-200': editor?.isActive('bold') }"
         @click="editor?.chain().focus().toggleBold().run()"
       >B</button>
       <button
+        type="button"
         title="Kurzíva"
         class="toolbar-btn italic"
         :class="{ 'bg-gray-200': editor?.isActive('italic') }"
         @click="editor?.chain().focus().toggleItalic().run()"
       >I</button>
       <button
+        type="button"
         title="Podtržení"
         class="toolbar-btn underline"
         :class="{ 'bg-gray-200': editor?.isActive('underline') }"
@@ -230,6 +525,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
       <!-- Group 4: Color -->
       <div ref="colorPopoverRef" class="relative">
         <button
+          type="button"
           title="Barva textu / pozadí"
           class="toolbar-btn flex flex-col items-center gap-0.5 px-1.5"
           @click.stop="showColorPopover = !showColorPopover; showMoreMenu = false"
@@ -247,6 +543,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
             <button
               v-for="c in fgColors"
               :key="c"
+              type="button"
               class="w-5 h-5 rounded-full border border-gray-200 hover:scale-110 transition-transform"
               :style="{ backgroundColor: c }"
               :title="c"
@@ -263,6 +560,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
             <button
               v-for="c in bgColors"
               :key="c"
+              type="button"
               class="w-5 h-5 rounded-full border border-gray-200 hover:scale-110 transition-transform"
               :style="{ backgroundColor: c === 'transparent' ? 'white' : c }"
               :title="c === 'transparent' ? 'Bez barvy' : c"
@@ -280,8 +578,25 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
 
       <div class="toolbar-sep" />
 
-      <!-- Group 5: Alignment -->
+      <!-- Group 5: Link -->
       <button
+        type="button"
+        title="Odkaz (Ctrl+K)"
+        class="toolbar-btn"
+        :class="{ 'bg-gray-200': isLinkActive }"
+        @click="openLinkPopover"
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <div class="toolbar-sep" />
+
+      <!-- Group 6: Alignment -->
+      <button
+        type="button"
         title="Zarovnat vlevo"
         class="toolbar-btn"
         :class="{ 'bg-gray-200': editor?.isActive({ textAlign: 'left' }) }"
@@ -292,6 +607,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
       <button
+        type="button"
         title="Zarovnat na střed"
         class="toolbar-btn"
         :class="{ 'bg-gray-200': editor?.isActive({ textAlign: 'center' }) }"
@@ -302,6 +618,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
       <button
+        type="button"
         title="Zarovnat vpravo"
         class="toolbar-btn"
         :class="{ 'bg-gray-200': editor?.isActive({ textAlign: 'right' }) }"
@@ -314,8 +631,9 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
 
       <div class="toolbar-sep" />
 
-      <!-- Group 6: Lists -->
+      <!-- Group 7: Lists -->
       <button
+        type="button"
         title="Číslovaný seznam"
         class="toolbar-btn"
         :class="{ 'bg-gray-200': editor?.isActive('orderedList') }"
@@ -329,6 +647,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
       <button
+        type="button"
         title="Odrážkový seznam"
         class="toolbar-btn"
         :class="{ 'bg-gray-200': editor?.isActive('bulletList') }"
@@ -342,8 +661,9 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
 
-      <!-- Group 6b: Indent -->
+      <!-- Indent -->
       <button
+        type="button"
         title="Méně odsazení"
         class="toolbar-btn"
         @click="editor?.chain().focus().liftListItem('listItem').run()"
@@ -354,6 +674,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </svg>
       </button>
       <button
+        type="button"
         title="Více odsazení"
         class="toolbar-btn"
         @click="editor?.chain().focus().sinkListItem('listItem').run()"
@@ -366,9 +687,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
 
       <div class="toolbar-sep" />
 
-      <!-- Group 7: More -->
+      <!-- Group 8: More -->
       <div ref="moreMenuRef" class="relative">
         <button
+          type="button"
           title="Více možností"
           class="toolbar-btn"
           :class="{ 'bg-gray-200': showMoreMenu }"
@@ -384,6 +706,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
           class="absolute bottom-full right-0 mb-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-44"
         >
           <button
+            type="button"
             class="more-item"
             :class="{ 'bg-gray-100': editor?.isActive('strike') }"
             title="Přeškrtnutí"
@@ -392,6 +715,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
             <s>Přeškrtnutí</s>
           </button>
           <button
+            type="button"
             class="more-item"
             title="Vymazat formátování"
             @click="editor?.chain().focus().clearNodes().unsetAllMarks().run(); showMoreMenu = false"
@@ -399,6 +723,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
             Vymazat formátování
           </button>
           <button
+            type="button"
             class="more-item"
             :class="{ 'bg-gray-100': editor?.isActive('blockquote') }"
             title="Citace"
@@ -409,12 +734,22 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
         </div>
       </div>
 
+      <div class="toolbar-sep" />
+
+      <!-- Group 9: HTML source toggle -->
+      <button
+        type="button"
+        :title="htmlMode ? 'Vizuální režim' : 'Zdrojový kód'"
+        class="toolbar-btn px-1.5 font-mono text-[11px]"
+        :class="{ 'bg-gray-200': htmlMode }"
+        @click="toggleHtmlMode"
+      >&lt;/&gt;</button>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Toolbar button base */
 .toolbar-btn {
   @apply flex items-center justify-center w-7 h-7 rounded-lg text-gray-600 hover:bg-gray-200 transition-colors text-sm cursor-pointer select-none;
 }
@@ -433,7 +768,6 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
 </style>
 
 <style>
-/* ProseMirror content area prose styles (unscoped so Tiptap's DOM is targeted) */
 .ProseMirror {
   min-height: 200px;
   padding: 12px 16px;
@@ -444,9 +778,14 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
   margin: 0 0 0.5em 0;
 }
 
-.ProseMirror ul,
+.ProseMirror ul {
+  padding-left: 1.5em;
+  list-style-type: disc;
+}
+
 .ProseMirror ol {
   padding-left: 1.5em;
+  list-style-type: decimal;
 }
 
 .ProseMirror blockquote {
@@ -454,6 +793,16 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, tru
   margin: 0;
   padding-left: 1em;
   color: #6b7280;
+}
+
+.ProseMirror a {
+  color: var(--color-primary, #6366f1);
+  text-decoration: underline;
+  cursor: text;
+}
+
+.ctrl-held .ProseMirror a {
+  cursor: pointer;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

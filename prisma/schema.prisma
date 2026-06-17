@@ -30,10 +30,13 @@ model User {
   permOverrides UserPermission[]
   budget        UserBudget?
 
-  globalRecords    GlobalRecord[]
-  inputSources     InputSource[]
-  addedRefs        PipelineRecordRef[]
-  recordEvents     RecordEvent[]
+  globalRecords        GlobalRecord[]
+  inputSources         InputSource[]
+  addedRefs            PipelineRecordRef[]
+  recordEvents         RecordEvent[]
+  partnerAssignments   PartnerAssignment[]
+  partnerMailEvents    PartnerMailEvent[]
+  partnerNotes         PartnerNote[]
 }
 
 model Role {
@@ -77,6 +80,7 @@ model Signature {
   name      String
   content   String
   isDefault Boolean  @default(false)
+  isSystem  Boolean  @default(false)
   author    User     @relation(fields: [authorId], references: [id])
   authorId  String
   createdAt DateTime @default(now())
@@ -259,6 +263,11 @@ model GlobalRecord {
 
   pipelineRefs    PipelineRecordRef[]
   events          RecordEvent[]
+  contacts        PartnerContact[]
+  assignments     PartnerAssignment[]
+  mailEvents      PartnerMailEvent[]
+  partnerNotes    PartnerNote[]
+  fulfillment     PartnerFulfillment?
 
   @@index([normalizedName])
 }
@@ -311,4 +320,72 @@ model RecordEvent {
   eventType      String
   timestamp      DateTime     @default(now())
   metadata       Json?
+}
+
+// ── Partner CRM System ────────────────────────────────────────────────────────
+
+enum MailDirection {
+  SENT
+  RECEIVED
+}
+
+model PartnerContact {
+  id             String       @id @default(cuid())
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  address        String
+  label          String?
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([globalRecordId])
+}
+
+model PartnerAssignment {
+  globalRecordId String
+  userId         String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+  assignedAt     DateTime     @default(now())
+
+  @@id([globalRecordId, userId])
+}
+
+model PartnerMailEvent {
+  id             String        @id @default(cuid())
+  globalRecordId String
+  globalRecord   GlobalRecord  @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  direction      MailDirection
+  subject        String
+  body           String?
+  sentAt         DateTime
+  fromAddress    String?
+  toAddress      String?
+  gmailId        String?
+  createdBy      String
+  creator        User          @relation(fields: [createdBy], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([globalRecordId, sentAt])
+}
+
+model PartnerNote {
+  id             String       @id @default(cuid())
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  content        String
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([globalRecordId])
+}
+
+model PartnerFulfillment {
+  globalRecordId String       @id
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  myToThem       String?
+  themToUs       String?
+  updatedAt      DateTime     @updatedAt
 }

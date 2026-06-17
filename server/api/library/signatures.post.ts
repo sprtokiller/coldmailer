@@ -1,13 +1,24 @@
 import { prisma } from '~/server/utils/prisma'
-import { requireAuth } from '~/server/utils/requireAuth'
+import { requirePermission } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
-  const user = await requireAuth(event)
-  const body = await readBody<{ name: string; content: string; isDefault?: boolean }>(event)
+  const body = await readBody<{ name: string; content: string; isDefault?: boolean; isSystem?: boolean }>(event)
 
-  if (body.isDefault) {
+  if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+    throw createError({ statusCode: 400, statusMessage: 'Název podpisu je povinný' })
+  }
+  if (!body.content || typeof body.content !== 'string' || !body.content.trim()) {
+    throw createError({ statusCode: 400, statusMessage: 'Obsah podpisu je povinný' })
+  }
+
+  const isSystem = body.isSystem ?? false
+  const isDefault = isSystem ? false : (body.isDefault ?? false)
+
+  const user = await requirePermission(event, isSystem ? 'signatures.system.edit' : 'signatures.own.edit')
+
+  if (isDefault) {
     await prisma.signature.updateMany({
-      where: { authorId: user.id, isDefault: true },
+      where: { authorId: user.id, isSystem: false, isDefault: true },
       data: { isDefault: false },
     })
   }
@@ -16,7 +27,8 @@ export default defineEventHandler(async (event) => {
     data: {
       name: body.name,
       content: body.content,
-      isDefault: body.isDefault ?? false,
+      isDefault,
+      isSystem,
       authorId: user.id,
     },
   })

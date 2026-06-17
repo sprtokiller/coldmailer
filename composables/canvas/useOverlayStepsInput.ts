@@ -1,6 +1,7 @@
 import type { StepRecord } from '~/composables/usePipelineCanvas'
 import type { OverlayCoreState } from './useOverlayCore'
 import { getStr } from './useOverlayCore'
+import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 
 // Combined cast type for pipeline composable methods used by steps 3-6
 interface PipelineStepsCtx {
@@ -18,7 +19,7 @@ interface PipelineStepsCtx {
   step5Alignments?: () => Array<Record<string, unknown>>
   step5SelectedIds: Record<string, boolean>
   initStep5Selection?: () => void
-  step5SelectAll?: () => void; step5DeselectAll?: () => void
+  step5SelectAll?: () => void; step5DeselectAll?: () => void; step5SelectUnprocessed?: () => void
   step5SelectedCount?: () => number
   outreachEmails?: () => Array<Record<string, unknown>>
   profilingOutputProfiles?: (k: string) => Array<Record<string, unknown>>
@@ -67,7 +68,7 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
   })
   const piProcessedItemNames = computed(() => {
     const s = new Set<string>()
-    for (const item of piOutputItems.value) if (item.itemName) s.add(item.itemName.toLowerCase().trim())
+    for (const item of piOutputItems.value) if (item.itemName) s.add(normalizeKey(item.itemName))
     return s
   })
   const piPartnerSourceMap = computed(() => {
@@ -133,15 +134,16 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
     return parts.join(' · ')
   }
 
-  // "✓ Hotovo" set for steps 3-5
+  // "✓ Hotovo" set for steps 3-5 — built strictly from valid outputData entries
+  // (records that errored out or lack a name are not considered processed)
   const processedNames = computed(() => {
     const s = new Set<string>()
-    if (stepType.value === 'PARTNER_PROFILING') for (const p of ppProfiles.value) { const n = getStr(p, 'name'); if (n) s.add(n.toLowerCase()) }
-    else if (stepType.value === 'VALUE_ALIGNMENT') for (const a of vaAlignments.value) { const n = getStr(a, 'name') || getStr(a, 'partnerName'); if (n) s.add(n.toLowerCase()) }
-    else if (stepType.value === 'OUTREACH_PREPARATION') for (const e of opEmails.value) { const n = getStr(e, 'partnerName') || getStr(e, 'name'); if (n) s.add(n.toLowerCase()) }
+    if (stepType.value === 'PARTNER_PROFILING') for (const p of ppProfiles.value) { if (p.error) continue; const n = normalizeKey(getStr(p, 'name')); if (n) s.add(n) }
+    else if (stepType.value === 'VALUE_ALIGNMENT') for (const a of vaAlignments.value) { if (a.error) continue; const n = normalizeKey(getStr(a, 'name') || getStr(a, 'partnerName')); if (n) s.add(n) }
+    else if (stepType.value === 'OUTREACH_PREPARATION') for (const e of opEmails.value) { if (e.error) continue; const n = normalizeKey(getStr(e, 'partnerName') || getStr(e, 'name')); if (n) s.add(n) }
     return s
   })
-  function isProcessed(name: string) { return processedNames.value.has(name.toLowerCase().trim()) }
+  function isProcessed(name: string) { return processedNames.value.has(normalizeKey(name)) }
   function toggleS3(id: string, val: boolean) { if (pl) pl.step3SelectedIds[id] = val }
   function toggleS4(name: string, val: boolean) { if (pl) pl.step4SelectedIds[name] = val }
   function toggleS5(name: string, val: boolean) { if (pl) pl.step5SelectedIds[name] = val }

@@ -52,7 +52,15 @@ export function getObj(obj: Record<string, unknown>, key: string): Record<string
 }
 export function renderLinks(text: string): string {
   if (!text) return ''
-  return text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-500 underline hover:opacity-80">$1</a>')
+  // Tolerant markdown link parsing: optional backslash-escaped brackets, whitespace
+  // between ] and (, angle-bracket URLs, optional "title", and www. without protocol
+  return text.replace(
+    /\\?\[([^\[\]\n]+?)\\?\]\s*\(\s*<?((?:https?:\/\/|www\.)[^\s)>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g,
+    (_, label: string, url: string) => {
+      const href = url.startsWith('www.') ? `https://${url}` : url
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 underline hover:opacity-80">${label}</a>`
+    },
+  )
 }
 export function isLegacyRef(r: { id: string }): boolean { return r.id.startsWith('legacy-') }
 export function sourceConfig(type?: string | null) { return SOURCE_CONFIG[type ?? 'legacy'] ?? SOURCE_CONFIG.legacy }

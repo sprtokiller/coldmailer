@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { overlayKey } from '~/composables/canvas/useOverlay'
 import { sourceConfig, isLegacyRef } from '~/composables/canvas/useOverlayCore'
+import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 const o = inject(overlayKey)!
 const { msSourceGroups, msExpandedGroups, msRecords, msRecordsLoading, msTotalSelected, currentRunId,
   piProcessedItemNames, toggleMsGroup, selectAllInGroup, toggleMsSel } = o
@@ -53,11 +54,11 @@ const { msSourceGroups, msExpandedGroups, msRecords, msRecordsLoading, msTotalSe
               class="rounded disabled:opacity-40 flex-shrink-0"
               @change="toggleMsSel(rec.id, ($event.target as HTMLInputElement).checked)"
             />
-            <span class="flex-1 text-sm text-gray-800 truncate">{{ rec.globalRecord.canonicalName }}</span>
             <span
-              v-if="piProcessedItemNames.has(rec.globalRecord.canonicalName.toLowerCase().trim())"
+              v-if="piProcessedItemNames.has(normalizeKey(rec.globalRecord.canonicalName))"
               class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium flex-shrink-0"
             >✓ Zpracováno</span>
+            <span class="flex-1 text-sm text-gray-800 truncate">{{ rec.globalRecord.canonicalName }}</span>
             <a
               v-if="(rec.globalRecord.payload as Record<string,string>).url"
               :href="(rec.globalRecord.payload as Record<string,string>).url"

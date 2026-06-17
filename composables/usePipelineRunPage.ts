@@ -204,6 +204,8 @@ export async function usePipelineRunPage() {
     selection.step2Initialized,
     selection.step4Initialized,
     selection.step5Initialized,
+    getStepResult,
+    outputUtils.alignmentOutputAlignments,
   )
 
   function prevStepOutput(stepKey: string): string {
@@ -247,9 +249,15 @@ export async function usePipelineRunPage() {
 
   watch(activeStep, (val) => {
     if (val === 'PARTNER_IDENTIFICATION') selection.initStep2Selection()
-    if (val === 'PARTNER_PROFILING') selection.initStep3Selection()
-    if (val === 'VALUE_ALIGNMENT') selection.initStep4Selection()
-    if (val === 'OUTREACH_PREPARATION') selection.initStep5Selection()
+    if (val === 'PARTNER_PROFILING') {
+      selection.initStep3Selection()
+    }
+    if (val === 'VALUE_ALIGNMENT') {
+      selection.initStep4Selection()
+    }
+    if (val === 'OUTREACH_PREPARATION') {
+      selection.initStep5Selection()
+    }
     if (val === 'OUTREACH_EXECUTION') {
       if (!selection.step6SelectedPartnerName.value && outputUtils.outreachEmails().length > 0) {
         const first = outputUtils.outreachEmails()[0]
@@ -259,6 +267,22 @@ export async function usePipelineRunPage() {
       }
     }
   })
+
+  watch(
+    () => outputUtils.profilingOutputProfiles('PARTNER_PROFILING'),
+    () => {
+      selection.step4Initialized.value = false
+    },
+    { deep: true }
+  )
+
+  watch(
+    () => outputUtils.alignmentOutputAlignments('VALUE_ALIGNMENT'),
+    () => {
+      selection.step5Initialized.value = false
+    },
+    { deep: true }
+  )
 
   // ── Assemble context ─────────────────────────────────────────────────────────
 
@@ -314,6 +338,8 @@ export async function usePipelineRunPage() {
     step3SelectUnprocessed: selection.step3SelectUnprocessed,
     step3FilteredCandidates: selection.step3FilteredCandidates,
     step3SelectedCount: selection.step3SelectedCount,
+    step3IsCandidateProcessed: selection.step3IsCandidateProcessed,
+
     step4SelectedIds: selection.step4SelectedIds,
     step4Initialized: selection.step4Initialized,
     step4Partners: selection.step4Partners,
@@ -322,12 +348,15 @@ export async function usePipelineRunPage() {
     step4DeselectAll: selection.step4DeselectAll,
     step4SelectUnprocessed: selection.step4SelectUnprocessed,
     step4SelectedCount: selection.step4SelectedCount,
+    step4IsPartnerProcessed: selection.step4IsPartnerProcessed,
+
     step5SelectedIds: selection.step5SelectedIds,
     step5Initialized: selection.step5Initialized,
     step5Alignments: selection.step5Alignments,
     initStep5Selection: selection.initStep5Selection,
     step5SelectAll: selection.step5SelectAll,
     step5DeselectAll: selection.step5DeselectAll,
+    step5SelectUnprocessed: selection.step5SelectUnprocessed,
     step5SelectedCount: selection.step5SelectedCount,
     step6SelectedPartnerName: selection.step6SelectedPartnerName,
     step6PreviewTo: selection.step6PreviewTo,

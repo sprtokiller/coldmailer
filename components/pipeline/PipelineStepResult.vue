@@ -113,22 +113,24 @@ async function deleteSelectedRows() {
     </template>
 
     <template v-else-if="step.key === 'PARTNER_PROFILING'">
-      <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
-        <button
-          v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
-          :key="m[0]"
-          class="px-3 py-1 rounded-lg font-medium transition-all"
-          :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-          @click="pipeline.setOutputMode(step.key, m[0])"
-        >
-          {{ m[1] }}
-        </button>
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit text-xs">
+          <button
+            v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
+            :key="m[0]"
+            class="px-3 py-1 rounded-lg font-medium transition-all"
+            :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            @click="pipeline.setOutputMode(step.key, m[0])"
+          >
+            {{ m[1] }}
+          </button>
+        </div>
       </div>
 
       <pre v-if="pipeline.getOutputMode(step.key, 'table') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
 
       <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[1fr_8rem_3rem_1fr_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+        <div class="grid grid-cols-[1fr_8rem_3rem_1fr_4rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 items-center">
           <span>Partner</span><span>Odvětví</span><span class="text-center">Kontak.</span><span>Nejlepší kontakt</span><span class="text-center">Detail</span><span></span>
         </div>
         <template v-for="(profile, pi) in pipeline.profilingOutputProfiles(step.key)" :key="pi">
@@ -277,31 +279,35 @@ async function deleteSelectedRows() {
     </template>
 
     <template v-else-if="step.key === 'VALUE_ALIGNMENT'">
-      <div class="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl w-fit text-xs">
-        <button
-          v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
-          :key="m[0]"
-          class="px-3 py-1 rounded-lg font-medium transition-all"
-          :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-          @click="pipeline.setOutputMode(step.key, m[0])"
-        >
-          {{ m[1] }}
-        </button>
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit text-xs">
+          <button
+            v-for="m in [['table', 'Tabulka'], ['raw', 'Raw']]"
+            :key="m[0]"
+            class="px-3 py-1 rounded-lg font-medium transition-all"
+            :class="pipeline.getOutputMode(step.key, 'table') === m[0] ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            @click="pipeline.setOutputMode(step.key, m[0])"
+          >
+            {{ m[1] }}
+          </button>
+        </div>
+
+        </div>
       </div>
 
       <pre v-if="pipeline.getOutputMode(step.key, 'table') === 'raw'" class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs overflow-x-auto max-h-64 whitespace-pre-wrap">{{ pipeline.stepResultOutput(step.key) }}</pre>
 
       <div v-else class="rounded-lg border border-gray-100 overflow-hidden text-xs">
-        <div class="grid grid-cols-[1fr_7rem_3rem_1fr_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span>Partner</span><span>Celková shoda</span><span class="text-center">Top arg.</span><span>Hook hypotéza</span><span></span>
+        <div class="grid grid-cols-[1fr_7rem_3rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2 items-center">
+          <span>Partner</span><span>Celková shoda</span><span class="text-center">Top arg.</span><span></span>
         </div>
         <template v-for="(alignment, ai) in pipeline.alignmentOutputAlignments(step.key)" :key="ai">
           <div
-            class="grid grid-cols-[1fr_7rem_3rem_1fr_2rem] px-3 py-2 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60 cursor-pointer"
+            class="grid grid-cols-[1fr_7rem_3rem_2rem] px-3 py-1 gap-2 border-t border-gray-50 items-center hover:bg-gray-50/60 cursor-pointer"
             :class="alignment.error ? 'bg-red-50' : ''"
-            @click="pipeline.expandedProfileName = pipeline.expandedProfileName === alignment.name ? null : String(alignment.name ?? '')"
+            @click="pipeline.expandedProfileName = pipeline.expandedProfileName === (alignment.name || alignment.partnerName) ? null : String(alignment.name || alignment.partnerName || '')"
           >
-            <span class="font-medium text-gray-800 truncate" :title="String(alignment.name ?? '')">{{ alignment.name }}</span>
+            <span class="font-medium text-gray-800 truncate" :title="String(alignment.name || alignment.partnerName || '')">{{ alignment.name || alignment.partnerName }}</span>
             <span
               class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full w-fit"
               :class="alignment.overallFitScore === 'Vysoký' ? 'text-success bg-success/10' : alignment.overallFitScore === 'Střední' ? 'text-amber-600 bg-amber-50' : alignment.overallFitScore === 'Nízký' ? 'text-gray-400 bg-gray-100' : 'text-gray-300'"
@@ -310,9 +316,6 @@ async function deleteSelectedRows() {
               class="text-center font-semibold text-[11px]"
               :class="Array.isArray(alignment.top3Arguments) && (alignment.top3Arguments as unknown[]).length ? 'text-success' : 'text-gray-400'"
             >{{ Array.isArray(alignment.top3Arguments) ? (alignment.top3Arguments as unknown[]).length : (alignment.error ? '⚠' : '–') }}</span>
-            <span class="text-[11px] truncate text-gray-500" :title="String(alignment.hookHypothesis ?? '')">
-              {{ String(alignment.hookHypothesis ?? '').slice(0, 60) }}{{ String(alignment.hookHypothesis ?? '').length > 60 ? '…' : '' }}
-            </span>
             <PipelineHoldDeleteButton @delete.stop="pipeline.deleteProfilingProfile(step.key, ai)" />
           </div>
 

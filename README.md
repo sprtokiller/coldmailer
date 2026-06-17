@@ -48,7 +48,7 @@ bun run dev
 | `NUXT_SESSION_PASSWORD` | yes | Session encryption key, min 32 chars — `openssl rand -base64 32` |
 | `OPEN_ROUTER_API_KEY` | yes | OpenRouter inference key — all AI calls go through OpenRouter |
 | `OPEN_ROUTER_MANAGEMENT_KEY` | no | OpenRouter management key for usage/cost tracking |
-| `SERPAPI_KEY` | yes | SerpAPI key used in the `PARTNER_IDENTIFICATION` step |
+| `SERPAPI_KEYS` | yes | Comma-separated SerpAPI keys rotated Round Robin in the `PARTNER_IDENTIFICATION` step (e.g. `key1,key2,key3`) |
 
 ### Google Cloud Console setup
 

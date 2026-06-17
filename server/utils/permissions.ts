@@ -27,6 +27,9 @@ export const ALL_PERMISSIONS = [
   'drafts.own.edit',
   'drafts.others.read',
   'drafts.others.edit',
+  // Signatures
+  'signatures.own.edit',
+  'signatures.system.edit',
   // Pipeline features
   'pipeline.serpapi',
   'pipeline.deep_research',
@@ -48,6 +51,7 @@ export const DEFAULT_PERMISSIONS: PermissionKey[] = [
   'selling.others.read',
   'drafts.own.read', 'drafts.own.edit',
   'drafts.others.read',
+  'signatures.own.edit',
   'pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail',
 ]
 
@@ -70,6 +74,8 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   'drafts.own.edit': 'Vytvářet / editovat vlastní e-mailové šablony',
   'drafts.others.read': 'Číst cizí e-mailové šablony',
   'drafts.others.edit': 'Upravovat cizí e-mailové šablony',
+  'signatures.own.edit': 'Vytvářet / editovat vlastní podpisy',
+  'signatures.system.edit': 'Spravovat podpisové šablony (systémové)',
   'pipeline.serpapi': 'Spouštět Partner Identification (SerpAPI)',
   'pipeline.deep_research': 'Spouštět deep-research kroky (o4-mini)',
   'pipeline.claude': 'Spouštět Claude kroky (Value Alignment, Outreach Preparation)',
@@ -84,6 +90,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Kontextové části', keys: ['context.own.read', 'context.own.edit', 'context.others.read', 'context.others.edit'] },
   { label: 'Prodejní argumenty', keys: ['selling.own.read', 'selling.own.edit', 'selling.others.read', 'selling.others.edit'] },
   { label: 'Mailové šablony', keys: ['drafts.own.read', 'drafts.own.edit', 'drafts.others.read', 'drafts.others.edit'] },
+  { label: 'Podpisy', keys: ['signatures.own.edit', 'signatures.system.edit'] },
   { label: 'Pipeline', keys: ['pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail'] },
   { label: 'Správa', keys: ['admin.roles'] },
 ]

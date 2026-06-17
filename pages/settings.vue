@@ -46,6 +46,7 @@ const PERMISSION_GROUPS = [
   { label: 'Kontextové části', keys: ['context.own.read', 'context.own.edit', 'context.others.read', 'context.others.edit'] },
   { label: 'Prodejní argumenty', keys: ['selling.own.read', 'selling.own.edit', 'selling.others.read', 'selling.others.edit'] },
   { label: 'Mailové šablony', keys: ['drafts.own.read', 'drafts.own.edit', 'drafts.others.read', 'drafts.others.edit'] },
+  { label: 'Podpisy', keys: ['signatures.own.edit', 'signatures.system.edit'] },
   { label: 'Pipeline', keys: ['pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail'] },
   { label: 'Správa', keys: ['admin.roles'] },
 ]

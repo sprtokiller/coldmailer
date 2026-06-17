@@ -1,5 +1,7 @@
 import type { Ref } from 'vue'
-import type { StepConfigState, Step3Candidate, PartnerProgressItem, ProfilingProgressItem, AlignmentProgressItem } from './types'
+import type { StepConfigState, Step3Candidate, PartnerProgressItem, ProfilingProgressItem, AlignmentProgressItem, RunStepResult } from './types'
+
+const RERUN_WARNING = 'Tato operace je nákladná a položka již má výsledky. Jste si opravdu jistí, že ji chcete spustit znovu?'
 
 export function useStepExecution(
   route: ReturnType<typeof useRoute>,
@@ -29,19 +31,49 @@ export function useStepExecution(
   step2Initialized: Ref<boolean>,
   step4Initialized: Ref<boolean>,
   step5Initialized: Ref<boolean>,
+  getStepResult: (stepKey: string) => RunStepResult | undefined,
+  alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>,
 ) {
+  function processedKeySet(items: Array<Record<string, unknown>>, keys: string[]): Set<string> {
+    const s = new Set<string>()
+    for (const item of items) {
+      for (const k of keys) {
+        const v = String(item[k] ?? '').toLowerCase().trim()
+        if (v) s.add(v)
+      }
+    }
+    return s
+  }
+
+  function hasExistingOutput(stepKey: string): boolean {
+    const d = getStepResult(stepKey)?.outputData
+    if (d == null) return false
+    if (Array.isArray(d)) return d.length > 0
+    if (typeof d === 'object') {
+      const items = (d as { items?: unknown[] }).items
+      if (Array.isArray(items)) return items.length > 0
+      return Object.keys(d).length > 0
+    }
+    return true
+  }
+
   async function executeStep(stepKey: string) {
     const cfg = getConfig(stepKey)
     let inputData: Record<string, unknown> = {}
+    // True when the run would re-process an item (or step) that already has output → costly re-run
+    let rerunsExisting = false
 
     if (stepKey === 'PARTNER_IDENTIFICATION') {
       // Server reads selection from DB (PipelineRecordRef.isSelectedForProcessing); inputData is ignored.
+      rerunsExisting = hasExistingOutput(stepKey)
     } else if (stepKey === 'PARTNER_PROFILING') {
       const allSelected = step3FilteredCandidates().filter(c => step3SelectedIds.value[c.partnerId])
       if (allSelected.length === 0) {
         alert('Vyberte alespoň jednoho partnera k prozkoumání.')
         return
       }
+      const done = processedKeySet(profilingOutputProfiles('PARTNER_PROFILING'), ['partnerId', 'name'])
+      rerunsExisting = allSelected.some(c => done.has(c.partnerId.toLowerCase().trim()) || done.has(c.name.toLowerCase().trim()))
       inputData = { partners: allSelected }
     } else if (stepKey === 'VALUE_ALIGNMENT') {
       const stepCfg = getConfig(stepKey)
@@ -52,6 +84,8 @@ export function useStepExecution(
         alert('Vyberte alespoň jednoho partnera k analýze.')
         return
       }
+      const done = processedKeySet(alignmentOutputAlignments('VALUE_ALIGNMENT'), ['partnerId', 'name', 'partnerName'])
+      rerunsExisting = selected.some(p => done.has(String(p.name ?? '').toLowerCase().trim()))
       inputData = { partners: selected }
     } else if (stepKey === 'OUTREACH_PREPARATION') {
       const stepCfg = getConfig(stepKey)
@@ -65,12 +99,15 @@ export function useStepExecution(
         alert('Vyberte alespoň jednoho partnera pro přípravu oslovení.')
         return
       }
+      const done = processedKeySet(outreachEmails(), ['partnerName', 'name'])
+      rerunsExisting = selectedAlignments.some(a => done.has(String(a.name ?? '').toLowerCase().trim()))
       inputData = { partners: selectedAlignments }
     } else if (stepKey === 'OUTREACH_EXECUTION') {
       if (!step6PreviewTo.value || !step6PreviewSubject.value || !step6PreviewBody.value) {
         alert('Vyplňte příjemce, předmět a tělo e-mailu v náhledu.')
         return
       }
+      rerunsExisting = hasExistingOutput(stepKey)
       inputData = {
         to: step6PreviewTo.value,
         subject: step6PreviewSubject.value,
@@ -83,7 +120,10 @@ export function useStepExecution(
       } catch {
         inputData = {}
       }
+      rerunsExisting = hasExistingOutput(stepKey)
     }
+
+    if (rerunsExisting && !confirm(RERUN_WARNING)) return
 
     executingStep.value = stepKey
     streamOutputs.value[stepKey] = ''

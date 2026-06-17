@@ -4,9 +4,38 @@ export interface SerpResult {
   snippet: string
 }
 
+// ---------------------------------------------------------------------------
+// Round-robin key rotation
+// ---------------------------------------------------------------------------
+// This counter lives at module scope, so it persists for the entire lifetime
+// of the server process and is shared across all concurrent requests.
+// ---------------------------------------------------------------------------
+let _keyIndex = 0
+
+/**
+ * Returns the next SerpAPI key in round-robin order.
+ * Reads the key list from Nuxt runtimeConfig (SERPAPI_KEYS env var).
+ * Throws if no keys are configured.
+ */
+function getNextApiKey(): string {
+  const config = useRuntimeConfig()
+  const keys: string[] = Array.isArray(config.serpApiKeys) ? config.serpApiKeys : []
+
+  if (keys.length === 0) {
+    throw new Error('No SerpAPI keys configured. Set SERPAPI_KEYS in your .env file (comma-separated).')
+  }
+
+  const key = keys[_keyIndex % keys.length]
+  _keyIndex = (_keyIndex + 1) % keys.length
+  return key
+}
+
+// ---------------------------------------------------------------------------
+// Search function
+// ---------------------------------------------------------------------------
+
 export async function serpSearch(query: string): Promise<SerpResult[]> {
-  const apiKey = process.env.SERPAPI_KEY
-  if (!apiKey) throw new Error('SERPAPI_KEY is not set in environment variables')
+  const apiKey = getNextApiKey()
 
   const params = new URLSearchParams({
     q: query,

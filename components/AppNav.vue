@@ -17,6 +17,13 @@ async function logout() {
         </NuxtLink>
         <template v-if="loggedIn">
           <NuxtLink
+            to="/partners"
+            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            active-class="text-gray-800 font-medium"
+          >
+            Partneři
+          </NuxtLink>
+          <NuxtLink
             to="/"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"

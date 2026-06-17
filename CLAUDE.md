@@ -86,7 +86,7 @@ Copy `.env.example` to `.env` and fill in:
 - `NUXT_SESSION_PASSWORD` — session encryption key, min 32 chars; generate with `openssl rand -base64 32`
 - `OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
 - `OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
-- `SERPAPI_KEY` — SerpAPI key for Google search in the `PARTNER_IDENTIFICATION` step
+- `SERPAPI_KEYS` — comma-separated SerpAPI keys rotated in Round Robin order for the `PARTNER_IDENTIFICATION` step (e.g. `key1,key2,key3`)
 
 ## Architecture
 

@@ -2,48 +2,20 @@
 import { overlayKey } from '~/composables/canvas/useOverlay'
 import { getStr } from '~/composables/canvas/useOverlayCore'
 const o = inject(overlayKey)!
-const { stepType, s3Candidates, s4Partners, s5Alignments, s6Emails, oeResult,
-  pl, isProcessed, partnerRunCount, toggleS3, toggleS4, toggleS5 } = o
+const { stepType, s4Partners, s5Alignments, s6Emails, oeResult,
+  pl, isProcessed, partnerRunCount, toggleS4, toggleS5 } = o
 </script>
 
 <template>
   <!-- PI (step 2): MS record selection -->
   <CanvasStepDetailInputTabPi v-if="stepType === 'PARTNER_IDENTIFICATION'" />
 
-  <!-- PP (step 3): partner candidate selection -->
-  <template v-else-if="stepType === 'PARTNER_PROFILING'">
-    <CanvasEmptyState v-if="s3Candidates.length === 0" message="Krok 2 zatím nemá žádné partnery." />
-    <div v-else>
-      <div class="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-        <span class="text-xs text-gray-500"><span class="font-semibold text-gray-800">{{ pl?.step3SelectedCount?.() ?? 0 }}</span> z {{ s3Candidates.length }} vybráno</span>
-        <div class="flex gap-2">
-          <button class="text-xs text-indigo-600 hover:underline" @click="pl?.step3SelectAll?.()">Vybrat vše</button>
-          <button class="text-xs text-gray-500 hover:underline" @click="pl?.step3SelectUnprocessed?.()">Jen nezpracované</button>
-          <button class="text-xs text-gray-400 hover:underline" @click="pl?.step3DeselectAll?.()">Zrušit vše</button>
-        </div>
-      </div>
-      <div class="divide-y divide-gray-50">
-        <div v-for="c in s3Candidates" :key="c.partnerId" class="px-5 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors">
-          <input type="checkbox" :checked="pl?.step3SelectedIds?.[c.partnerId] ?? false" class="mt-0.5 rounded flex-shrink-0"
-            @change="toggleS3(c.partnerId, ($event.target as HTMLInputElement).checked)" />
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span :class="['text-sm font-medium', isProcessed(c.name) ? 'text-green-800' : 'text-gray-800']">{{ c.name }}</span>
-              <span v-if="isProcessed(c.name)" class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">✓ Hotovo</span>
-              <span v-if="c.source === 'imported'" class="text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">↑ Import</span>
-              <span v-else-if="c.source === 'db'" class="text-xs px-1.5 py-0.5 rounded bg-rose-50 text-rose-600">⊕ Z databáze</span>
-              <span v-if="partnerRunCount(c.name) > 1" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ partnerRunCount(c.name) }}× pipeline</span>
-            </div>
-            <div v-if="c.frequency > 1" class="text-xs text-gray-400 mt-0.5">Nalezen {{ c.frequency }}× ({{ c.itemNames.slice(0, 2).join(', ') }})</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </template>
-
   <!-- VA (step 4): profiled partner selection -->
   <template v-else-if="stepType === 'VALUE_ALIGNMENT'">
-    <CanvasEmptyState v-if="s4Partners.length === 0" message="Krok 3 zatím nemá žádné profily." />
+    <CanvasEmptyState
+      v-if="s4Partners.length === 0"
+      message="Krok 3 zatím nemá žádné profily."
+    />
     <div v-else>
       <div class="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
         <span class="text-xs text-gray-500"><span class="font-semibold text-gray-800">{{ pl?.step4SelectedCount?.() ?? 0 }}</span> z {{ s4Partners.length }} vybráno</span>
@@ -59,8 +31,8 @@ const { stepType, s3Candidates, s4Partners, s5Alignments, s6Emails, oeResult,
             @change="toggleS4(p.name, ($event.target as HTMLInputElement).checked)" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap">
-              <span :class="['text-sm font-medium', isProcessed(p.name) ? 'text-green-800' : 'text-gray-800']">{{ p.name }}</span>
               <span v-if="isProcessed(p.name)" class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">✓ Hotovo</span>
+              <span :class="['text-sm font-medium', isProcessed(p.name) ? 'text-green-800' : 'text-gray-800']">{{ p.name }}</span>
               <span v-if="p.industry" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ p.industry }}</span>
               <span v-if="partnerRunCount(p.name) > 1" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ partnerRunCount(p.name) }}× pipeline</span>
             </div>
@@ -76,12 +48,16 @@ const { stepType, s3Candidates, s4Partners, s5Alignments, s6Emails, oeResult,
 
   <!-- OP (step 5): alignment selection -->
   <template v-else-if="stepType === 'OUTREACH_PREPARATION'">
-    <CanvasEmptyState v-if="s5Alignments.length === 0" message="Krok 4 zatím nemá žádné alignmenty." />
+    <CanvasEmptyState
+      v-if="s5Alignments.length === 0"
+      message="Krok 4 zatím nemá žádné alignmenty."
+    />
     <div v-else>
       <div class="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
         <span class="text-xs text-gray-500"><span class="font-semibold text-gray-800">{{ pl?.step5SelectedCount?.() ?? 0 }}</span> z {{ s5Alignments.length }} vybráno</span>
         <div class="flex gap-2">
           <button class="text-xs text-indigo-600 hover:underline" @click="pl?.step5SelectAll?.()">Vybrat vše</button>
+          <button class="text-xs text-gray-500 hover:underline" @click="pl?.step5SelectUnprocessed?.()">Jen nezpracované</button>
           <button class="text-xs text-gray-400 hover:underline" @click="pl?.step5DeselectAll?.()">Zrušit vše</button>
         </div>
       </div>
@@ -94,8 +70,8 @@ const { stepType, s3Candidates, s4Partners, s5Alignments, s6Emails, oeResult,
             @change="toggleS5(getStr(a, 'name') || getStr(a, 'partnerName'), ($event.target as HTMLInputElement).checked)" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap">
-              <span :class="['text-sm font-medium', isProcessed(getStr(a, 'name') || getStr(a, 'partnerName')) ? 'text-green-800' : 'text-gray-800']">{{ getStr(a, 'name') || getStr(a, 'partnerName') }}</span>
               <span v-if="isProcessed(getStr(a, 'name') || getStr(a, 'partnerName'))" class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">✓ Hotovo</span>
+              <span :class="['text-sm font-medium', isProcessed(getStr(a, 'name') || getStr(a, 'partnerName')) ? 'text-green-800' : 'text-gray-800']">{{ getStr(a, 'name') || getStr(a, 'partnerName') }}</span>
               <span v-if="partnerRunCount(getStr(a, 'name') || getStr(a, 'partnerName')) > 1" class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ partnerRunCount(getStr(a, 'name') || getStr(a, 'partnerName')) }}× pipeline</span>
             </div>
             <p v-if="getStr(a, 'hookHypothesis')" class="text-xs text-gray-500 mt-0.5 line-clamp-1 italic">{{ getStr(a, 'hookHypothesis') }}</p>
