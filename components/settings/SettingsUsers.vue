@@ -19,6 +19,19 @@ const emit = defineEmits<{
 
 const selectedUserId = ref<string | null>(null)
 const selectedUser = computed(() => props.adminUsers?.find(u => u.id === selectedUserId.value) ?? null)
+const adminProjects = computed(() =>
+  props.adminGroups?.flatMap(group =>
+    group.projects.map(project => ({
+      ...project,
+      group: {
+        id: group.id,
+        name: group.name,
+        slug: group.slug,
+        color: group.color,
+      },
+    })),
+  ) ?? [],
+)
 
 function selectUser(userId: string) {
   selectedUserId.value = selectedUserId.value === userId ? null : userId
@@ -34,14 +47,14 @@ async function removeRole(userId: string, roleId: string) {
   emit('refreshUsers')
 }
 
-// ── Assign / remove group ────────────────────────────────────────────────
-async function assignGroup(userId: string, groupId: string) {
-  await $fetch(`/api/admin/users/${userId}/groups`, { method: 'POST', body: { groupId } })
+// ── Assign / remove project ──────────────────────────────────────────────
+async function assignProject(userId: string, projectId: string) {
+  await $fetch(`/api/admin/users/${userId}/projects`, { method: 'POST', body: { projectId } })
   emit('refreshUsers')
   emit('refreshGroups')
 }
-async function removeGroup(userId: string, groupId: string) {
-  await $fetch(`/api/admin/users/${userId}/groups/${groupId}`, { method: 'DELETE' })
+async function removeProject(userId: string, projectId: string) {
+  await $fetch(`/api/admin/users/${userId}/projects/${projectId}`, { method: 'DELETE' })
   emit('refreshUsers')
   emit('refreshGroups')
 }
@@ -135,12 +148,12 @@ async function toggleSuperAdmin(user: AdminUser) {
                     :style="`background-color: ${role.color}18; border-color: ${role.color}44; color: ${role.color}`"
                   >{{ role.name }}</span>
                   <span
-                    v-for="g in u.groups"
-                    :key="g.id"
+                    v-for="project in u.projects"
+                    :key="project.id"
                     class="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
-                    :style="`background-color: ${g.color}18; border-color: ${g.color}44; color: ${g.color}`"
-                  >{{ g.name }}</span>
-                  <span v-if="!u.isSuperAdmin && u.roles.length === 0 && u.groups.length === 0" class="text-xs text-gray-300">—</span>
+                    :style="`background-color: ${project.group.color}18; border-color: ${project.group.color}44; color: ${project.group.color}`"
+                  >{{ project.name }}</span>
+                  <span v-if="!u.isSuperAdmin && u.roles.length === 0 && u.projects.length === 0" class="text-xs text-gray-300">—</span>
                 </div>
 
                 <div class="hidden md:block text-right shrink-0">
@@ -208,32 +221,35 @@ async function toggleSuperAdmin(user: AdminUser) {
                   </div>
                 </div>
 
-                <!-- Groups -->
+                <!-- Projects -->
                 <div class="bg-white rounded-xl border border-gray-100 p-4">
-                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Skupiny</div>
+                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Projekty</div>
                   <div class="flex flex-wrap gap-1.5 mb-4 min-h-[28px]">
                     <span
-                      v-for="g in u.groups"
-                      :key="g.id"
+                      v-for="project in u.projects"
+                      :key="project.id"
                       class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-70 transition-opacity"
-                      :style="`background-color: ${g.color}18; border-color: ${g.color}44; color: ${g.color}`"
-                      title="Kliknutím odeberete ze skupiny"
-                      @click.stop="removeGroup(u.id, g.id)"
+                      :style="`background-color: ${project.group.color}18; border-color: ${project.group.color}44; color: ${project.group.color}`"
+                      :title="`${project.group.name} — kliknutím odeberete projekt`"
+                      @click.stop="removeProject(u.id, project.id)"
                     >
-                      {{ g.name }}
+                      {{ project.name }}
                       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                     </span>
-                    <span v-if="u.groups.length === 0" class="text-xs text-gray-400">Žádné skupiny</span>
+                    <span v-if="u.projects.length === 0" class="text-xs text-gray-400">Žádné projekty</span>
                   </div>
-                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přidat do skupiny</div>
-                  <div class="flex flex-wrap gap-1">
+                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přiřadit projekt</div>
+                  <div class="space-y-2">
                     <button
-                      v-for="g in adminGroups?.filter(ag => !u.groups.some(ug => ug.id === ag.id))"
-                      :key="g.id"
-                      class="text-xs px-2 py-0.5 rounded-full border hover:opacity-80 transition-opacity"
-                      :style="`background-color: ${g.color}10; border-color: ${g.color}33; color: ${g.color}`"
-                      @click.stop="assignGroup(u.id, g.id)"
-                    >+ {{ g.name }}</button>
+                      v-for="project in adminProjects.filter(ap => !u.projects.some(up => up.id === ap.id))"
+                      :key="project.id"
+                      class="w-full text-left text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-80 transition-opacity"
+                      :style="`background-color: ${project.group.color}10; border-color: ${project.group.color}33; color: ${project.group.color}`"
+                      @click.stop="assignProject(u.id, project.id)"
+                    >
+                      <span class="font-medium">+ {{ project.name }}</span>
+                      <span class="ml-1 opacity-70">· {{ project.group.name }}</span>
+                    </button>
                   </div>
                 </div>
 

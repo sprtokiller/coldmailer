@@ -2,20 +2,34 @@ export type Role = { id: string; name: string; description: string | null; color
 export type PermOverride = { id: string; key: string; granted: boolean }
 export type BudgetResetPeriod = 'never' | 'daily' | 'weekly' | 'monthly'
 export type Budget = { limitUsd: number | null; usedUsd: number; resetPeriod: BudgetResetPeriod; periodStartAt: string | null }
-export type GroupInfo = { id: string; name: string; slug: string; color: string }
+export type ProjectInfo = {
+  id: string
+  name: string
+  slug: string
+  groupId: string
+  group: { id: string; name: string; slug: string; color: string }
+}
+export type GroupInfo = {
+  id: string
+  name: string
+  slug: string
+  color: string
+  projects: Array<Omit<ProjectInfo, 'group'>>
+}
 
 export type MeResponse = {
   user: { id: string; email: string; name: string; image: string | null; isSuperAdmin: boolean; createdAt: string }
   roles: Role[]
   permOverrides: PermOverride[]
   budget: Budget | null
+  projects: ProjectInfo[]
   effectivePermissions: string[]
 }
 
 export type AdminUser = {
   id: string; email: string; name: string; image: string | null
   isSuperAdmin: boolean; createdAt: string
-  roles: Role[]; groups: GroupInfo[]; permOverrides: PermOverride[]
+  roles: Role[]; groups: GroupInfo[]; projects: ProjectInfo[]; permOverrides: PermOverride[]
   budget: Budget | null; effectivePermissions: string[]
 }
 

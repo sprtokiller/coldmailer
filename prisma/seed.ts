@@ -115,9 +115,9 @@ async function seedRoles() {
 }
 
 const GROUPS = [
-  { name: 'TdA', slug: 'tda', color: '#EF8A17' },
-  { name: 'PPT', slug: 'ppt', color: '#A6CE39' },
-  { name: 'XO',  slug: 'xo',  color: '#e31837' },
+  { name: 'Tour de App', slug: 'tda', color: '#EF8A17' },
+  { name: 'Prezentiáda', slug: 'ppt', color: '#A6CE39' },
+  { name: 'pIšQworky',   slug: 'xo',  color: '#e31837' },
 ]
 
 async function seedGroups() {
@@ -133,16 +133,23 @@ async function seedGroups() {
   const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
   if (!tdaGroup) return
 
+  const tda27 = await prisma.project.upsert({
+    where: { slug: 'tda27' },
+    create: { name: 'TdA27', slug: 'tda27', groupId: tdaGroup.id },
+    update: { name: 'TdA27', groupId: tdaGroup.id },
+  })
+  console.log('  ✓ Project: Tour de App → TdA27')
+
   const realUsers = await prisma.user.findMany({
     where: { googleId: { not: 'system' } },
   })
   for (const u of realUsers) {
-    await prisma.userGroup.upsert({
-      where: { userId_groupId: { userId: u.id, groupId: tdaGroup.id } },
-      create: { userId: u.id, groupId: tdaGroup.id },
+    await prisma.userProject.upsert({
+      where: { userId_projectId: { userId: u.id, projectId: tda27.id } },
+      create: { userId: u.id, projectId: tda27.id },
       update: {},
     })
-    console.log(`  ✓ User ${u.email} → TdA`)
+    console.log(`  ✓ User ${u.email} → Tour de App / TdA27`)
   }
 
   const tables = [
@@ -150,15 +157,14 @@ async function seedGroups() {
     { model: 'contextPart', extra: {} },
     { model: 'sellingPoint', extra: {} },
     { model: 'emailDraft', extra: {} },
-    { model: 'pipelineRun', extra: {} },
   ] as const
 
   for (const t of tables) {
     const result = await (prisma[t.model] as any).updateMany({
-      where: { groupId: null, ...t.extra },
-      data: { groupId: tdaGroup.id },
+      where: { groupId: null, projectId: null, ...t.extra },
+      data: { groupId: tdaGroup.id, projectId: null },
     })
-    if (result.count > 0) console.log(`  ✓ Migrated ${result.count} ${t.model} → TdA`)
+    if (result.count > 0) console.log(`  ✓ Migrated ${result.count} ${t.model} → Tour de App`)
   }
 }
 

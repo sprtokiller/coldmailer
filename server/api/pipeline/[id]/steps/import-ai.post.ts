@@ -7,6 +7,7 @@ import { OPENROUTER, MODELS, STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage } from '~/server/utils/usage-tracker'
 import { mergeOutputData } from '~/server/utils/merge-output'
+import { libraryScopeForProject } from '~/server/utils/libraryScope'
 
 interface ImportBody {
   stepType: string
@@ -87,12 +88,21 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
+  const run = await prisma.pipelineRun.findUnique({
+    where: { id: runId },
+    include: { project: true },
+  })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  const scopeFilter = libraryScopeForProject(run.project)
 
   const [customPrompt, dbSystemPrompt, existingStep] = await Promise.all([
     body.systemPromptId
-      ? prisma.systemPrompt.findUnique({ where: { id: body.systemPromptId } })
+      ? prisma.systemPrompt.findFirst({
+          where: {
+            id: body.systemPromptId,
+            OR: [{ isSystem: true }, { isSystem: false, ...scopeFilter }],
+          },
+        })
       : Promise.resolve(null),
     prisma.systemPrompt.findFirst({
       where: { stepType: body.stepType as never, isSystem: true },
@@ -103,6 +113,9 @@ export default defineEventHandler(async (event) => {
       orderBy: { createdAt: 'desc' },
     }),
   ])
+  if (body.systemPromptId && !customPrompt) {
+    throw createError({ statusCode: 403, statusMessage: 'Vybraný prompt není dostupný pro tento projekt.' })
+  }
 
   const existingData = existingStep?.outputData ?? null
 

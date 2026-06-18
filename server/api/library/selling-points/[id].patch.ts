@@ -1,10 +1,16 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requirePermission, requireResourceScopeAccess } from '~/server/utils/permissions'
+import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
 export default defineEventHandler(async (event) => {
   const user = await requirePermission(event, 'selling.own.edit')
   const id = getRouterParam(event, 'id')!
-  const body = await readBody<{ name?: string; content?: string }>(event)
+  const body = await readBody<{
+    name?: string
+    content?: string
+    projectId?: string | null
+    groupId?: string | null
+  }>(event)
 
   const part = await prisma.sellingPoint.findUnique({ where: { id } })
   if (!part) throw createError({ statusCode: 404, statusMessage: 'Selling point not found' })
@@ -12,9 +18,18 @@ export default defineEventHandler(async (event) => {
   if (part.authorId !== user.id) {
     await requirePermission(event, 'selling.others.edit')
   }
+  await requireResourceScopeAccess(event, part)
+  const scope = ('projectId' in body || 'groupId' in body)
+    ? await resolveLibraryScope(event, body)
+    : {}
 
   return prisma.sellingPoint.update({
     where: { id },
-    data: { name: body.name ?? part.name, content: body.content ?? part.content },
+    data: { name: body.name ?? part.name, content: body.content ?? part.content, ...scope },
+    include: {
+      author: { select: { id: true, name: true, image: true } },
+      group: true,
+      project: { include: { group: true } },
+    },
   })
 })

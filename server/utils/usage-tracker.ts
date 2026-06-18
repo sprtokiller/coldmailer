@@ -43,14 +43,13 @@ export async function maybeResetBudget(userId: string) {
   const nextReset = getNextResetDate(budget.periodStartAt, budget.resetPeriod)
   if (!nextReset || new Date() < nextReset) return budget
 
-  // Window has expired — reset usedUsd and advance the period start
-  return prisma.userBudget.update({
-    where: { userId },
-    data: {
-      usedUsd: 0,
-      periodStartAt: new Date(),
-    },
+  // Atomic conditional update — only resets if periodStartAt hasn't changed (CAS pattern)
+  await prisma.userBudget.updateMany({
+    where: { userId, periodStartAt: budget.periodStartAt },
+    data: { usedUsd: 0, periodStartAt: new Date() },
   })
+
+  return prisma.userBudget.findUnique({ where: { userId } })
 }
 
 // ── Cost enforcement ──────────────────────────────────────────────────────────

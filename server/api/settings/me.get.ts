@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
       permOverrides: true,
       budget: true,
       groups: { include: { group: true } },
+      projects: { include: { project: { include: { group: true } } } },
     },
   })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Uživatel nenalezen' })
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
     permOverrides: user.permOverrides,
     budget: user.budget,
     groups: user.groups.map(ug => ug.group),
+    projects: user.projects.map(up => up.project),
     effectivePermissions,
   }
 })

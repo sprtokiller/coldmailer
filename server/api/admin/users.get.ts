@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
       permOverrides: true,
       budget: true,
       groups: { include: { group: true } },
+      projects: { include: { project: { include: { group: true } } } },
     },
     orderBy: { createdAt: 'asc' },
   })
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
     createdAt: u.createdAt,
     roles: u.roles.map(ur => ur.role),
     groups: u.groups.map(ug => ug.group),
+    projects: u.projects.map(up => up.project),
     permOverrides: u.permOverrides,
     budget: u.budget,
     effectivePermissions: await getEffectivePermissions(u.id),

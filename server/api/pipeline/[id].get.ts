@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
     where: { id },
     include: {
       author: { select: { id: true, name: true, image: true } },
+      project: { include: { group: true } },
       steps: {
         include: {
           systemPrompt: true,

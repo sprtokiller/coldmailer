@@ -21,6 +21,10 @@ type LibraryItem = {
   isSystem?: boolean
   isDefault?: boolean
   author?: Author
+  groupId?: string | null
+  group?: { id: string; name: string; color: string } | null
+  projectId?: string | null
+  project?: { id: string; name: string; group: { id: string; name: string; color: string } } | null
   createdAt: string | Date
   derivedFromId: string | null
 }
@@ -41,6 +45,7 @@ type SignaturesResponse = { templates: SignatureItem[]; personal: SignatureItem[
 
 const route = useRoute()
 const router = useRouter()
+const { activeProject, groups } = useActiveProject()
 
 const VALID_TABS: Tab[] = ['prompts', 'context', 'selling', 'drafts', 'signatures']
 const initialTab = VALID_TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'prompts'
@@ -109,6 +114,7 @@ const validFoundPlaceholders = computed(() =>
 const showForm = ref(false)
 const saving = ref(false)
 const editingId = ref<string | null>(null)
+const editingIsSystem = ref(false)
 
 const form = ref({
   name: '',
@@ -120,13 +126,26 @@ const form = ref({
   signatureContent: '',
   signatureIsDefault: false,
   signatureIsSystem: false,
+  scope: '',
 })
 
 const showNewSignatureMenu = ref(false)
 
 function resetForm() {
-  form.value = { name: '', content: '', stepType: 'MARKET_SCANNING', stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'], subject: '', body: '', signatureContent: '', signatureIsDefault: false, signatureIsSystem: false }
+  form.value = {
+    name: '',
+    content: '',
+    stepType: 'MARKET_SCANNING',
+    stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'],
+    subject: '',
+    body: '',
+    signatureContent: '',
+    signatureIsDefault: false,
+    signatureIsSystem: false,
+    scope: activeProject.value ? `project:${activeProject.value.id}` : '',
+  }
   editingId.value = null
+  editingIsSystem.value = false
   showForm.value = false
   showNewSignatureMenu.value = false
   editor.value?.commands.setContent('')
@@ -214,6 +233,7 @@ onMounted(() => {
 
 function startEdit(item: LibraryItem) {
   editingId.value = item.id
+  editingIsSystem.value = item.isSystem ?? false
   form.value.name = item.name
   form.value.content = item.content ?? ''
   form.value.subject = (item as LibraryItem & { subject?: string }).subject ?? ''
@@ -223,6 +243,11 @@ function startEdit(item: LibraryItem) {
   form.value.signatureContent = item.content ?? ''
   form.value.signatureIsDefault = item.isDefault ?? false
   form.value.signatureIsSystem = item.isSystem ?? false
+  form.value.scope = item.projectId
+    ? `project:${item.projectId}`
+    : item.groupId
+      ? `group:${item.groupId}`
+      : ''
   showForm.value = true
   if (tab.value === 'drafts') {
     nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
@@ -273,33 +298,41 @@ async function save() {
   if (placeholderError.value) return
   saving.value = true
   try {
+    const [scopeType, scopeId] = form.value.scope.split(':')
+    const scope = editingIsSystem.value
+      ? {}
+      : {
+          projectId: scopeType === 'project' ? scopeId : null,
+          groupId: scopeType === 'group' ? scopeId : null,
+        }
+
     if (tab.value === 'prompts') {
       if (editingId.value) {
-        await $fetch(`/api/library/prompts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepType: form.value.stepType } })
+        await $fetch(`/api/library/prompts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepType: form.value.stepType, ...scope } })
       } else {
-        await $fetch('/api/library/prompts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepType: form.value.stepType } })
+        await $fetch('/api/library/prompts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepType: form.value.stepType, ...scope } })
       }
       await refreshPrompts()
     } else if (tab.value === 'context') {
       if (editingId.value) {
-        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys } })
+        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, ...scope } })
       } else {
-        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys } })
+        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, ...scope } })
       }
       await refreshContext()
     } else if (tab.value === 'selling') {
       if (editingId.value) {
-        await $fetch(`/api/library/selling-points/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content } })
+        await $fetch(`/api/library/selling-points/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, ...scope } })
       } else {
-        await $fetch('/api/library/selling-points', { method: 'POST', body: { name: form.value.name, content: form.value.content } })
+        await $fetch('/api/library/selling-points', { method: 'POST', body: { name: form.value.name, content: form.value.content, ...scope } })
       }
       await refreshSelling()
     } else if (tab.value === 'drafts') {
       const cleanBody = sanitizeAndNormalizeHtml(form.value.body)
       if (editingId.value) {
-        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: cleanBody } })
+        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, ...scope } })
       } else {
-        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: cleanBody } })
+        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, ...scope } })
       }
       await refreshDrafts()
     } else {
@@ -332,11 +365,20 @@ async function deleteSignature(id: string) {
   }
 }
 
+async function setDefaultSignature(id: string) {
+  await $fetch(`/api/library/signatures/${id}`, {
+    method: 'PATCH',
+    body: { isDefault: true },
+  })
+  await refreshSignatures()
+}
+
 // ── Filters ──────────────────────────────────────────────────────────────────
 const filterType   = ref('')
 const filterAuthor = ref('')
+const filterScope = ref('')
 
-watch(tab, () => { filterType.value = ''; filterAuthor.value = '' })
+watch(tab, () => { filterType.value = ''; filterAuthor.value = ''; filterScope.value = '' })
 
 const allItems = computed(() => {
   if (tab.value === 'prompts') return prompts.value as LibraryItem[]
@@ -352,6 +394,12 @@ const currentItems = computed(() => {
       if (filterType.value && item.stepType !== filterType.value) return false
       const authorName = item.author?.name ?? ''
       if (filterAuthor.value && authorName !== filterAuthor.value) return false
+      const itemScope = item.projectId
+        ? `project:${item.projectId}`
+        : item.groupId
+          ? `group:${item.groupId}`
+          : 'system'
+      if (filterScope.value && itemScope !== filterScope.value) return false
       return true
     })
     .sort((a, b) => {
@@ -368,6 +416,23 @@ const authorOptions = computed(() => {
   const names = allItems.value.map((item) => item.author?.name ?? '').filter(Boolean)
   return [...new Set(names)] as string[]
 })
+
+const scopeOptions = computed(() => {
+  const result: { groupLabel: string; groupColor: string; options: { value: string; label: string }[] }[] = []
+  for (const group of groups.value) {
+    const opts: { value: string; label: string }[] = []
+    for (const project of group.projects) {
+      opts.push({ value: `project:${project.id}`, label: project.name })
+    }
+    opts.push({ value: `group:${group.id}`, label: `Celý typ: ${group.name}` })
+    result.push({ groupLabel: group.name, groupColor: group.color, options: opts })
+  }
+  return result
+})
+
+watch(activeProject, (project) => {
+  if (!editingId.value && project) form.value.scope = `project:${project.id}`
+}, { immediate: true })
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'prompts', label: 'Systémové prompty' },
@@ -436,6 +501,25 @@ const tabs: { key: Tab; label: string }[] = [
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Název</label>
           <input v-model="form.name" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+
+        <div v-if="tab !== 'signatures' && !editingIsSystem">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Platnost položky</label>
+          <select
+            v-model="form.scope"
+            required
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="" disabled>Vyberte projekt nebo typ projektu</option>
+            <optgroup v-for="group in scopeOptions" :key="group.groupLabel" :label="group.groupLabel">
+              <option v-for="option in group.options" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </optgroup>
+          </select>
+          <p class="mt-1 text-[11px] text-gray-400">
+            Projekt je určen pro konkrétní ročník, typ projektu sdílí položku mezi všemi jeho projekty.
+          </p>
         </div>
 
         <div v-if="tab === 'prompts'">
@@ -582,7 +666,7 @@ const tabs: { key: Tab; label: string }[] = [
         <div class="flex gap-2 pt-1">
           <button
             type="submit"
-            :disabled="saving || !!placeholderError"
+            :disabled="saving || !!placeholderError || (tab !== 'signatures' && !editingIsSystem && !form.scope)"
             class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {{ saving ? 'Ukládám…' : 'Uložit' }}
@@ -601,6 +685,21 @@ const tabs: { key: Tab; label: string }[] = [
       >
         <option value="">Všechny typy kroků</option>
         <option v-for="s in PROMPT_STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+      </select>
+      <select
+        v-if="scopeOptions.length > 0"
+        v-model="filterScope"
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
+      >
+        <option value="">Všechny projekty a typy</option>
+        <template v-for="group in scopeOptions" :key="group.groupLabel">
+          <optgroup :label="group.groupLabel">
+            <option v-for="option in group.options" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </optgroup>
+        </template>
+        <option v-if="tab === 'prompts'" value="system">Globální systémové</option>
       </select>
       <select
         v-if="authorOptions.length > 1"
@@ -689,7 +788,7 @@ const tabs: { key: Tab; label: string }[] = [
                 <button
                   v-if="!sig.isDefault"
                   class="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
-                  @click="$fetch(`/api/library/signatures/${sig.id}`, { method: 'PATCH', body: { isDefault: true } }).then(() => refreshSignatures())"
+                  @click="setDefaultSignature(sig.id)"
                 >Nastavit jako výchozí</button>
                 <button
                   class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
@@ -719,6 +818,28 @@ const tabs: { key: Tab; label: string }[] = [
         >
           <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
             <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
+            <span
+              v-if="item.project"
+              class="text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0 border"
+              :style="{
+                color: item.project.group.color,
+                backgroundColor: item.project.group.color + '15',
+                borderColor: item.project.group.color + '30'
+              }"
+            >
+              {{ item.project.name }}
+            </span>
+            <span
+              v-else-if="item.group"
+              class="text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0 border"
+              :style="{
+                color: item.group.color,
+                backgroundColor: item.group.color + '15',
+                borderColor: item.group.color + '30'
+              }"
+            >
+              {{ item.group.name }}
+            </span>
             <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
               {{ item.stepType.replace(/_/g, ' ') }}
             </span>

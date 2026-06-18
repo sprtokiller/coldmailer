@@ -31,27 +31,18 @@ export function mergeContacts(
   return [...map.values()]
 }
 
-// Strips legal suffixes, parenthetical qualifiers and punctuation so that
-// "EPAM" matches "EPAM Systems (Czech Republic) s.r.o."
-export function normalizeCompanyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\b(s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.\s*s\s*r\.?\s*o\.?|z\.?\s*s\.?|o\.?\s*p\.?\s*s\.?|ltd\.?|inc\.?|llc\.?|gmbh\.?|corp\.?|co\.?|group|holding|systems|services|solutions)\b/g, '')
-    .replace(/[,.\-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+import { normalizeName } from '~/server/utils/deduplication'
 
-// Returns the existing map key that fuzzy-matches newKey, or null if none found.
+export { normalizeName as normalizeCompanyName }
+
 export function fuzzyMatchCompany(
   newKey: string,
   recordMap: Map<string, Record<string, unknown>>,
 ): string | null {
-  const normNew = normalizeCompanyName(newKey)
+  const normNew = normalizeName(newKey)
   if (!normNew) return null
   for (const existingKey of recordMap.keys()) {
-    const normExisting = normalizeCompanyName(existingKey)
+    const normExisting = normalizeName(existingKey)
     if (!normExisting) continue
     if (normExisting === normNew) return existingKey
     if (normExisting.startsWith(normNew) || normNew.startsWith(normExisting)) return existingKey

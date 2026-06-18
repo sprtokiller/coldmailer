@@ -38,10 +38,22 @@ erDiagram
         string color
         datetime createdAt
     }
+    Project {
+        string id PK
+        string name
+        string slug UK
+        string groupId
+        datetime createdAt
+    }
     UserGroup {
         string userId
         string groupId
         datetime joinedAt
+    }
+    UserProject {
+        string userId
+        string projectId
+        datetime assignedAt
     }
     UserBudget {
         string userId PK
@@ -68,6 +80,7 @@ erDiagram
         boolean isSystem
         string authorId
         string groupId "nullable"
+        string projectId "nullable"
         datetime createdAt
         string derivedFromId "nullable"
     }
@@ -78,6 +91,7 @@ erDiagram
         string stepKeys
         string authorId
         string groupId "nullable"
+        string projectId "nullable"
         datetime createdAt
         string derivedFromId "nullable"
     }
@@ -87,6 +101,7 @@ erDiagram
         string content
         string authorId
         string groupId "nullable"
+        string projectId "nullable"
         datetime createdAt
         string derivedFromId "nullable"
     }
@@ -97,6 +112,7 @@ erDiagram
         string body
         string authorId
         string groupId "nullable"
+        string projectId "nullable"
         datetime createdAt
         string derivedFromId "nullable"
     }
@@ -104,7 +120,7 @@ erDiagram
         string id PK
         string name
         string authorId
-        string groupId "nullable"
+        string projectId
         datetime createdAt
     }
     PipelineStep {
@@ -251,28 +267,35 @@ erDiagram
     UserRole ||--}o User : "user"
     UserRole ||--}o Role : "role"
     UserPermission ||--}o User : "user"
+    Project ||--}o Group : "group"
     UserGroup ||--}o User : "user"
     UserGroup ||--}o Group : "group"
+    UserProject ||--}o User : "user"
+    UserProject ||--}o Project : "project"
     UserBudget ||--o| User : "user"
     Signature ||--}o User : "author"
     SystemPrompt ||--}o User : "author"
     SystemPrompt |o--}o Group : "group"
+    SystemPrompt |o--}o Project : "project"
     SystemPrompt |o--o| SystemPrompt : "derivedFrom"
     SystemPrompt ||--}o SystemPrompt : "derived"
     ContextPart ||--}o User : "author"
     ContextPart |o--}o Group : "group"
+    ContextPart |o--}o Project : "project"
     ContextPart |o--o| ContextPart : "derivedFrom"
     ContextPart ||--}o ContextPart : "derived"
     SellingPoint ||--}o User : "author"
     SellingPoint |o--}o Group : "group"
+    SellingPoint |o--}o Project : "project"
     SellingPoint |o--o| SellingPoint : "derivedFrom"
     SellingPoint ||--}o SellingPoint : "derived"
     EmailDraft ||--}o User : "author"
     EmailDraft |o--}o Group : "group"
+    EmailDraft |o--}o Project : "project"
     EmailDraft |o--o| EmailDraft : "derivedFrom"
     EmailDraft ||--}o EmailDraft : "derived"
     PipelineRun ||--}o User : "author"
-    PipelineRun |o--}o Group : "group"
+    PipelineRun ||--}o Project : "project"
     PipelineStep ||--}o PipelineRun : "pipelineRun"
     PipelineStep |o--}o SystemPrompt : "systemPrompt"
     PipelineStep |o--}o SellingPoint : "sellingPoint"

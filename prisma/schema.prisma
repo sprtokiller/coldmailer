@@ -25,20 +25,21 @@ model User {
   emailDrafts   EmailDraft[]
   signatures    Signature[]
   pipelineRuns  PipelineRun[]
-  stepsRun      PipelineStep[] @relation("StepRunner")
+  stepsRun      PipelineStep[]   @relation("StepRunner")
   roles         UserRole[]
   permOverrides UserPermission[]
   budget        UserBudget?
   groups        UserGroup[]
+  projects      UserProject[]
 
-  globalRecords        GlobalRecord[]
-  inputSources         InputSource[]
-  addedRefs            PipelineRecordRef[]
-  recordEvents         RecordEvent[]
-  partnerAssignments   PartnerAssignment[]
-  partnerMailEvents    PartnerMailEvent[]
-  partnerNotes         PartnerNote[]
-  usageEvents          UsageEvent[]
+  globalRecords      GlobalRecord[]
+  inputSources       InputSource[]
+  addedRefs          PipelineRecordRef[]
+  recordEvents       RecordEvent[]
+  partnerAssignments PartnerAssignment[]
+  partnerMailEvents  PartnerMailEvent[]
+  partnerNotes       PartnerNote[]
+  usageEvents        UsageEvent[]
 }
 
 model Role {
@@ -58,6 +59,7 @@ model UserRole {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
   assignedAt DateTime @default(now())
+
   @@id([userId, roleId])
 }
 
@@ -67,6 +69,7 @@ model UserPermission {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   key     String
   granted Boolean
+
   @@unique([userId, key])
 }
 
@@ -77,14 +80,33 @@ model Group {
   color     String   @default("#6366f1")
   createdAt DateTime @default(now())
 
-  members            UserGroup[]
-  systemPrompts      SystemPrompt[]
-  contextParts       ContextPart[]
-  sellingPoints      SellingPoint[]
-  emailDrafts        EmailDraft[]
-  pipelineRuns       PipelineRun[]
-  partnerNotes       PartnerNote[]
+  members             UserGroup[]
+  projects            Project[]
+  systemPrompts       SystemPrompt[]
+  contextParts        ContextPart[]
+  sellingPoints       SellingPoint[]
+  emailDrafts         EmailDraft[]
+  partnerNotes        PartnerNote[]
   partnerFulfillments PartnerFulfillment[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  members       UserProject[]
+  systemPrompts SystemPrompt[]
+  contextParts  ContextPart[]
+  sellingPoints SellingPoint[]
+  emailDrafts   EmailDraft[]
+  pipelineRuns  PipelineRun[]
+
+  @@unique([groupId, name])
+  @@index([groupId])
 }
 
 model UserGroup {
@@ -93,7 +115,19 @@ model UserGroup {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   joinedAt DateTime @default(now())
+
   @@id([userId, groupId])
+}
+
+model UserProject {
+  userId     String
+  projectId  String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@id([userId, projectId])
+  @@index([projectId])
 }
 
 enum BudgetResetPeriod {
@@ -104,12 +138,12 @@ enum BudgetResetPeriod {
 }
 
 model UserBudget {
-  userId          String            @id
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  limitUsd        Float?
-  usedUsd         Float             @default(0)
-  resetPeriod     BudgetResetPeriod @default(never)
-  periodStartAt   DateTime?         // start of the current billing window
+  userId        String            @id
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  limitUsd      Float?
+  usedUsd       Float             @default(0)
+  resetPeriod   BudgetResetPeriod @default(never)
+  periodStartAt DateTime? // start of the current billing window
 }
 
 model Signature {
@@ -142,18 +176,20 @@ enum StepStatus {
 }
 
 model SystemPrompt {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
   content       String
   stepType      StepType
-  isSystem      Boolean       @default(false)
+  isSystem      Boolean        @default(false)
   authorId      String
-  author        User          @relation(fields: [authorId], references: [id])
+  author        User           @relation(fields: [authorId], references: [id])
   groupId       String?
-  group         Group?        @relation(fields: [groupId], references: [id])
-  createdAt     DateTime      @default(now())
+  group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdAt     DateTime       @default(now())
   derivedFromId String?
-  derivedFrom   SystemPrompt? @relation("PromptLineage", fields: [derivedFromId], references: [id])
+  derivedFrom   SystemPrompt?  @relation("PromptLineage", fields: [derivedFromId], references: [id])
   derived       SystemPrompt[] @relation("PromptLineage")
   steps         PipelineStep[]
 }
@@ -166,7 +202,9 @@ model ContextPart {
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
   groupId       String?
-  group         Group?        @relation(fields: [groupId], references: [id])
+  group         Group?        @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Restrict)
   createdAt     DateTime      @default(now())
   derivedFromId String?
   derivedFrom   ContextPart?  @relation("ContextLineage", fields: [derivedFromId], references: [id])
@@ -180,7 +218,9 @@ model SellingPoint {
   authorId      String
   author        User           @relation(fields: [authorId], references: [id])
   groupId       String?
-  group         Group?         @relation(fields: [groupId], references: [id])
+  group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
   createdAt     DateTime       @default(now())
   derivedFromId String?
   derivedFrom   SellingPoint?  @relation("SellingLineage", fields: [derivedFromId], references: [id])
@@ -189,55 +229,59 @@ model SellingPoint {
 }
 
 model EmailDraft {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
   subject       String
   body          String
   authorId      String
-  author        User         @relation(fields: [authorId], references: [id])
+  author        User           @relation(fields: [authorId], references: [id])
   groupId       String?
-  group         Group?       @relation(fields: [groupId], references: [id])
-  createdAt     DateTime     @default(now())
+  group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdAt     DateTime       @default(now())
   derivedFromId String?
-  derivedFrom   EmailDraft?  @relation("DraftLineage", fields: [derivedFromId], references: [id])
-  derived       EmailDraft[] @relation("DraftLineage")
+  derivedFrom   EmailDraft?    @relation("DraftLineage", fields: [derivedFromId], references: [id])
+  derived       EmailDraft[]   @relation("DraftLineage")
   steps         PipelineStep[]
 }
 
 model PipelineRun {
-  id        String         @id @default(cuid())
-  name      String
-  authorId  String
-  author    User           @relation(fields: [authorId], references: [id])
-  groupId      String?
-  group        Group?         @relation(fields: [groupId], references: [id])
-  createdAt    DateTime       @default(now())
+  id           String              @id @default(cuid())
+  name         String
+  authorId     String
+  author       User                @relation(fields: [authorId], references: [id])
+  projectId    String
+  project      Project             @relation(fields: [projectId], references: [id])
+  createdAt    DateTime            @default(now())
   steps        PipelineStep[]
   inputSources InputSource[]
   recordRefs   PipelineRecordRef[]
+
+  @@index([projectId])
 }
 
 model PipelineStep {
-  id             String        @id @default(cuid())
-  pipelineRunId  String
-  pipelineRun    PipelineRun   @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
-  stepType       StepType
-  status         StepStatus    @default(PENDING)
-  systemPromptId String?
-  systemPrompt   SystemPrompt? @relation(fields: [systemPromptId], references: [id])
-  contextPartIds String[]
-  sellingPointId String?
-  sellingPoint   SellingPoint? @relation(fields: [sellingPointId], references: [id])
-  emailDraftId   String?
-  emailDraft     EmailDraft?   @relation(fields: [emailDraftId], references: [id])
-  inputData      Json?
-  outputData     Json?
-  errorMessage   String?
-  runnerId       String
-  runner         User          @relation("StepRunner", fields: [runnerId], references: [id])
-  createdAt      DateTime      @default(now())
-  candidatePartners CandidatePartner[]
+  id                String              @id @default(cuid())
+  pipelineRunId     String
+  pipelineRun       PipelineRun         @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  stepType          StepType
+  status            StepStatus          @default(PENDING)
+  systemPromptId    String?
+  systemPrompt      SystemPrompt?       @relation(fields: [systemPromptId], references: [id])
+  contextPartIds    String[]
+  sellingPointId    String?
+  sellingPoint      SellingPoint?       @relation(fields: [sellingPointId], references: [id])
+  emailDraftId      String?
+  emailDraft        EmailDraft?         @relation(fields: [emailDraftId], references: [id])
+  inputData         Json?
+  outputData        Json?
+  errorMessage      String?
+  runnerId          String
+  runner            User                @relation("StepRunner", fields: [runnerId], references: [id])
+  createdAt         DateTime            @default(now())
   completedAt       DateTime?
+  candidatePartners CandidatePartner[]
   inputSources      InputSource[]
   recordRefs        PipelineRecordRef[]
   usageEvents       UsageEvent[]
@@ -257,14 +301,14 @@ model Partner {
 }
 
 model CandidatePartner {
-  id                 String       @id @default(cuid())
-  itemName           String
-  itemUrl            String?
-  partnerId          String
-  partner            Partner      @relation(fields: [partnerId], references: [id])
-  pipelineStepId     String
-  step               PipelineStep @relation(fields: [pipelineStepId], references: [id])
-  createdAt          DateTime     @default(now())
+  id                  String       @id @default(cuid())
+  itemName            String
+  itemUrl             String?
+  partnerId           String
+  partner             Partner      @relation(fields: [partnerId], references: [id])
+  pipelineStepId      String
+  step                PipelineStep @relation(fields: [pipelineStepId], references: [id])
+  createdAt           DateTime     @default(now())
   pipelineRecordRefId String?
 }
 
@@ -295,29 +339,29 @@ enum InputSourceType {
 }
 
 model GlobalRecord {
-  id              String          @id @default(cuid())
-  type            RecordType
-  canonicalName   String
-  normalizedName  String
-  payload         Json
-  sourceMetadata  Json?
-  createdBy       String
-  creator         User            @relation(fields: [createdBy], references: [id])
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  duplicateOfId   String?
-  duplicateOf     GlobalRecord?   @relation("Duplicates", fields: [duplicateOfId], references: [id])
-  duplicates      GlobalRecord[]  @relation("Duplicates")
+  id             String         @id @default(cuid())
+  type           RecordType
+  canonicalName  String
+  normalizedName String
+  payload        Json
+  sourceMetadata Json?
+  createdBy      String
+  creator        User           @relation(fields: [createdBy], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  duplicateOfId  String?
+  duplicateOf    GlobalRecord?  @relation("Duplicates", fields: [duplicateOfId], references: [id])
+  duplicates     GlobalRecord[] @relation("Duplicates")
 
-  pipelineRefs    PipelineRecordRef[]
-  events          RecordEvent[]
-  contacts        PartnerContact[]
-  assignments     PartnerAssignment[]
-  mailEvents      PartnerMailEvent[]
-  partnerNotes    PartnerNote[]
-  fulfillments    PartnerFulfillment[]
+  pipelineRefs PipelineRecordRef[]
+  events       RecordEvent[]
+  contacts     PartnerContact[]
+  assignments  PartnerAssignment[]
+  mailEvents   PartnerMailEvent[]
+  partnerNotes PartnerNote[]
+  fulfillments PartnerFulfillment[]
 
-  @@index([normalizedName])
+  @@unique([normalizedName, type])
 }
 
 // ── Usage tracking ────────────────────────────────────────────────────────────
@@ -328,19 +372,19 @@ enum UsageEventType {
 }
 
 model UsageEvent {
-  id             String          @id @default(cuid())
-  userId         String
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime        @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
-  eventType      UsageEventType
-  model          String?         // e.g. "anthropic/claude-sonnet-4.6" or "serpapi"
-  costUsd        Float           @default(0)
-  generationId   String?         // OpenRouter generation ID for AI calls
+  eventType    UsageEventType
+  model        String? // e.g. "anthropic/claude-sonnet-4.6" or "serpapi"
+  costUsd      Float          @default(0)
+  generationId String? // OpenRouter generation ID for AI calls
 
   pipelineStepId String?
-  step           PipelineStep?   @relation(fields: [pipelineStepId], references: [id], onDelete: SetNull)
-  stepType       String?         // e.g. "MARKET_SCANNING"
+  step           PipelineStep? @relation(fields: [pipelineStepId], references: [id], onDelete: SetNull)
+  stepType       String? // e.g. "MARKET_SCANNING"
 
   @@index([userId, createdAt])
   @@index([userId, eventType])
@@ -349,8 +393,8 @@ model UsageEvent {
 // ── System-wide configuration ─────────────────────────────────────────────────
 
 model SystemConfig {
-  key       String   @id        // e.g. "budget.defaultLimitUsd"
-  value     Json                // arbitrary JSON value
+  key       String   @id // e.g. "budget.defaultLimitUsd"
+  value     Json // arbitrary JSON value
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
@@ -368,23 +412,23 @@ model InputSource {
   createdAt     DateTime        @default(now())
   metadata      Json?
 
-  recordRefs    PipelineRecordRef[]
+  recordRefs PipelineRecordRef[]
 }
 
 model PipelineRecordRef {
-  id                      String          @id @default(cuid())
+  id                      String       @id @default(cuid())
   pipelineRunId           String
-  pipelineRun             PipelineRun     @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  pipelineRun             PipelineRun  @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
   stepId                  String
-  step                    PipelineStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  step                    PipelineStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
   globalRecordId          String
-  globalRecord            GlobalRecord    @relation(fields: [globalRecordId], references: [id])
+  globalRecord            GlobalRecord @relation(fields: [globalRecordId], references: [id])
   inputSourceId           String?
-  inputSource             InputSource?    @relation(fields: [inputSourceId], references: [id])
+  inputSource             InputSource? @relation(fields: [inputSourceId], references: [id])
   addedBy                 String
-  adder                   User            @relation(fields: [addedBy], references: [id])
-  addedAt                 DateTime        @default(now())
-  isSelectedForProcessing Boolean         @default(true)
+  adder                   User         @relation(fields: [addedBy], references: [id])
+  addedAt                 DateTime     @default(now())
+  isSelectedForProcessing Boolean      @default(true)
   addMethod               AddMethod
   localNote               String?
 
@@ -392,16 +436,27 @@ model PipelineRecordRef {
   @@index([stepId, isSelectedForProcessing])
 }
 
+enum RecordEventType {
+  CREATED
+  DEDUP_LINKED
+  DEDUP_REVIEW
+  STATUS_CHANGED
+  RELEVANCE_SET
+  DELETED
+  MERGED
+  MIGRATED
+}
+
 model RecordEvent {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   globalRecordId String
-  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id])
+  globalRecord   GlobalRecord    @relation(fields: [globalRecordId], references: [id])
   pipelineRunId  String?
   stepId         String?
   userId         String
-  user           User         @relation(fields: [userId], references: [id])
-  eventType      String
-  timestamp      DateTime     @default(now())
+  user           User            @relation(fields: [userId], references: [id])
+  eventType      RecordEventType
+  timestamp      DateTime        @default(now())
   metadata       Json?
 }
 

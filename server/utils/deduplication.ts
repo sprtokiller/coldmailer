@@ -47,7 +47,8 @@ function jaroWinkler(s1: string, s2: string, p = 0.1): number {
 
 // ── Name normalisation ────────────────────────────────────────────────────────
 
-const LEGAL_SUFFIXES = /\b(s\.r\.o\.|a\.s\.|spol\.|k\.s\.|v\.o\.s\.|LLC|Ltd|GmbH|Inc|Corp|S\.A\.|N\.V\.)\b/gi
+const LEGAL_SUFFIXES = /\b(s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.?\s*s\.?\s*r\.?\s*o\.?|k\.s\.|v\.o\.s\.|z\.?\s*s\.?|o\.?\s*p\.?\s*s\.?|LLC|Ltd\.?|GmbH\.?|Inc\.?|Corp\.?|Co\.?|S\.A\.|N\.V\.)\b/gi
+const BUSINESS_SUFFIXES = /\b(group|holding|systems|services|solutions)\b/gi
 const CZECH_COMPETITION_SUFFIXES = /\b(olympiáda|soutěž|liga|challenge|hackathon|cup|championship)\b/gi
 const PARENTHETICALS = /\([^)]*\)/g
 
@@ -56,8 +57,9 @@ export function normalizeName(name: string): string {
     .toLowerCase()
     .replace(PARENTHETICALS, '')
     .replace(LEGAL_SUFFIXES, '')
+    .replace(BUSINESS_SUFFIXES, '')
     .replace(CZECH_COMPETITION_SUFFIXES, '')
-    .replace(/[,;.!?]/g, ' ')
+    .replace(/[,;.!?\-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -164,7 +166,7 @@ export async function checkDuplicate(candidate: DeduplicationCandidate): Promise
     const allOfType = await prisma.globalRecord.findMany({
       where: { type: candidate.type },
       select: { id: true, canonicalName: true, payload: true },
-      take: 500,
+      take: 2000,
     })
     for (const rec of allOfType) {
       const payload = rec.payload as Record<string, unknown>

@@ -9,6 +9,7 @@ import { runPartnerIdentification } from '~/server/utils/partner-identification'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
+import { libraryScopeForProject } from '~/server/utils/libraryScope'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 
@@ -57,15 +58,31 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 402, statusMessage: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
   }
 
-  const run = await prisma.pipelineRun.findUnique({ where: { id: runId } })
+  const run = await prisma.pipelineRun.findUnique({
+    where: { id: runId },
+    include: { project: true },
+  })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  const scopeFilter = libraryScopeForProject(run.project)
+
+  const alreadyRunning = await prisma.pipelineStep.findFirst({
+    where: { pipelineRunId: runId, stepType: body.stepType as never, status: 'RUNNING' },
+  })
+  if (alreadyRunning) {
+    throw createError({ statusCode: 409, statusMessage: 'Tento krok již běží.' })
+  }
 
   const [contextParts, customPrompt, dbSystemPrompt, sellingPoint, emailDraft] = await Promise.all([
     body.contextPartIds?.length
-      ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds } } })
+      ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds }, ...scopeFilter } })
       : Promise.resolve([]),
     body.systemPromptId
-      ? prisma.systemPrompt.findUnique({ where: { id: body.systemPromptId } })
+      ? prisma.systemPrompt.findFirst({
+          where: {
+            id: body.systemPromptId,
+            OR: [{ isSystem: true }, { isSystem: false, ...scopeFilter }],
+          },
+        })
       : Promise.resolve(null),
     // Priority lookup: find the isSystem prompt for this step type in DB.
     prisma.systemPrompt.findFirst({
@@ -73,12 +90,25 @@ export default defineEventHandler(async (event) => {
       orderBy: { createdAt: 'desc' },
     }),
     body.sellingPointId
-      ? prisma.sellingPoint.findUnique({ where: { id: body.sellingPointId } })
+      ? prisma.sellingPoint.findFirst({ where: { id: body.sellingPointId, ...scopeFilter } })
       : Promise.resolve(null),
     body.emailDraftId
-      ? prisma.emailDraft.findUnique({ where: { id: body.emailDraftId } })
+      ? prisma.emailDraft.findFirst({ where: { id: body.emailDraftId, ...scopeFilter } })
       : Promise.resolve(null),
   ])
+
+  if (body.contextPartIds?.length && contextParts.length !== new Set(body.contextPartIds).size) {
+    throw createError({ statusCode: 403, statusMessage: 'Některé kontextové části nejsou dostupné pro tento projekt.' })
+  }
+  if (body.systemPromptId && !customPrompt) {
+    throw createError({ statusCode: 403, statusMessage: 'Vybraný prompt není dostupný pro tento projekt.' })
+  }
+  if (body.sellingPointId && !sellingPoint) {
+    throw createError({ statusCode: 403, statusMessage: 'Vybraný prodejní argument není dostupný pro tento projekt.' })
+  }
+  if (body.emailDraftId && !emailDraft) {
+    throw createError({ statusCode: 403, statusMessage: 'Vybraná e-mailová šablona není dostupná pro tento projekt.' })
+  }
 
   const systemPromptText =
     customPrompt?.content ??
@@ -280,9 +310,17 @@ export default defineEventHandler(async (event) => {
               const pid = profile.partnerId as string | undefined
               if (!pid || profile.error) continue
               const { partnerId: _, error: __, raw: ___, ...profileData } = profile
+              const existingGr = await prisma.globalRecord.findUnique({
+                where: { id: pid },
+                select: { payload: true },
+              })
+              const merged = {
+                ...((existingGr?.payload as Record<string, unknown>) ?? {}),
+                ...profileData,
+              }
               await prisma.globalRecord.update({
                 where: { id: pid },
-                data: { payload: profileData as never },
+                data: { payload: merged as never },
               }).catch(() => {})
             }
           } else if (body.stepType === 'VALUE_ALIGNMENT') {
@@ -501,7 +539,7 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'FAILED', errorMessage: message, completedAt: new Date() },
             })
-            .catch(() => {})
+            .catch((e) => console.error('[execute] Failed to mark step FAILED:', e))
           write({ error: message })
         } finally {
           controller.close()

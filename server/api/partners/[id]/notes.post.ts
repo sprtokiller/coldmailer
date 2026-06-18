@@ -1,6 +1,6 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { getActiveGroupId } from '~/server/utils/activeGroup'
+import { getActiveGroupId } from '~/server/utils/activeProject'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)

@@ -5,7 +5,7 @@ definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const router = useRouter()
-const { refreshGroups } = useActiveGroup()
+const { refreshProjects } = useActiveProject()
 
 // ── Credits ──────────────────────────────────────────────────────────────────
 const { data: credits, pending: creditsPending, error: creditsError, refresh: refreshCredits } = await useFetch('/api/settings/credits')
@@ -222,7 +222,7 @@ const visibleNav = computed(() =>
           :admin-groups="adminGroups"
           :is-super-admin="isSuperAdmin"
           @refresh-users="refreshUsers()"
-          @refresh-groups="refreshGroups()"
+          @refresh-groups="refreshProjects()"
         />
 
         <SettingsRoles

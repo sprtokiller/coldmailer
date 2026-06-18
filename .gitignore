@@ -30,8 +30,10 @@ Thumbs.db
 .vscode/code-counter
 .idea/
 
-# Prisma
-prisma/migrations/
+# Prisma (legacy local migrations stay ignored; the project hierarchy migration is tracked)
+prisma/migrations/*
+!prisma/migrations/20260618180000_add_projects/
+!prisma/migrations/20260618180000_add_projects/migration.sql
 
 # Google OAuth client secret — keep out of git
 client_secret_*.json

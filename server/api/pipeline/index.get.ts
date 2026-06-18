@@ -1,15 +1,17 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { getActiveGroupId } from '~/server/utils/activeGroup'
+import { getActiveProjectId } from '~/server/utils/activeProject'
 
 export default defineEventHandler(async (event) => {
   await requireAuth(event)
-  const groupId = await getActiveGroupId(event)
+  const projectId = await getActiveProjectId(event)
+  if (!projectId) return []
 
   const runs = await prisma.pipelineRun.findMany({
-    where: groupId ? { groupId } : undefined,
+    where: { projectId },
     include: {
       author: { select: { id: true, name: true, image: true } },
+      project: { include: { group: true } },
       steps: {
         select: { stepType: true, status: true, outputData: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
@@ -55,6 +57,7 @@ export default defineEventHandler(async (event) => {
       name: run.name,
       createdAt: run.createdAt,
       author: run.author,
+      project: run.project,
       stats: {
         competitions: arrayCount('MARKET_SCANNING'),
         partners: partnerCount(),

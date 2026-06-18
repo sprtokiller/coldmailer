@@ -2,20 +2,28 @@
 definePageMeta({ middleware: 'auth' })
 
 const { data: runs, refresh } = await useFetch('/api/pipeline', { default: () => [] })
+const { projects, activeProject, activeGroup } = useActiveProject()
 
 const creating = ref(false)
 const newName = ref('')
+const createErrorMessage = ref('')
 
 async function createRun() {
-  if (!newName.value.trim()) return
+  if (!newName.value.trim() || !activeProject.value) return
   creating.value = true
+  createErrorMessage.value = ''
   try {
     const run = await $fetch('/api/pipeline', {
       method: 'POST',
-      body: { name: newName.value.trim() },
+      body: {
+        name: newName.value.trim(),
+        projectId: activeProject.value.id,
+      },
     })
     newName.value = ''
     await navigateTo(`/pipeline/${run.id}`)
+  } catch (error: any) {
+    createErrorMessage.value = error?.data?.statusMessage ?? 'Pipeline se nepodařilo vytvořit.'
   } finally {
     creating.value = false
   }
@@ -35,6 +43,28 @@ const STAT_DEFS: { key: keyof RunStats; label: string; tooltip: string }[] = [
 
 <template>
   <div>
+    <div
+      v-if="!activeProject && !activeGroup"
+      class="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900"
+      role="alert"
+    >
+      <div class="font-semibold">Nemáte přiřazený žádný projekt ani typ projektu</div>
+      <p class="mt-1 text-sm text-amber-800">
+        Pipeline ani knihovnu nelze spravovat, dokud vám administrátor nepřiřadí přístup.
+      </p>
+    </div>
+
+    <div
+      v-else-if="!activeProject"
+      class="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900"
+      role="alert"
+    >
+      <div class="font-semibold">Nemáte přiřazený žádný projekt</div>
+      <p class="mt-1 text-sm text-amber-800">
+        Pro správu pipelines vám musí administrátor přiřadit konkrétní projekt.
+      </p>
+    </div>
+
     <div class="flex items-center justify-between mb-8">
       <div>
         <h1 class="text-2xl font-semibold text-gray-800">Oslovování partnerů</h1>
@@ -47,16 +77,20 @@ const STAT_DEFS: { key: keyof RunStats; label: string; tooltip: string }[] = [
           placeholder="Název nové pipeline…"
           class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-52"
           required
+          :disabled="!activeProject"
         />
         <button
           type="submit"
-          :disabled="creating"
+          :disabled="creating || !activeProject"
           class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {{ creating ? 'Vytváření…' : 'Nová Pipeline' }}
         </button>
       </form>
     </div>
+
+
+    <p v-if="createErrorMessage" class="-mt-5 mb-6 text-sm text-red-600">{{ createErrorMessage }}</p>
 
     <div v-if="runs.length === 0" class="text-center py-20 text-gray-400 text-sm">
       Zatím žádné pipeline. Vytvořte jednu pro začátek.

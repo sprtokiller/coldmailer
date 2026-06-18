@@ -1,16 +1,18 @@
 import { prisma } from '~/server/utils/prisma'
 import { requirePermission } from '~/server/utils/permissions'
-import { getActiveGroupId } from '~/server/utils/activeGroup'
+import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
 export default defineEventHandler(async (event) => {
   const user = await requirePermission(event, 'prompts.own.edit')
-  const groupId = await getActiveGroupId(event)
   const body = await readBody<{
     name: string
     content: string
     stepType: string
     derivedFromId?: string
+    projectId?: string | null
+    groupId?: string | null
   }>(event)
+  const scope = await resolveLibraryScope(event, body)
 
   return prisma.systemPrompt.create({
     data: {
@@ -18,9 +20,13 @@ export default defineEventHandler(async (event) => {
       content: body.content,
       stepType: body.stepType as never,
       authorId: user.id,
-      groupId,
+      ...scope,
       derivedFromId: body.derivedFromId ?? null,
     },
-    include: { author: { select: { id: true, name: true, image: true } } },
+    include: {
+      author: { select: { id: true, name: true, image: true } },
+      group: true,
+      project: { include: { group: true } },
+    },
   })
 })

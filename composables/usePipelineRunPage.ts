@@ -34,15 +34,17 @@ export type PromptOption = {
 export const pipelineRunKey = Symbol('pipelineRun')
 
 export async function usePipelineRunPage() {
+  const nuxtApp = useNuxtApp()
   const route = useRoute()
-  const [runResult, promptsResult, contextPartsResult, sellingPointsResult, emailDraftsResult, signaturesResult] = await Promise.all([
-    useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`),
-    useFetch<PromptOption[]>('/api/library/prompts', { default: () => [] }),
-    useFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { default: () => [] }),
-    useFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { default: () => [] }),
-    useFetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { default: () => [] }),
+  const runResult = await useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`)
+  const projectQuery = computed(() => ({ projectId: runResult.data.value?.projectId }))
+  const [promptsResult, contextPartsResult, sellingPointsResult, emailDraftsResult, signaturesResult] = await nuxtApp.runWithContext(() => Promise.all([
+    useFetch<PromptOption[]>('/api/library/prompts', { query: projectQuery, default: () => [] }),
+    useFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { query: projectQuery, default: () => [] }),
+    useFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { query: projectQuery, default: () => [] }),
+    useFetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { query: projectQuery, default: () => [] }),
     useFetch<Array<{ id: string; name: string; content: string; isDefault: boolean }>>('/api/library/signatures', { default: () => [] }),
-  ])
+  ]))
   const { data: run, refresh } = runResult
   const { data: prompts } = promptsResult
   const { data: contextParts } = contextPartsResult
@@ -94,7 +96,12 @@ export async function usePipelineRunPage() {
     const cfg = getConfig(stepKey)
     const created = await $fetch<{ id: string; name: string; content: string; stepKeys: string[] }>('/api/library/context-parts', {
       method: 'POST',
-      body: { name, content: cfg.manualContext, stepKeys: [stepKey] },
+      body: {
+        name,
+        content: cfg.manualContext,
+        stepKeys: [stepKey],
+        projectId: run.value?.projectId,
+      },
     })
     if (contextParts.value && !contextParts.value.find(cp => cp.id === created.id)) {
       contextParts.value.push({ id: created.id, name: created.name, content: created.content, stepKeys: created.stepKeys })

@@ -10,9 +10,14 @@ if (!pipeline) {
   throw new Error('Pipeline run context is missing')
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function renderLinks(text: string | null | undefined): string {
   if (!text) return ''
-  return String(text).replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">$1</a>')
+  const escaped = escapeHtml(String(text))
+  return escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">$1</a>')
 }
 
 const selectedRows = ref<Set<number>>(new Set())
@@ -192,7 +197,7 @@ async function deleteSelectedRows() {
               <div v-if="Array.isArray(profile.recentHighlights) && (profile.recentHighlights as unknown[]).length">
                 <p class="font-medium text-gray-600 mb-0.5">Nedávné novinky</p>
                 <ul class="space-y-0.5">
-                  <li v-for="h in (profile.recentHighlights as string[])" :key="h" class="text-gray-600">· {{ h }}</li>
+                  <li v-for="h in (profile.recentHighlights as string[])" :key="h" class="text-gray-600" v-html="'· ' + renderLinks(h)" />
                 </ul>
               </div>
 
@@ -207,7 +212,7 @@ async function deleteSelectedRows() {
                 <p class="font-medium text-gray-600 mb-1">Minulá spolupráce</p>
                 <ul class="space-y-0.5">
                   <li v-for="e in (profile.partnershipEvidence as Record<string, unknown>[])" :key="String(e.event ?? '')" class="text-gray-600">
-                    · {{ e.event }}{{ e.year ? ' (' + e.year + ')' : '' }} — {{ e.role }}
+                    · <span v-html="renderLinks(String(e.event ?? ''))" />{{ e.year ? ' (' + e.year + ')' : '' }} — <span v-html="renderLinks(String(e.role ?? ''))" />
                     <a v-if="e.source" :href="String(e.source)" target="_blank" rel="noopener noreferrer" class="ml-1 text-primary text-[10px] hover:opacity-80">↗</a>
                   </li>
                 </ul>

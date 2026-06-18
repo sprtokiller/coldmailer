@@ -32,6 +32,9 @@ async function main() {
   console.log('System user:', systemUser.id)
   console.log('\n--- Importing TDA Content ---\n')
 
+  const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
+  if (!tdaGroup) throw new Error('Group "Tour de App" (slug: tda) does not exist. Run the seed first.')
+
   // ── 1. Import DATA01.txt as GlobalRecord (COMPETITION) ─────────────────────
   await importCompetitions(systemUser.id)
 
@@ -39,7 +42,7 @@ async function main() {
   await importMarketPrompt(systemUser.id)
 
   // ── 3. Import Tour de App content files as ContextPart ──────────────────────
-  await importContextParts(systemUser.id)
+  await importContextParts(systemUser.id, tdaGroup.id)
 
   console.log('\n✅ Import completed!')
 }
@@ -125,7 +128,7 @@ async function importMarketPrompt(userId: string) {
   }
 }
 
-async function importContextParts(userId: string) {
+async function importContextParts(userId: string, groupId: string) {
   const contentFiles = [
     'Tour de App - Mise, cílová skupina a filosofie soutěže.txt',
     'Tour de App - Struktura soutěže.txt',
@@ -144,7 +147,7 @@ async function importContextParts(userId: string) {
     if (existing) {
       await prisma.contextPart.update({
         where: { id: existing.id },
-        data: { content },
+        data: { content, groupId, projectId: null },
       })
       console.log(`  ↻ Updated: ${name}`)
     } else {
@@ -153,6 +156,7 @@ async function importContextParts(userId: string) {
           name,
           content,
           authorId: userId,
+          groupId,
         },
       })
       console.log(`  ✓ Created: ${name}`)

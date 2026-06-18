@@ -57,37 +57,99 @@ export async function findOrCreateGlobalRecord(
   const normalizedCandidateName = normalizeName(candidate.name)
 
   if (dedup.matchStatus === 'possible_match' && dedup.matchedRecordId) {
+    const duplicateOfId = await wouldCreateCycle(dedup.matchedRecordId)
+      ? undefined
+      : dedup.matchedRecordId
+    try {
+      const record = await prisma.globalRecord.create({
+        data: {
+          type: candidate.type,
+          canonicalName: candidate.name,
+          normalizedName: normalizedCandidateName,
+          payload: candidate.payload as never,
+          createdBy: userId,
+          duplicateOfId,
+        },
+      })
+      await prisma.pipelineRecordRef.create({
+        data: { pipelineRunId, stepId, globalRecordId: record.id, inputSourceId, addedBy: userId, addMethod },
+      })
+      await logEvent({ globalRecordId: record.id, pipelineRunId, stepId, userId, eventType: 'DEDUP_REVIEW', metadata: { explanation: dedup.explanation } })
+      return { globalRecordId: record.id, wasCreated: true }
+    } catch (err: unknown) {
+      if (isUniqueConstraintError(err)) {
+        return handleDuplicateConflict(candidate, pipelineRunId, stepId, inputSourceId, userId, addMethod)
+      }
+      throw err
+    }
+  }
+
+  try {
     const record = await prisma.globalRecord.create({
       data: {
         type: candidate.type,
         canonicalName: candidate.name,
         normalizedName: normalizedCandidateName,
-        payload: candidate.payload,
+        payload: candidate.payload as never,
         createdBy: userId,
-        duplicateOfId: dedup.matchedRecordId,
       },
     })
     await prisma.pipelineRecordRef.create({
       data: { pipelineRunId, stepId, globalRecordId: record.id, inputSourceId, addedBy: userId, addMethod },
     })
-    await logEvent({ globalRecordId: record.id, pipelineRunId, stepId, userId, eventType: 'DEDUP_REVIEW', metadata: { explanation: dedup.explanation } })
+    await logEvent({ globalRecordId: record.id, pipelineRunId, stepId, userId, eventType: 'CREATED' })
     return { globalRecordId: record.id, wasCreated: true }
+  } catch (err: unknown) {
+    if (isUniqueConstraintError(err)) {
+      return handleDuplicateConflict(candidate, pipelineRunId, stepId, inputSourceId, userId, addMethod)
+    }
+    throw err
   }
+}
 
-  const record = await prisma.globalRecord.create({
-    data: {
-      type: candidate.type,
-      canonicalName: candidate.name,
-      normalizedName: normalizedCandidateName,
-      payload: candidate.payload,
-      createdBy: userId,
-    },
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002'
+}
+
+async function handleDuplicateConflict(
+  candidate: GlobalRecordCandidate,
+  pipelineRunId: string,
+  stepId: string,
+  inputSourceId: string | undefined,
+  userId: string,
+  addMethod: AddMethod,
+): Promise<{ globalRecordId: string; wasCreated: boolean }> {
+  const existing = await prisma.globalRecord.findFirst({
+    where: { type: candidate.type, normalizedName: normalizeName(candidate.name) },
+    select: { id: true },
   })
-  await prisma.pipelineRecordRef.create({
-    data: { pipelineRunId, stepId, globalRecordId: record.id, inputSourceId, addedBy: userId, addMethod },
+  if (!existing) throw new Error('Unique constraint conflict but no existing record found')
+
+  const ref = await prisma.pipelineRecordRef.findUnique({
+    where: { pipelineRunId_stepId_globalRecordId: { pipelineRunId, stepId, globalRecordId: existing.id } },
   })
-  await logEvent({ globalRecordId: record.id, pipelineRunId, stepId, userId, eventType: 'CREATED' })
-  return { globalRecordId: record.id, wasCreated: true }
+  if (!ref) {
+    await prisma.pipelineRecordRef.create({
+      data: { pipelineRunId, stepId, globalRecordId: existing.id, inputSourceId, addedBy: userId, addMethod },
+    })
+  }
+  await logEvent({ globalRecordId: existing.id, pipelineRunId, stepId, userId, eventType: 'DEDUP_LINKED', metadata: { explanation: 'Resolved via unique constraint conflict' } })
+  return { globalRecordId: existing.id, wasCreated: false }
+}
+
+async function wouldCreateCycle(targetId: string, maxDepth = 10): Promise<boolean> {
+  let currentId: string | null = targetId
+  const visited = new Set<string>()
+  for (let i = 0; i < maxDepth && currentId; i++) {
+    if (visited.has(currentId)) return true
+    visited.add(currentId)
+    const node: { duplicateOfId: string | null } | null = await prisma.globalRecord.findUnique({
+      where: { id: currentId },
+      select: { duplicateOfId: true },
+    })
+    currentId = node?.duplicateOfId ?? null
+  }
+  return false
 }
 
 export async function updateRelevanceStatus(
