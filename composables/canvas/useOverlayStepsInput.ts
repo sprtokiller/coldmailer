@@ -111,10 +111,10 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
         name: r.globalRecord.canonicalName,
         addMethod: r.addMethod,
         isSelectedForProcessing: r.isSelectedForProcessing,
-        hasProfileData: Boolean(
-          (r.globalRecord.payload as Record<string, unknown>)?.industry
-          || (r.globalRecord.payload as Record<string, unknown>)?.contacts,
-        ),
+        hasProfileData: (() => {
+          const p = r.globalRecord.payload as Record<string, unknown> | null
+          return Boolean(p?.industry || p?.summary || p?.profile || (Array.isArray(p?.contacts) && p!.contacts.length > 0))
+        })(),
       }))
     pl.piExtraRefs = extras
     // Default-select newly appearing candidates (PI panel selection is the default)

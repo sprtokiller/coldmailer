@@ -15,7 +15,7 @@ function profileExtraRef(candidate: Step3Candidate) {
 }
 
 function canOpenProfileImport(candidate: Step3Candidate): boolean {
-  return !candidate.partnerId.startsWith('direct:')
+  return candidate.source !== 'direct'
 }
 
 function hasProfileImportHint(candidate: Step3Candidate): boolean {
@@ -52,7 +52,7 @@ function hasProfileImportHint(candidate: Step3Candidate): boolean {
       </div>
       <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
         <div class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
-          <span></span><span>Partner</span><span class="text-center">Výskytů</span><span></span><span></span>
+          <span></span><span>Partner</span><span class="text-center">Výskytů</span><span></span><span></span><span></span>
         </div>
         <label
           v-for="c in pipeline.step3FilteredCandidates()"

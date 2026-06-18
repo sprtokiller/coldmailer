@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
 
   const mergedData = mergeOutputData(existingStep?.outputData ?? null, profiles, 'PARTNER_PROFILING')
 
+  let stepId: string
   if (existingStep) {
     await prisma.pipelineStep.update({
       where: { id: existingStep.id },
@@ -43,22 +44,33 @@ export default defineEventHandler(async (event) => {
         completedAt: new Date(),
       },
     })
-    return { success: true, stepId: existingStep.id, mergedData }
+    stepId = existingStep.id
+  } else {
+    const created = await prisma.pipelineStep.create({
+      data: {
+        pipelineRunId: runId,
+        stepType: 'PARTNER_PROFILING',
+        status: 'COMPLETED',
+        systemPromptId: null,
+        contextPartIds: [],
+        inputData: {},
+        outputData: mergedData as never,
+        runnerId: user.id,
+        completedAt: new Date(),
+      },
+    })
+    stepId = created.id
   }
 
-  const created = await prisma.pipelineStep.create({
-    data: {
-      pipelineRunId: runId,
-      stepType: 'PARTNER_PROFILING',
-      status: 'COMPLETED',
-      systemPromptId: null,
-      contextPartIds: [],
-      inputData: {},
-      outputData: mergedData as never,
-      runnerId: user.id,
-      completedAt: new Date(),
-    },
-  })
+  for (const profile of mergedData as Array<Record<string, unknown>>) {
+    const pid = profile.partnerId as string | undefined
+    if (!pid || profile.error) continue
+    const { partnerId: _, error: __, raw: ___, ...profileData } = profile
+    await prisma.globalRecord.update({
+      where: { id: pid },
+      data: { payload: profileData as never },
+    }).catch(() => {})
+  }
 
-  return { success: true, stepId: created.id, mergedData }
+  return { success: true, stepId }
 })

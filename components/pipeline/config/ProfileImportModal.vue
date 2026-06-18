@@ -72,6 +72,7 @@ const options = computed<ProfileOption[]>(() => {
   return [...current, ...historical]
 })
 
+// oldest-first so mergeOutputData overwrites older fields with newer ones
 const selectedProfiles = computed(() =>
   [...options.value]
     .reverse()
@@ -86,8 +87,8 @@ async function loadProfiles() {
     response.value = await $fetch<RecordProfilesResponse>(`/api/records/${props.globalRecordId}/profiles`)
     const firstKey = options.value[0]?.key
     selectedKeys.value = firstKey ? { [firstKey]: true } : {}
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Profilace se nepodařilo načíst.'
+  } catch (err: any) {
+    error.value = err?.data?.statusMessage ?? err?.statusMessage ?? (err instanceof Error ? err.message : 'Profilace se nepodařilo načíst.')
   } finally {
     loading.value = false
   }
@@ -101,8 +102,8 @@ async function importSelected() {
     await pipeline.importProfiles(selectedProfiles.value)
     emit('imported')
     emit('close')
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Profilace se nepodařilo importovat.'
+  } catch (err: any) {
+    error.value = err?.data?.statusMessage ?? err?.statusMessage ?? (err instanceof Error ? err.message : 'Profilace se nepodařilo importovat.')
   } finally {
     importing.value = false
   }
@@ -117,7 +118,7 @@ onMounted(loadProfiles)
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
       @click.self="emit('close')"
     >
-      <div class="w-full max-w-2xl rounded-lg bg-white shadow-2xl">
+      <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
         <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
           <div class="min-w-0">
             <h3 class="truncate text-sm font-semibold text-gray-800">{{ partnerName }}</h3>
