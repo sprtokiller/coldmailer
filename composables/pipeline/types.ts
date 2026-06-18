@@ -52,6 +52,25 @@ export interface PiExtraRef {
   name: string
   addMethod: string
   isSelectedForProcessing: boolean
+  hasProfileData?: boolean
+}
+
+export interface RecordProfileCurrent {
+  data: Record<string, unknown>
+  updatedAt: string
+}
+
+export interface RecordProfileHistorical {
+  stepId: string
+  pipelineRunName: string
+  runnerName: string
+  completedAt: string
+  data: Record<string, unknown>
+}
+
+export interface RecordProfilesResponse {
+  current: RecordProfileCurrent | null
+  historical: RecordProfileHistorical[]
 }
 
 export type PromptOption = {
@@ -140,6 +159,7 @@ export interface PipelineRunContext {
   isAiImportStep: (stepKey: string) => boolean
   toggleAiImport: (stepKey: string) => void
   runAiImport: (stepKey: string) => Promise<void>
+  importProfiles: (profiles: Array<Record<string, unknown>>) => Promise<void>
   deleteTableRow: (stepKey: string, rowIndex: number) => Promise<void>
   deleteTableRows: (stepKey: string, rowIndices: number[]) => Promise<void>
   deleteProfilingProfile: (stepKey: string, profileIndex: number) => Promise<void>

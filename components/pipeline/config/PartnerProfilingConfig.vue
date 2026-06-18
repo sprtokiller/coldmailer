@@ -7,7 +7,20 @@ defineProps<{ step: StepDefinition }>()
 const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipelineRunPage>>
 
 const provenanceCandidate = ref<Step3Candidate | null>(null)
+const profileImportCandidate = ref<Step3Candidate | null>(null)
 const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.itemNames ?? [])])
+
+function profileExtraRef(candidate: Step3Candidate) {
+  return pipeline.piExtraRefs.find(ref => ref.globalRecordId === candidate.partnerId)
+}
+
+function canOpenProfileImport(candidate: Step3Candidate): boolean {
+  return !candidate.partnerId.startsWith('direct:')
+}
+
+function hasProfileImportHint(candidate: Step3Candidate): boolean {
+  return Boolean(profileExtraRef(candidate)?.hasProfileData)
+}
 </script>
 
 <template>
@@ -38,13 +51,13 @@ const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.
         </div>
       </div>
       <div class="rounded-lg border border-gray-100 overflow-hidden text-xs max-h-56 overflow-y-auto">
-        <div class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
+        <div class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem_2rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
           <span></span><span>Partner</span><span class="text-center">Výskytů</span><span></span><span></span>
         </div>
         <label
           v-for="c in pipeline.step3FilteredCandidates()"
           :key="c.partnerId"
-          class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
+          class="grid grid-cols-[1.5rem_1fr_4rem_2rem_2rem_2rem] px-3 py-1.5 gap-2 border-t border-gray-50 items-center cursor-pointer hover:bg-gray-50/60"
           :class="[
             pipeline.step3SelectedIds[c.partnerId] ? '' : 'opacity-50',
             c.source === 'direct' ? 'bg-amber-50/40' : '',
@@ -60,6 +73,20 @@ const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.
             class="text-center font-semibold"
             :class="c.source === 'direct' ? 'text-amber-400' : c.frequency > 1 ? 'text-primary' : 'text-gray-400'"
           >{{ c.source === 'direct' ? '–' : c.frequency + '×' }}</span>
+          <button
+            v-if="canOpenProfileImport(c)"
+            type="button"
+            class="flex items-center justify-center transition-colors"
+            :class="hasProfileImportHint(c) ? 'text-primary hover:text-primary/80' : 'text-gray-300 hover:text-primary'"
+            :title="'Načíst uložený profil pro ' + c.name"
+            @click.stop.prevent="profileImportCandidate = c"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v10m0 0l4-4m-4 4L8 9" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1" />
+            </svg>
+          </button>
+          <span v-else></span>
           <button
             type="button"
             class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
@@ -121,4 +148,12 @@ const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.
       </div>
     </div>
   </Teleport>
+
+  <ProfileImportModal
+    v-if="profileImportCandidate"
+    :global-record-id="profileImportCandidate.partnerId"
+    :partner-name="profileImportCandidate.name"
+    @close="profileImportCandidate = null"
+    @imported="profileImportCandidate = null"
+  />
 </template>

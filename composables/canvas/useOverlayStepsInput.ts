@@ -7,7 +7,7 @@ import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 interface PipelineStepsCtx {
   step3FilteredCandidates?: () => Array<{ partnerId: string; name: string; frequency: number; itemNames: string[]; source?: string }>
   step3SelectedIds: Record<string, boolean>
-  piExtraRefs?: Array<{ globalRecordId: string; name: string; addMethod: string; isSelectedForProcessing: boolean }>
+  piExtraRefs?: Array<{ globalRecordId: string; name: string; addMethod: string; isSelectedForProcessing: boolean; hasProfileData?: boolean }>
   initStep3Selection?: () => void
   step3SelectAll?: () => void; step3DeselectAll?: () => void; step3SelectUnprocessed?: () => void
   step3SelectedCount?: () => number
@@ -111,6 +111,10 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
         name: r.globalRecord.canonicalName,
         addMethod: r.addMethod,
         isSelectedForProcessing: r.isSelectedForProcessing,
+        hasProfileData: Boolean(
+          (r.globalRecord.payload as Record<string, unknown>)?.industry
+          || (r.globalRecord.payload as Record<string, unknown>)?.contacts,
+        ),
       }))
     pl.piExtraRefs = extras
     // Default-select newly appearing candidates (PI panel selection is the default)

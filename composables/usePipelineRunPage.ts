@@ -167,6 +167,15 @@ export async function usePipelineRunPage() {
 
   const aiImport = useAiImport(route, refresh, getConfig)
 
+  async function importProfiles(profiles: Array<Record<string, unknown>>) {
+    await $fetch(`/api/pipeline/${route.params.id}/steps/import-profiles`, {
+      method: 'POST',
+      body: { profiles },
+    })
+    selection.step4Initialized.value = false
+    await refresh()
+  }
+
   const promptBuilding = usePromptBuilding(
     contextParts,
     getConfig,
@@ -366,6 +375,7 @@ export async function usePipelineRunPage() {
     applySignature,
     // ai import
     ...aiImport,
+    importProfiles,
     // prompt building
     ...promptBuilding,
     // orchestrator-level functions
