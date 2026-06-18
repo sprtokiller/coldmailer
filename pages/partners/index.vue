@@ -2,16 +2,15 @@
 definePageMeta({ middleware: 'auth' })
 
 interface Contact { id: string; address: string; isPrimary: boolean; label: string | null }
-interface AssignedUser { user: { id: string; name: string; image: string | null } }
-interface MailEventPreview { id: string; direction: string; sentAt: string }
+interface AssigneeUser { id: string; name: string; image: string | null }
 interface Partner {
   id: string
   canonicalName: string
   payload: Record<string, string>
   contacts: Contact[]
-  assignments: AssignedUser[]
-  mailEvents: MailEventPreview[]
-  _count: { mailEvents: number; partnerNotes: number }
+  assignees: AssigneeUser[]
+  lastInteractionAt: string | null
+  interactionCount: number
 }
 
 const search = ref('')
@@ -27,9 +26,8 @@ function primaryEmail(p: Partner) {
   return p.contacts.find(c => c.isPrimary)?.address ?? p.contacts[0]?.address ?? null
 }
 function lastContact(p: Partner) {
-  const e = p.mailEvents[0]
-  if (!e) return null
-  return new Date(e.sentAt).toLocaleDateString('cs-CZ')
+  if (!p.lastInteractionAt) return null
+  return new Date(p.lastInteractionAt).toLocaleDateString('cs-CZ')
 }
 </script>
 
@@ -58,7 +56,7 @@ function lastContact(p: Partner) {
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Primární email</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Maily</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Poslední kontakt</th>
           </tr>
         </thead>
@@ -96,29 +94,29 @@ function lastContact(p: Partner) {
             </td>
             <td class="px-4 py-3">
               <div class="flex items-center -space-x-1">
-                <template v-for="a in p.assignments.slice(0, 4)" :key="a.user.id">
+                <template v-for="a in p.assignees.slice(0, 4)" :key="a.id">
                   <img
-                    v-if="a.user.image"
-                    :src="a.user.image"
-                    :alt="a.user.name"
-                    :title="a.user.name"
+                    v-if="a.image"
+                    :src="a.image"
+                    :alt="a.name"
+                    :title="a.name"
                     class="w-6 h-6 rounded-full ring-2 ring-white object-cover"
                     referrerpolicy="no-referrer"
                   />
                   <div
                     v-else
-                    :title="a.user.name"
+                    :title="a.name"
                     class="w-6 h-6 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-xs font-medium"
                   >
-                    {{ a.user.name.charAt(0).toUpperCase() }}
+                    {{ a.name.charAt(0).toUpperCase() }}
                   </div>
                 </template>
-                <span v-if="p.assignments.length > 4" class="text-xs text-gray-400 pl-2">+{{ p.assignments.length - 4 }}</span>
-                <span v-if="!p.assignments.length" class="text-xs text-gray-300">—</span>
+                <span v-if="p.assignees.length > 4" class="text-xs text-gray-400 pl-2">+{{ p.assignees.length - 4 }}</span>
+                <span v-if="!p.assignees.length" class="text-xs text-gray-300">—</span>
               </div>
             </td>
             <td class="px-4 py-3 text-center">
-              <span class="text-xs font-medium text-gray-700">{{ p._count.mailEvents }}</span>
+              <span class="text-xs font-medium text-gray-700">{{ p.interactionCount }}</span>
             </td>
             <td class="px-4 py-3 text-xs text-gray-400">
               {{ lastContact(p) ?? '—' }}

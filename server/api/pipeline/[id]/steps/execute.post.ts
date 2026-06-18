@@ -66,10 +66,14 @@ export default defineEventHandler(async (event) => {
   const scopeFilter = libraryScopeForProject(run.project)
 
   const alreadyRunning = await prisma.pipelineStep.findFirst({
-    where: { pipelineRunId: runId, stepType: body.stepType as never, status: 'RUNNING' },
+    where: { pipelineRunId: runId, status: 'RUNNING' },
+    include: { runner: { select: { name: true } } },
   })
   if (alreadyRunning) {
-    throw createError({ statusCode: 409, statusMessage: 'Tento krok již běží.' })
+    throw createError({
+      statusCode: 409,
+      statusMessage: `Krok ${alreadyRunning.stepType} právě běží (spustil/a ${alreadyRunning.runner?.name ?? 'neznámý'}).`,
+    })
   }
 
   const [contextParts, customPrompt, dbSystemPrompt, sellingPoint, emailDraft] = await Promise.all([
@@ -199,10 +203,19 @@ export default defineEventHandler(async (event) => {
             })
             let finalOutput: unknown = {}
             let partnerIdCostUsd = 0
+            const piProgressItems: Array<{ index: number; total: number; itemName: string; status: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; error?: string }> = []
             for await (const ev of gen) {
               if (ev.type === 'progress') write({ chunk: ev.text })
-              else if (ev.type === 'item') write({ partnerItem: ev.item })
-              else if (ev.type === 'output') { finalOutput = ev.data; partnerIdCostUsd = ev.totalCostUsd }
+              else if (ev.type === 'item') {
+                write({ partnerItem: ev.item })
+                const idx = piProgressItems.findIndex(i => i.index === ev.item.index)
+                if (idx >= 0) piProgressItems[idx] = { ...ev.item }
+                else piProgressItems.push({ ...ev.item })
+                await prisma.pipelineStep.update({
+                  where: { id: step.id },
+                  data: { progress: { items: piProgressItems } as Prisma.InputJsonValue },
+                }).catch(() => {})
+              } else if (ev.type === 'output') { finalOutput = ev.data; partnerIdCostUsd = ev.totalCostUsd }
             }
             if (partnerIdCostUsd > 0) {
               await trackAIUsage({
@@ -215,7 +228,7 @@ export default defineEventHandler(async (event) => {
             }
             await prisma.pipelineStep.update({
               where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date() },
+              data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
           } else if (body.stepType === 'PARTNER_PROFILING') {
             // inputData: { partners: [{ partnerId?, name, frequency?, itemNames? }] }
@@ -249,12 +262,16 @@ export default defineEventHandler(async (event) => {
             }))
 
             const allProfiles: unknown[] = []
+            const ppProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
 
             for (let i = 0; i < inputPartners.length; i++) {
               const ip = inputPartners[i]
               const db = ip.partnerId ? dbMap.get(ip.partnerId) : undefined
 
-              write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'processing' } })
+              const ppItem = { index: i + 1, total: inputPartners.length, name: ip.name, status: 'processing' }
+              ppProgressItems.push(ppItem)
+              write({ profilingItem: ppItem })
+              prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
               const userMsg = [
@@ -290,36 +307,57 @@ export default defineEventHandler(async (event) => {
                     : { raw: partnerOutput }),
                 }
                 allProfiles.push(profile)
+                ppProgressItems[i] = { ...ppProgressItems[i], status: 'done' }
                 write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'done', profile } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
                 write({ chunk: `  ❌ ${msg}\n` })
                 allProfiles.push({ partnerId: ip.partnerId, name: ip.name, error: msg })
+                ppProgressItems[i] = { ...ppProgressItems[i], status: 'error', error: msg }
                 write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'error', error: msg } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               }
             }
 
             write({ chunk: `\n✅ Hotovo! Prozkoumáno ${inputPartners.length} partnerů.\n` })
             await prisma.pipelineStep.update({
               where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date() },
+              data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
 
             // Persist profile data back to GlobalRecord so the Database page can display it
             for (const profile of allProfiles as Array<Record<string, unknown>>) {
+              if (profile.error) continue
+              const { partnerId: _, error: __, raw: ___, name: profileName, ...profileData } = profile
               const pid = profile.partnerId as string | undefined
-              if (!pid || profile.error) continue
-              const { partnerId: _, error: __, raw: ___, ...profileData } = profile
-              const existingGr = await prisma.globalRecord.findUnique({
-                where: { id: pid },
-                select: { payload: true },
-              })
+              let existingGr = pid
+                ? await prisma.globalRecord.findUnique({ where: { id: pid }, select: { id: true, payload: true } })
+                : null
+              if (!existingGr && profileName) {
+                const { normalizeName } = await import('~/server/utils/deduplication')
+                existingGr = await prisma.globalRecord.findFirst({
+                  where: { type: 'PARTNER', normalizedName: normalizeName(String(profileName)) },
+                  select: { id: true, payload: true },
+                })
+              }
+              if (!existingGr) continue
+              const stripMd = (s: string) => s.replace(/\s*\(\s*\[[^\]]*\]\([^)]*\)\s*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/ {2,}/g, ' ').trim()
+              const cleaned: Record<string, unknown> = { name: profileName, ...profileData }
+              for (const key of Object.keys(cleaned)) {
+                const v = cleaned[key]
+                if (typeof v === 'string' && v.includes('](')) {
+                  cleaned[key] = stripMd(v)
+                } else if (Array.isArray(v)) {
+                  cleaned[key] = v.map(item => typeof item === 'string' && item.includes('](') ? stripMd(item) : item)
+                }
+              }
               const merged = {
-                ...((existingGr?.payload as Record<string, unknown>) ?? {}),
-                ...profileData,
+                ...((existingGr.payload as Record<string, unknown>) ?? {}),
+                ...cleaned,
               }
               await prisma.globalRecord.update({
-                where: { id: pid },
+                where: { id: existingGr.id },
                 data: { payload: merged as never },
               }).catch(() => {})
             }
@@ -338,11 +376,15 @@ export default defineEventHandler(async (event) => {
             }
 
             const allAlignments: unknown[] = []
+            const vaProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
 
             for (let i = 0; i < inputPartners.length; i++) {
               const ip = inputPartners[i]
 
-              write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'processing' } })
+              const vaItem = { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'processing' }
+              vaProgressItems.push(vaItem)
+              write({ alignmentItem: vaItem })
+              prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: vaProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
               const userMsg = [
@@ -376,19 +418,23 @@ export default defineEventHandler(async (event) => {
                     : { raw: alignmentOutput }),
                 }
                 allAlignments.push(alignment)
+                vaProgressItems[i] = { ...vaProgressItems[i], status: 'done' }
                 write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'done', alignment } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: vaProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
                 write({ chunk: `  ❌ ${msg}\n` })
                 allAlignments.push({ partnerId: ip.partnerId, name: ip.name, error: msg })
+                vaProgressItems[i] = { ...vaProgressItems[i], status: 'error', error: msg }
                 write({ alignmentItem: { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'error', error: msg } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: vaProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               }
             }
 
             write({ chunk: `\n✅ Hotovo! Analyzováno ${inputPartners.length} partnerů.\n` })
             await prisma.pipelineStep.update({
               where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: allAlignments as never, completedAt: new Date() },
+              data: { status: 'COMPLETED', outputData: allAlignments as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
           } else if (body.stepType === 'OUTREACH_PREPARATION') {
             const inputPartners = (() => {
@@ -412,9 +458,14 @@ export default defineEventHandler(async (event) => {
               : null
 
             const allEmails: unknown[] = []
+            const opProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
 
             for (let i = 0; i < inputPartners.length; i++) {
               const ip = inputPartners[i]
+              const opItem = { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'processing' }
+              opProgressItems.push(opItem)
+              write({ profilingItem: opItem })
+              prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
               const userMsg = [
@@ -450,17 +501,23 @@ export default defineEventHandler(async (event) => {
                     : { raw: emailOutput }),
                 }
                 allEmails.push(emailData)
+                opProgressItems[i] = { ...opProgressItems[i], status: 'done' }
+                write({ profilingItem: { ...opProgressItems[i] } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
                 write({ chunk: `  ❌ ${msg}\n` })
                 allEmails.push({ partnerName: String(ip.name ?? ''), error: msg })
+                opProgressItems[i] = { ...opProgressItems[i], status: 'error', error: msg }
+                write({ profilingItem: { ...opProgressItems[i] } })
+                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               }
             }
 
             write({ chunk: `\n✅ Hotovo! Připraveno ${inputPartners.length} e-mailů.\n` })
             await prisma.pipelineStep.update({
               where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: allEmails as never, completedAt: new Date() },
+              data: { status: 'COMPLETED', outputData: allEmails as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
           } else if (body.stepType === 'MARKET_SCANNING') {
             let fullOutput = ''
@@ -537,7 +594,7 @@ export default defineEventHandler(async (event) => {
           await prisma.pipelineStep
             .update({
               where: { id: step.id },
-              data: { status: 'FAILED', errorMessage: message, completedAt: new Date() },
+              data: { status: 'FAILED', errorMessage: message, completedAt: new Date(), progress: Prisma.DbNull },
             })
             .catch((e) => console.error('[execute] Failed to mark step FAILED:', e))
           write({ error: message })

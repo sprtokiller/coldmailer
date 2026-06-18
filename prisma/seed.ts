@@ -184,6 +184,34 @@ const DEFAULT_INDUSTRY_TAGS = [
   'Zábava a volný čas',
 ]
 
+const DEFAULT_PROJECT_ROLES = [
+  {
+    name: 'Vedoucí obchodu',
+    permissions: ['project.interactions.view_all', 'project.interactions.edit_all'],
+    isSystem: true,
+  },
+  {
+    name: 'Obchodní tým',
+    permissions: ['project.interactions.view_all'],
+    isSystem: true,
+  },
+]
+
+async function seedProjectRoles() {
+  console.log('Seeding project roles…')
+  const projects = await prisma.project.findMany()
+  for (const project of projects) {
+    for (const role of DEFAULT_PROJECT_ROLES) {
+      await prisma.projectRole.upsert({
+        where: { projectId_name: { projectId: project.id, name: role.name } },
+        create: { projectId: project.id, name: role.name, permissions: role.permissions, isSystem: role.isSystem },
+        update: {},
+      })
+    }
+    console.log(`  ✓ ProjectRoles for: ${project.name}`)
+  }
+}
+
 async function seedTags() {
   console.log('Seeding industry tags…')
   const key = 'tags.partnerIndustry'
@@ -201,6 +229,7 @@ async function seedTags() {
 main()
   .then(() => seedRoles())
   .then(() => seedGroups())
+  .then(() => seedProjectRoles())
   .then(() => seedTags())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

@@ -403,6 +403,10 @@ async function confirmEditContextPart() {
         {{ pipeline.executingStep === step.key ? 'Probíhá…' : 'Spustit krok' }}
       </button>
 
+      <p v-if="pipeline.executingStep && pipeline.executingRunner" class="text-xs text-gray-400">
+        {{ pipeline.executingStep === step.key ? 'Zpracovává' : 'Blokuje' }}: {{ pipeline.executingRunner.name }}
+      </p>
+
       <button
         v-if="step.key === 'MARKET_SCANNING'"
         type="button"

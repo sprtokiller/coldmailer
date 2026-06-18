@@ -1,4 +1,3 @@
-import type { RecordEventType } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 
 interface LogEventParams {
@@ -6,7 +5,7 @@ interface LogEventParams {
   pipelineRunId?: string
   stepId?: string
   userId: string
-  eventType: RecordEventType
+  eventType: string
   metadata?: Record<string, unknown>
 }
 

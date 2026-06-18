@@ -21,6 +21,7 @@ export function useStepExecution(
   step6PreviewBody: Ref<string>,
   step6SelectedPartnerName: Ref<string | null>,
   executingStep: Ref<string | null>,
+  executingRunner: Ref<{ name: string; image: string | null } | null>,
   streamOutputs: Ref<Record<string, string>>,
   partnerProgress: Ref<Record<string, PartnerProgressItem[]>>,
   profilingProgress: Ref<Record<string, ProfilingProgressItem[]>>,
@@ -34,6 +35,8 @@ export function useStepExecution(
   getStepResult: (stepKey: string) => RunStepResult | undefined,
   alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>,
 ) {
+  const { user: sessionUser } = useUserSession()
+
   function processedKeySet(items: Array<Record<string, unknown>>, keys: string[]): Set<string> {
     const s = new Set<string>()
     for (const item of items) {
@@ -126,6 +129,8 @@ export function useStepExecution(
     if (rerunsExisting && !confirm(RERUN_WARNING)) return
 
     executingStep.value = stepKey
+    const u = sessionUser.value as { name?: string; image?: string | null } | null
+    executingRunner.value = u ? { name: u.name ?? '', image: u.image ?? null } : null
     streamOutputs.value[stepKey] = ''
     partnerProgress.value[stepKey] = []
     profilingProgress.value[stepKey] = []
@@ -147,12 +152,14 @@ export function useStepExecution(
       })
     } catch {
       executingStep.value = null
+      executingRunner.value = null
       alert('Chyba sítě — nelze se připojit k serveru.')
       return
     }
 
     if (!response.ok) {
       executingStep.value = null
+      executingRunner.value = null
       const text = await response.text().catch(() => response.statusText)
       alert(`Nepodařilo se spustit krok: ${text}`)
       return
@@ -203,6 +210,7 @@ export function useStepExecution(
       }
     } finally {
       executingStep.value = null
+      executingRunner.value = null
     }
   }
 

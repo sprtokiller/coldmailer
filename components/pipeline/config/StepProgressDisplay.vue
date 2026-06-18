@@ -17,8 +17,8 @@ const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipeline
   </div>
 
   <!-- Partner profiling progress -->
-  <div v-if="step.key === 'PARTNER_PROFILING' && pipeline.profilingProgress[step.key]?.length" class="mt-2">
-    <p class="text-xs font-medium text-gray-500 mb-2">Průběh profilování</p>
+  <div v-if="(step.key === 'PARTNER_PROFILING' || step.key === 'OUTREACH_PREPARATION') && pipeline.profilingProgress[step.key]?.length" class="mt-2">
+    <p class="text-xs font-medium text-gray-500 mb-2">{{ step.key === 'OUTREACH_PREPARATION' ? 'Průběh přípravy' : 'Průběh profilování' }}</p>
     <div class="rounded-lg border border-gray-100 overflow-hidden text-xs">
       <div class="grid grid-cols-[2rem_1fr_5rem] bg-gray-50 px-3 py-1.5 font-medium text-gray-400 gap-2">
         <span>#</span><span>Partner</span><span class="text-center">Status</span>

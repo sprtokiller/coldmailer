@@ -6,6 +6,7 @@ import { useSelectionState } from './pipeline/useSelectionState'
 import { useAiImport } from './pipeline/useAiImport'
 import { usePromptBuilding } from './pipeline/usePromptBuilding'
 import { useStepExecution } from './pipeline/useStepExecution'
+import { useExecutionPolling } from './pipeline/useExecutionPolling'
 import type { PipelineRunContext, PipelineRunResponse, RunStepResult, StepConfigState, PiExtraRef } from './pipeline/types'
 
 export { type PipelineRunContext } from './pipeline/types'
@@ -54,6 +55,7 @@ export async function usePipelineRunPage() {
 
   const activeStep = ref<string | null>(null)
   const executingStep = ref<string | null>(null)
+  const executingRunner = ref<{ name: string; image: string | null } | null>(null)
   const streamOutputs = ref<Record<string, string>>({})
 
   const expandedProfileName = ref<string | null>(null)
@@ -210,6 +212,7 @@ export async function usePipelineRunPage() {
     selection.step6PreviewBody,
     selection.step6SelectedPartnerName,
     executingStep,
+    executingRunner,
     streamOutputs,
     progress.partnerProgress,
     progress.profilingProgress,
@@ -222,6 +225,19 @@ export async function usePipelineRunPage() {
     selection.step5Initialized,
     getStepResult,
     outputUtils.alignmentOutputAlignments,
+  )
+
+  useExecutionPolling(
+    route.params.id as string,
+    executingStep,
+    executingRunner,
+    progress.partnerProgress,
+    progress.profilingProgress,
+    progress.alignmentProgress,
+    progress.updatePartnerItem,
+    progress.updateProfilingItem,
+    progress.updateAlignmentItem,
+    refresh,
   )
 
   function prevStepOutput(stepKey: string): string {
@@ -314,6 +330,7 @@ export async function usePipelineRunPage() {
     signatures,
     activeStep,
     executingStep,
+    executingRunner,
     streamOutputs,
     expandedProfileName,
     promptPreviewStep,

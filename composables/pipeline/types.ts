@@ -126,6 +126,7 @@ export interface PipelineRunContext {
   signatures: Array<{ id: string; name: string; content: string; isDefault: boolean }>
   activeStep: string | null
   executingStep: string | null
+  executingRunner: { name: string; image: string | null } | null
   streamOutputs: Record<string, string>
   editingOutputStep: string | null
   editingOutputDraft: string

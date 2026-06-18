@@ -36,10 +36,14 @@ model User {
   inputSources       InputSource[]
   addedRefs          PipelineRecordRef[]
   recordEvents       RecordEvent[]
-  partnerAssignments PartnerAssignment[]
-  partnerMailEvents  PartnerMailEvent[]
-  partnerNotes       PartnerNote[]
+  partnerAssignments PartnerAssignment[] // @deprecated — replaced by InteractionAssignee
+  partnerMailEvents  PartnerMailEvent[] // @deprecated — replaced by Interaction
+  partnerNotes       PartnerNote[] // @deprecated — replaced by Interaction
   usageEvents        UsageEvent[]
+
+  interactionsCreated    Interaction[]         @relation("InteractionCreator")
+  interactionAssignments InteractionAssignee[]
+  projectRoles           UserProjectRole[]
 }
 
 model Role {
@@ -104,6 +108,8 @@ model Project {
   sellingPoints SellingPoint[]
   emailDrafts   EmailDraft[]
   pipelineRuns  PipelineRun[]
+  interactions  Interaction[]
+  projectRoles  ProjectRole[]
 
   @@unique([groupId, name])
   @@index([groupId])
@@ -277,6 +283,7 @@ model PipelineStep {
   inputData         Json?
   outputData        Json?
   errorMessage      String?
+  progress          Json?
   runnerId          String
   runner            User                @relation("StepRunner", fields: [runnerId], references: [id])
   createdAt         DateTime            @default(now())
@@ -356,10 +363,11 @@ model GlobalRecord {
   pipelineRefs PipelineRecordRef[]
   events       RecordEvent[]
   contacts     PartnerContact[]
-  assignments  PartnerAssignment[]
-  mailEvents   PartnerMailEvent[]
-  partnerNotes PartnerNote[]
-  fulfillments PartnerFulfillment[]
+  assignments  PartnerAssignment[] // @deprecated — replaced by InteractionAssignee
+  mailEvents   PartnerMailEvent[] // @deprecated — replaced by Interaction
+  partnerNotes PartnerNote[] // @deprecated — replaced by Interaction
+  fulfillments PartnerFulfillment[] // @deprecated — replaced by Interaction
+  interactions Interaction[]
 
   @@unique([normalizedName, type])
 }
@@ -436,17 +444,6 @@ model PipelineRecordRef {
   @@index([stepId, isSelectedForProcessing])
 }
 
-enum RecordEventType {
-  CREATED
-  DEDUP_LINKED
-  DEDUP_REVIEW
-  STATUS_CHANGED
-  RELEVANCE_SET
-  DELETED
-  MERGED
-  MIGRATED
-}
-
 model RecordEvent {
   id             String          @id @default(cuid())
   globalRecordId String
@@ -455,7 +452,7 @@ model RecordEvent {
   stepId         String?
   userId         String
   user           User            @relation(fields: [userId], references: [id])
-  eventType      RecordEventType
+  eventType      String
   timestamp      DateTime        @default(now())
   metadata       Json?
 }
@@ -478,6 +475,104 @@ model PartnerContact {
 
   @@index([globalRecordId])
 }
+
+// ── Interaction System ────────────────────────────────────────────────────────
+
+enum InteractionType {
+  NOTE
+  EMAIL
+  FULFILLMENT
+}
+
+enum ActionStatus {
+  WAITING_FOR_THEM
+  WAITING_FOR_US
+  BEFORE_MEETING
+  NONE
+}
+
+enum DealStage {
+  CONTACTED
+  NEGOTIATING
+  NOT_INTERESTED
+  NOT_THIS_TIME
+  PARTNER
+  COMPLETED
+}
+
+model Interaction {
+  id             String            @id @default(cuid())
+  globalRecordId String
+  globalRecord   GlobalRecord      @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type           InteractionType
+  actionStatus   ActionStatus?
+  dealStage      DealStage?
+
+  content   String?
+  createdBy String
+  creator   User     @relation("InteractionCreator", fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // EMAIL-specific
+  direction   MailDirection?
+  subject     String?
+  sentAt      DateTime?
+  fromAddress String?
+  toAddress   String?
+  gmailId     String?
+
+  // FULFILLMENT-specific
+  myToThem String?
+  themToUs String?
+
+  assignees InteractionAssignee[]
+
+  @@index([globalRecordId, projectId])
+  @@index([globalRecordId])
+  @@index([projectId])
+}
+
+model InteractionAssignee {
+  interactionId String
+  interaction   Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  assignedAt    DateTime    @default(now())
+
+  @@id([interactionId, userId])
+  @@index([userId])
+}
+
+// ── Project Roles ────────────────────────────────────────────────────────────
+
+model ProjectRole {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  permissions String[]
+  isSystem    Boolean           @default(false)
+  users       UserProjectRole[]
+  createdAt   DateTime          @default(now())
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model UserProjectRole {
+  userId        String
+  projectRoleId String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectRole   ProjectRole @relation(fields: [projectRoleId], references: [id], onDelete: Cascade)
+  assignedAt    DateTime    @default(now())
+
+  @@id([userId, projectRoleId])
+}
+
+// ── Deprecated Partner CRM Models (replaced by Interaction) ──────────────────
 
 model PartnerAssignment {
   globalRecordId String
