@@ -1,9 +1,4 @@
 <script setup lang="ts">
-import { useEditor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import TextAlign from '@tiptap/extension-text-align'
-import Placeholder from '@tiptap/extension-placeholder'
 import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
@@ -45,7 +40,7 @@ type SignaturesResponse = { templates: SignatureItem[]; personal: SignatureItem[
 
 const route = useRoute()
 const router = useRouter()
-const { activeProject, groups } = useActiveProject()
+const { activeProject, groups, groupFont } = useActiveProject()
 
 const VALID_TABS: Tab[] = ['prompts', 'context', 'selling', 'drafts', 'signatures']
 const initialTab = VALID_TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'prompts'
@@ -148,64 +143,6 @@ function resetForm() {
   editingIsSystem.value = false
   showForm.value = false
   showNewSignatureMenu.value = false
-  editor.value?.commands.setContent('')
-}
-
-// ── Tiptap editor ─────────────────────────────────────────────────────────────
-const editor = useEditor({
-  extensions: [
-    StarterKit,
-    Underline,
-    TextAlign.configure({ types: ['heading', 'paragraph'] }),
-    Placeholder.configure({ placeholder: 'Napište tělo e-mailu…' }),
-  ],
-  content: '',
-  editorProps: {
-    attributes: {
-      class: 'prose prose-sm max-w-none min-h-[10rem] focus:outline-none px-4 py-3 font-[Parkinsans,sans-serif]',
-    },
-    transformPastedHTML(html) {
-      return sanitizeHtml(html)
-    },
-  },
-  onUpdate({ editor: e }) {
-    form.value.body = e.getHTML()
-  },
-})
-
-watch(showForm, (visible) => {
-  if (!visible) return
-  if (tab.value === 'drafts') {
-    nextTick(() => {
-      editor.value?.commands.setContent(form.value.body || '')
-    })
-  }
-})
-
-watch(tab, (t) => {
-  if (t === 'drafts' && showForm.value) {
-    nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
-  }
-})
-
-// Predefined signature presets
-const SIGNATURES = [
-  {
-    label: 'Standardní',
-    html: `<p>S pozdravem,</p><p><strong>[Jméno]</strong><br>[Pozice] | SCG<br>[Email] | [Telefon]</p>`,
-  },
-  {
-    label: 'Krátká',
-    html: `<p>--<br><strong>[Jméno]</strong>, SCG</p>`,
-  },
-  {
-    label: 'S odkazem',
-    html: `<p>S pozdravem,<br><strong>[Jméno]</strong><br>[Pozice] | SCG<br><a href="https://scg.cz">scg.cz</a></p>`,
-  },
-]
-
-function insertSignature(html: string) {
-  editor.value?.chain().focus().insertContent('<p></p>' + html).run()
 }
 
 function closeMenus(e: MouseEvent) {
@@ -249,9 +186,6 @@ function startEdit(item: LibraryItem) {
       ? `group:${item.groupId}`
       : ''
   showForm.value = true
-  if (tab.value === 'drafts') {
-    nextTick(() => editor.value?.commands.setContent(form.value.body || ''))
-  }
 }
 
 watch(() => form.value.stepType, (newType, oldType) => {
@@ -434,13 +368,18 @@ watch(activeProject, (project) => {
   if (!editingId.value && project) form.value.scope = `project:${project.id}`
 }, { immediate: true })
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: 'prompts', label: 'Systémové prompty' },
-  { key: 'context', label: 'Kontextové části' },
-  { key: 'selling', label: 'Prodejní argumenty' },
-  { key: 'drafts', label: 'E-mailové šablony' },
-  { key: 'signatures', label: 'Podpisy' },
-]
+const tabs = computed(() => {
+  const items: { key: Tab; label: string }[] = [
+    { key: 'prompts', label: 'Systémové prompty' },
+    { key: 'context', label: 'Kontextové části' },
+    { key: 'selling', label: 'Prodejní argumenty' },
+    { key: 'drafts', label: 'E-mailové šablony' },
+  ]
+  if (canEditSystemSignatures.value) {
+    items.push({ key: 'signatures', label: 'Podpisové šablony' })
+  }
+  return items
+})
 </script>
 
 <template>
@@ -450,26 +389,13 @@ const tabs: { key: Tab; label: string }[] = [
         <h1 class="text-2xl font-semibold text-gray-800">Knihovna</h1>
         <p class="text-sm text-gray-400 mt-1">Sdílené prompty, kontext, prodejní argumenty a šablony.</p>
       </div>
-      <div v-if="tab === 'signatures'" class="relative">
+      <div v-if="tab === 'signatures' && canEditSystemSignatures">
         <button
           class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-          @click="canEditSystemSignatures ? (showNewSignatureMenu = !showNewSignatureMenu) : startNewSignature(false)"
+          @click="startNewSignature(true)"
         >
-          + Nový podpis
+          + Nový
         </button>
-        <div
-          v-if="showNewSignatureMenu && canEditSystemSignatures"
-          class="absolute right-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-52"
-        >
-          <button
-            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            @click="startNewSignature(false)"
-          >Vlastní podpis</button>
-          <button
-            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            @click="startNewSignature(true)"
-          >Nová šablona</button>
-        </div>
       </div>
       <button
         v-else
@@ -551,7 +477,7 @@ const tabs: { key: Tab; label: string }[] = [
         <template v-if="tab === 'signatures'">
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Obsah podpisu (WYSIWYG)</label>
-            <RichTextEditor v-model="form.signatureContent" />
+            <RichTextEditor v-model="form.signatureContent" :default-font="groupFont" />
           </div>
           <div v-if="!form.signatureIsSystem" class="flex items-center gap-2">
             <input id="sig-default" v-model="form.signatureIsDefault" type="checkbox" class="accent-primary" />
@@ -566,59 +492,7 @@ const tabs: { key: Tab; label: string }[] = [
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu (WYSIWYG)</label>
-            <!-- Tiptap toolbar -->
-            <div v-if="editor" class="flex flex-wrap items-center gap-1 p-2 bg-gray-50 border border-gray-200 rounded-t-lg">
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
-                :class="editor.isActive('bold') ? 'bg-gray-200 font-bold' : ''"
-                title="Tučné"
-                @click="editor.chain().focus().toggleBold().run()"
-              ><strong>B</strong></button>
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors italic"
-                :class="editor.isActive('italic') ? 'bg-gray-200' : ''"
-                title="Kurzíva"
-                @click="editor.chain().focus().toggleItalic().run()"
-              ><em>I</em></button>
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors underline"
-                :class="editor.isActive('underline') ? 'bg-gray-200' : ''"
-                title="Podtržení"
-                @click="editor.chain().focus().toggleUnderline().run()"
-              >U</button>
-              <span class="w-px h-4 bg-gray-200 mx-1"></span>
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
-                :class="editor.isActive('bulletList') ? 'bg-gray-200' : ''"
-                title="Nečíslovaný seznam"
-                @click="editor.chain().focus().toggleBulletList().run()"
-              >• —</button>
-              <button
-                type="button"
-                class="px-2 py-1 text-xs rounded hover:bg-gray-200 transition-colors"
-                :class="editor.isActive('orderedList') ? 'bg-gray-200' : ''"
-                title="Číslovaný seznam"
-                @click="editor.chain().focus().toggleOrderedList().run()"
-              >1. —</button>
-              <span class="w-px h-4 bg-gray-200 mx-1"></span>
-              <span class="text-[11px] text-gray-400 ml-1 mr-0.5">Podpis:</span>
-              <button
-                v-for="sig in SIGNATURES"
-                :key="sig.label"
-                type="button"
-                class="px-2 py-1 text-[11px] rounded border border-gray-200 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors"
-                @click="insertSignature(sig.html)"
-              >+ {{ sig.label }}</button>
-            </div>
-            <!-- Tiptap editor area -->
-            <div class="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary/30 bg-white">
-              <EditorContent :editor="editor" class="text-sm" />
-            </div>
-            <p class="mt-1 text-[11px] text-gray-400">Formátování se uloží jako HTML a AI je při generování e-mailů rozumí.</p>
+            <RichTextEditor v-model="form.body" placeholder="Napište tělo e-mailu…" :default-font="groupFont" />
           </div>
         </template>
         <template v-else>
@@ -761,43 +635,10 @@ const tabs: { key: Tab; label: string }[] = [
           </div>
         </div>
 
-        <!-- Moje podpisy -->
-        <div>
-          <h3 class="text-sm font-semibold text-gray-600 mb-3">Moje podpisy</h3>
-          <div v-if="signaturePersonal.length === 0" class="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 rounded-xl">
-            Zatím žádné vlastní podpisy.
-          </div>
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              v-for="sig in signaturePersonal"
-              :key="sig.id"
-              class="bg-white rounded-xl border border-gray-100 p-5 transition-colors hover:border-primary/40 hover:shadow-sm"
-              :class="sig.isDefault ? 'border-primary/30' : ''"
-            >
-              <div class="flex items-start gap-2 min-w-0 mb-2">
-                <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
-                <span v-if="sig.isDefault" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">výchozí</span>
-              </div>
-              <div class="text-xs text-gray-400 mb-3">{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</div>
-              <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" />
-              <div class="flex items-center gap-2">
-                <button
-                  class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
-                  @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, isSystem: false, createdAt: sig.createdAt, derivedFromId: null })"
-                >Upravit</button>
-                <button
-                  v-if="!sig.isDefault"
-                  class="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
-                  @click="setDefaultSignature(sig.id)"
-                >Nastavit jako výchozí</button>
-                <button
-                  class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
-                  :disabled="deletingSignatureId === sig.id"
-                  @click="deleteSignature(sig.id)"
-                >{{ deletingSignatureId === sig.id ? '…' : 'Smazat' }}</button>
-              </div>
-            </div>
-          </div>
+        <!-- Info: personal signatures moved to Settings -->
+        <div class="text-center py-4 text-gray-400 text-sm">
+          Vlastní podpisy se spravují v
+          <NuxtLink to="/settings?tab=signatures" class="text-primary hover:underline">Nastavení → Můj podpis</NuxtLink>.
         </div>
       </template>
     </template>

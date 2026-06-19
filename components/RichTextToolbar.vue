@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { Editor } from '@tiptap/vue-3'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   editor: Editor | undefined
   txCounter: number
   htmlMode: boolean
-}>()
+  defaultFont?: string
+}>(), { defaultFont: '' })
 
 const emit = defineEmits<{
   (e: 'toggleHtmlMode'): void
@@ -41,10 +42,10 @@ const bgColors = ['transparent', '#ffff00', '#ff9900', '#ff0000', '#00ff00', '#0
 // ── Computed current state (reactive via txCounter) ───────────────────────
 const currentFont = computed(() => {
   props.txCounter
-  if (!props.editor) return ''
+  if (!props.editor) return props.defaultFont
   const attrs = props.editor.getAttributes('textStyle')
   const ff = (attrs.fontFamily as string) ?? ''
-  return ff.replace(/^["']|["']$/g, '')
+  return ff.replace(/^["']|["']$/g, '') || props.defaultFont
 })
 
 const currentSize = computed(() => {

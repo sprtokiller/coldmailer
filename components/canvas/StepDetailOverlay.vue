@@ -11,7 +11,7 @@ const { canvas, isOpen, activeNode, activeEdgeId, activeTab, tabItems, overlayTi
 
 <template>
   <Transition name="overlay">
-    <div v-if="isOpen" class="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col" style="width: 620px">
+    <div v-if="isOpen && stepType !== 'OUTREACH_PREPARATION'" class="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col" style="width: 620px">
       <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
         <div class="flex items-center gap-2.5 min-w-0">
           <h2 class="text-sm font-semibold text-gray-800 truncate">{{ overlayTitle }}</h2>

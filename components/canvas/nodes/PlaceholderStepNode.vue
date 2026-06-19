@@ -67,7 +67,7 @@ const isLast = computed(() => props.data.stepType === 'OUTREACH_EXECUTION')
       </div>
       <h3 class="text-sm font-semibold text-gray-800">{{ data.label }}</h3>
       <button
-        v-if="total === 0"
+        v-if="total === 0 && data.stepType !== 'OUTREACH_PREPARATION'"
         class="mt-2 w-full text-xs py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors font-medium"
         @click.stop="canvas.openOverlay(id, data.stepId, data.stepType)"
       >▶ Spustit krok</button>

@@ -71,11 +71,23 @@ export function useActiveProject() {
     }
   }
 
+  const GROUP_FONTS: Record<string, string> = {
+    tda: 'Inter Tight',
+    xo: 'Dosis',
+    ppt: 'Figtree',
+  }
+
+  const groupFont = computed(() => {
+    const slug = activeGroup.value?.slug
+    return slug ? GROUP_FONTS[slug] ?? '' : ''
+  })
+
   return {
     groups,
     projects,
     activeProject,
     activeGroup,
+    groupFont,
     setProject,
     refreshProjects: refresh,
   }

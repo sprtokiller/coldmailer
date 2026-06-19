@@ -96,5 +96,6 @@ const styledEdges = computed(() =>
     />
 
     <CanvasStepDetailOverlay />
+    <CanvasOutreachWorkspace />
   </div>
 </template>

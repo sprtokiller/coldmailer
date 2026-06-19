@@ -6,9 +6,55 @@ import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-s
 import { Highlight } from '@tiptap/extension-highlight'
 import { TextAlign } from '@tiptap/extension-text-align'
 import { Link } from '@tiptap/extension-link'
+import { Placeholder } from '@tiptap/extension-placeholder'
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
-const props = defineProps<{ modelValue: string }>()
+const templateVarKey = new PluginKey('templateVariableHighlight')
+const TemplateVariableHighlight = Extension.create({
+  name: 'templateVariableHighlight',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: templateVarKey,
+        state: {
+          init(_, state) {
+            return buildDecorations(state.doc)
+          },
+          apply(tr, old) {
+            return tr.docChanged ? buildDecorations(tr.doc) : old
+          },
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state)
+          },
+        },
+      }),
+    ]
+  },
+})
+
+function buildDecorations(doc: import('@tiptap/pm/model').Node): DecorationSet {
+  const decorations: Decoration[] = []
+  const re = /\{[\w\s.\-]+\}/g
+  doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return
+    let match: RegExpExecArray | null
+    while ((match = re.exec(node.text)) !== null) {
+      decorations.push(
+        Decoration.inline(pos + match.index, pos + match.index + match[0].length, {
+          class: 'template-var',
+        }),
+      )
+    }
+  })
+  return DecorationSet.create(doc, decorations)
+}
+
+const props = withDefaults(defineProps<{ modelValue: string; placeholder?: string; defaultFont?: string }>(), { placeholder: '', defaultFont: '' })
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -43,6 +89,8 @@ const editor = useEditor({
     Color,
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    ...(props.placeholder ? [Placeholder.configure({ placeholder: props.placeholder })] : []),
+    TemplateVariableHighlight,
     Link.configure({
       openOnClick: false,
       autolink: true,
@@ -102,10 +150,28 @@ watch(
     if (!editor.value) return
     const current = editor.value.getHTML()
     if (val !== current) {
-      editor.value.commands.setContent(val, false)
+      editor.value.commands.setContent(val, { emitUpdate: false })
     }
   },
 )
+
+function applyDefaultFont() {
+  const e = editor.value
+  if (!e || !props.defaultFont) return
+  const markType = e.schema.marks.textStyle
+  if (!markType) return
+  const mark = markType.create({ fontFamily: props.defaultFont })
+  const { tr } = e.state
+  tr.setStoredMarks([mark])
+  e.view.dispatch(tr)
+}
+
+watch(
+  () => props.defaultFont,
+  () => { if (editor.value?.isEmpty) applyDefaultFont() },
+)
+
+onMounted(() => nextTick(applyDefaultFont))
 
 onBeforeUnmount(() => editor.value?.destroy())
 
@@ -234,24 +300,26 @@ function toggleHtmlMode() {
     htmlSource.value = editor.value?.getHTML() ?? ''
     htmlMode.value = true
   } else {
-    const safe = sanitizeAndNormalizeHtml(htmlSource.value)
-    editor.value?.commands.setContent(safe, false)
-    emit('update:modelValue', safe)
+    const safe = sanitizeHtml(htmlSource.value)
+    editor.value?.commands.setContent(safe, { emitUpdate: false })
+    emit('update:modelValue', editor.value?.getHTML() ?? safe)
     htmlMode.value = false
   }
 }
 
 function onHtmlSourceInput(e: Event) {
   htmlSource.value = (e.target as HTMLTextAreaElement).value
-  emit('update:modelValue', htmlSource.value)
 }
 
 defineExpose({
   normalize() {
     if (!editor.value) return
     const normalized = sanitizeAndNormalizeHtml(editor.value.getHTML())
-    editor.value.commands.setContent(normalized, false)
+    editor.value.commands.setContent(normalized, { emitUpdate: false })
     emit('update:modelValue', normalized)
+  },
+  insertContent(html: string) {
+    editor.value?.chain().focus().insertContent(html).run()
   },
 })
 </script>
@@ -341,6 +409,7 @@ defineExpose({
       :editor="editor"
       :tx-counter="txCounter"
       :html-mode="htmlMode"
+      :default-font="defaultFont"
       @toggle-html-mode="toggleHtmlMode"
       @open-link-popover="openLinkPopover"
     />
@@ -391,5 +460,12 @@ defineExpose({
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+.ProseMirror .template-var {
+  background-color: #ede9fe;
+  color: #6d28d9;
+  border-radius: 3px;
+  padding: 0 2px;
 }
 </style>

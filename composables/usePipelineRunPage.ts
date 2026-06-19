@@ -194,7 +194,7 @@ export async function usePipelineRunPage() {
     STEP_SYSTEM_PROMPTS,
   )
 
-  const { executeStep } = useStepExecution(
+  const { executeStep } = nuxtApp.runWithContext(() => useStepExecution(
     route,
     refresh,
     getConfig,
@@ -225,20 +225,7 @@ export async function usePipelineRunPage() {
     selection.step5Initialized,
     getStepResult,
     outputUtils.alignmentOutputAlignments,
-  )
-
-  useExecutionPolling(
-    route.params.id as string,
-    executingStep,
-    executingRunner,
-    progress.partnerProgress,
-    progress.profilingProgress,
-    progress.alignmentProgress,
-    progress.updatePartnerItem,
-    progress.updateProfilingItem,
-    progress.updateAlignmentItem,
-    refresh,
-  )
+  ))
 
   function prevStepOutput(stepKey: string): string {
     return outputUtils.prevStepOutput(stepKey, STEPS)
@@ -252,7 +239,6 @@ export async function usePipelineRunPage() {
 
   const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
 
-  // Base body (without the appended signature portion)
   const step6BaseBody = ref('')
 
   function applySignatureToBody(baseBody: string, signatureContent: string): string {
@@ -277,44 +263,59 @@ export async function usePipelineRunPage() {
       : step6BaseBody.value
   }
 
-  // ── Watch activeStep ─────────────────────────────────────────────────────────
+  // ── Lifecycle hooks & watchers (must run inside Nuxt context) ───────────────
 
-  watch(activeStep, (val) => {
-    if (val === 'PARTNER_IDENTIFICATION') selection.initStep2Selection()
-    if (val === 'PARTNER_PROFILING') {
-      selection.initStep3Selection()
-    }
-    if (val === 'VALUE_ALIGNMENT') {
-      selection.initStep4Selection()
-    }
-    if (val === 'OUTREACH_PREPARATION') {
-      selection.initStep5Selection()
-    }
-    if (val === 'OUTREACH_EXECUTION') {
-      if (!selection.step6SelectedPartnerName.value && outputUtils.outreachEmails().length > 0) {
-        const first = outputUtils.outreachEmails()[0]
-        const name = String(first.partnerName ?? first.name ?? '')
-        selection.step6SelectedPartnerName.value = name
-        initStep6Preview(name)
+  nuxtApp.runWithContext(() => {
+    useExecutionPolling(
+      route.params.id as string,
+      executingStep,
+      executingRunner,
+      progress.partnerProgress,
+      progress.profilingProgress,
+      progress.alignmentProgress,
+      progress.updatePartnerItem,
+      progress.updateProfilingItem,
+      progress.updateAlignmentItem,
+      refresh,
+    )
+
+    watch(activeStep, (val) => {
+      if (val === 'PARTNER_IDENTIFICATION') selection.initStep2Selection()
+      if (val === 'PARTNER_PROFILING') {
+        selection.initStep3Selection()
       }
-    }
+      if (val === 'VALUE_ALIGNMENT') {
+        selection.initStep4Selection()
+      }
+      if (val === 'OUTREACH_PREPARATION') {
+        selection.initStep5Selection()
+      }
+      if (val === 'OUTREACH_EXECUTION') {
+        if (!selection.step6SelectedPartnerName.value && outputUtils.outreachEmails().length > 0) {
+          const first = outputUtils.outreachEmails()[0]
+          const name = String(first.partnerName ?? first.name ?? '')
+          selection.step6SelectedPartnerName.value = name
+          initStep6Preview(name)
+        }
+      }
+    })
+
+    watch(
+      () => outputUtils.profilingOutputProfiles('PARTNER_PROFILING'),
+      () => {
+        selection.step4Initialized.value = false
+      },
+      { deep: true }
+    )
+
+    watch(
+      () => outputUtils.alignmentOutputAlignments('VALUE_ALIGNMENT'),
+      () => {
+        selection.step5Initialized.value = false
+      },
+      { deep: true }
+    )
   })
-
-  watch(
-    () => outputUtils.profilingOutputProfiles('PARTNER_PROFILING'),
-    () => {
-      selection.step4Initialized.value = false
-    },
-    { deep: true }
-  )
-
-  watch(
-    () => outputUtils.alignmentOutputAlignments('VALUE_ALIGNMENT'),
-    () => {
-      selection.step5Initialized.value = false
-    },
-    { deep: true }
-  )
 
   // ── Assemble context ─────────────────────────────────────────────────────────
 

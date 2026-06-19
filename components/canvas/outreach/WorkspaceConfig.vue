@@ -1,0 +1,352 @@
+<script setup lang="ts">
+import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
+import { outreachWorkspaceKey } from '~/composables/canvas/useOutreachWorkspace'
+
+const pipeline = inject(pipelineRunKey) as PipelineRunContext
+const workspace = inject(outreachWorkspaceKey)!
+
+const STEP_KEY = 'OUTREACH_PREPARATION'
+
+const cfg = computed(() => pipeline.getConfig(STEP_KEY))
+
+// ── Previews ─────────────────────────────────────────────────────────────────
+const previewField = ref<string | null>(null)
+
+const selectedPrompt = computed(() => {
+  const id = cfg.value.systemPromptId
+  if (!id) return null
+  return pipeline.promptsForStep(STEP_KEY).find(p => p.id === id) ?? null
+})
+
+const selectedDraft = computed(() => {
+  const id = cfg.value.emailDraftId
+  if (!id) return null
+  return pipeline.emailDrafts.find(d => d.id === id) ?? null
+})
+
+const selectedSig = computed(() => {
+  if (!selectedSignatureId.value) return null
+  return sigs.value.find(s => s.id === selectedSignatureId.value) ?? null
+})
+
+// ── Context part combobox ─────────────────────────────────────────────────────
+const contextSearch = ref('')
+const showContextDropdown = ref(false)
+
+const selectedContextParts = computed(() =>
+  cfg.value.contextPartIds
+    .map(id => pipeline.contextParts.find(cp => cp.id === id))
+    .filter(Boolean) as Array<{ id: string; name: string; content: string }>,
+)
+
+const filteredContextParts = computed(() =>
+  pipeline.contextParts.filter(cp =>
+    !cfg.value.contextPartIds.includes(cp.id) &&
+    cp.name.toLowerCase().includes(contextSearch.value.toLowerCase()) &&
+    cp.stepKeys.includes(STEP_KEY),
+  ),
+)
+
+function addContextPart(id: string) {
+  if (!cfg.value.contextPartIds.includes(id)) cfg.value.contextPartIds.push(id)
+  contextSearch.value = ''
+  showContextDropdown.value = false
+}
+
+function removeContextPart(id: string) {
+  cfg.value.contextPartIds = cfg.value.contextPartIds.filter(cid => cid !== id)
+}
+
+function onSearchBlur() {
+  setTimeout(() => { showContextDropdown.value = false }, 150)
+}
+
+// ── Signature ─────────────────────────────────────────────────────────────────
+const sigs = computed(() => Array.isArray(pipeline.signatures) ? pipeline.signatures : [])
+const selectedSignatureId = ref('')
+
+watch(sigs, (val) => {
+  if (!selectedSignatureId.value && val.length > 0) {
+    selectedSignatureId.value = val.find(s => s.isDefault)?.id ?? val[0]?.id ?? ''
+  }
+}, { immediate: true })
+
+// ── Execute ───────────────────────────────────────────────────────────────────
+function handleGenerate() {
+  pipeline.executeStep(STEP_KEY)
+}
+</script>
+
+<template>
+  <div class="flex flex-col h-full">
+    <!-- Config header -->
+    <div class="border-b border-gray-100 px-4 py-2.5">
+      <div class="grid grid-cols-3 gap-3 items-end">
+        <!-- Col 1: system prompt + email template -->
+        <div class="space-y-1.5">
+          <!-- System prompt -->
+          <div>
+            <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Systémový prompt</label>
+            <div class="flex items-center gap-1">
+              <select
+                v-model="cfg.systemPromptId"
+                class="flex-1 min-w-0 border border-gray-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+              >
+                <option
+                  v-for="p in pipeline.promptsForStep(STEP_KEY)"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}{{ p.isSystem ? '' : ' · ' + p.author.name }}
+                </option>
+              </select>
+              <div
+                class="relative shrink-0"
+                @mouseenter="previewField = 'prompt'"
+                @mouseleave="previewField = null"
+              >
+                <button type="button" class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors" tabindex="-1">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+                <div v-if="previewField === 'prompt' && selectedPrompt" class="absolute right-0 top-full z-50 pt-1 w-80">
+                  <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-60 overflow-y-auto">
+                    <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedPrompt.name }}</p>
+                    <pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">{{ selectedPrompt.content }}</pre>
+                  </div>
+                </div>
+              </div>
+              <NuxtLink
+                :to="`/library?action=new&stepType=${STEP_KEY}`"
+                class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+                title="Vytvořit nový prompt"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- Email template -->
+          <div>
+            <label class="block text-[10px] font-medium text-gray-400 mb-0.5">E-mailová šablona</label>
+            <div v-if="pipeline.emailDrafts.length > 0" class="flex items-center gap-1">
+              <div class="relative flex-1 min-w-0">
+                <select
+                  v-model="cfg.emailDraftId"
+                  class="w-full border rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1"
+                  :class="cfg.emailDraftId ? 'border-gray-200 focus:ring-primary/30' : 'border-amber-300 bg-amber-50 focus:ring-amber-300'"
+                >
+                  <option value="">— vyberte šablonu —</option>
+                  <option v-for="d in pipeline.emailDrafts" :key="d.id" :value="d.id">
+                    {{ d.name }} · {{ d.subject }}
+                  </option>
+                </select>
+                <span
+                  v-if="!cfg.emailDraftId"
+                  class="absolute right-7 top-1/2 -translate-y-1/2 text-amber-500 cursor-help"
+                  title="Bez šablony bude e-mail pravděpodobně generický a bude znít jako AI slop."
+                >⚠</span>
+              </div>
+              <div
+                class="relative shrink-0"
+                @mouseenter="previewField = 'draft'"
+                @mouseleave="previewField = null"
+              >
+                <button type="button" class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors" :class="{ 'opacity-30 pointer-events-none': !selectedDraft }" tabindex="-1">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+                <div v-if="previewField === 'draft' && selectedDraft" class="absolute right-0 top-full z-50 pt-1 w-80">
+                  <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-60 overflow-y-auto">
+                    <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedDraft.name }}</p>
+                    <p class="text-[10px] text-gray-500 mb-1">Předmět: {{ selectedDraft.subject }}</p>
+                    <pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">{{ selectedDraft.body }}</pre>
+                  </div>
+                </div>
+              </div>
+              <NuxtLink
+                to="/library?tab=drafts"
+                class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+                title="Vytvořit novou šablonu"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+            <div
+              v-else
+              class="flex items-center gap-1"
+            >
+              <div class="flex-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-600 cursor-help" title="Vytvořte e-mailovou šablonu v Knihovně, aby AI mohla personalizovat e-mail na základě vaší struktury.">
+                ⚠ Žádná šablona
+              </div>
+              <NuxtLink
+                to="/library?tab=drafts"
+                class="w-6 h-6 flex items-center justify-center rounded border border-amber-300 text-amber-500 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+                title="Vytvořit šablonu v Knihovně"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 2: signature + context parts -->
+        <div class="space-y-1.5">
+          <!-- Signature -->
+          <div>
+            <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Podpis</label>
+            <div v-if="sigs.length > 0" class="flex items-center gap-1">
+              <div class="relative flex-1 min-w-0">
+                <select
+                  v-model="selectedSignatureId"
+                  class="w-full border rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1"
+                  :class="selectedSignatureId ? 'border-gray-200 focus:ring-primary/30' : 'border-amber-300 bg-amber-50 focus:ring-amber-300'"
+                >
+                  <option value="">— bez podpisu —</option>
+                  <option v-for="sig in sigs" :key="sig.id" :value="sig.id">
+                    {{ sig.name }}{{ sig.isDefault ? ' (výchozí)' : '' }}
+                  </option>
+                </select>
+                <span
+                  v-if="!selectedSignatureId"
+                  class="absolute right-7 top-1/2 -translate-y-1/2 text-amber-500 cursor-help"
+                  title="Bez podpisu bude doplněn obecný podpis, který je potřeba customizovat."
+                >⚠</span>
+              </div>
+              <div
+                class="relative shrink-0"
+                @mouseenter="previewField = 'sig'"
+                @mouseleave="previewField = null"
+              >
+                <button type="button" class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors" :class="{ 'opacity-30 pointer-events-none': !selectedSig }" tabindex="-1">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+                <div v-if="previewField === 'sig' && selectedSig" class="absolute right-0 top-full z-50 pt-1 w-72">
+                  <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-48 overflow-y-auto">
+                    <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedSig.name }}</p>
+                    <div class="text-[10px] text-gray-600 leading-relaxed" v-html="selectedSig.content" />
+                  </div>
+                </div>
+              </div>
+              <NuxtLink
+                to="/settings?tab=signatures"
+                class="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-gray-400 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+                title="Spravovat podpisy v Nastavení"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+            <div v-else class="flex items-center gap-1">
+              <div class="flex-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-600 cursor-help" title="Vytvořte podpis v Nastavení, aby e-mail vypadal profesionálně.">
+                ⚠ Žádný podpis
+              </div>
+              <NuxtLink
+                to="/settings?tab=signatures"
+                class="w-6 h-6 flex items-center justify-center rounded border border-amber-300 text-amber-500 hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+                title="Vytvořit podpis v Nastavení"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- Context parts -->
+          <div>
+            <div class="flex items-center justify-between mb-0.5">
+              <label class="text-[10px] font-medium text-gray-400">Kontextové části</label>
+              <NuxtLink
+                to="/library?tab=contextParts"
+                class="w-4 h-4 flex items-center justify-center rounded text-gray-400 hover:text-primary transition-colors"
+                title="Spravovat kontextové části v Knihovně"
+                tabindex="-1"
+                target="_blank"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              </NuxtLink>
+            </div>
+            <div v-if="selectedContextParts.length" class="flex flex-wrap gap-0.5 mb-1">
+              <span
+                v-for="cp in selectedContextParts"
+                :key="cp.id"
+                class="inline-flex items-center gap-0.5 pl-1.5 pr-0.5 py-px bg-primary/10 text-primary text-[9px] rounded-full"
+              >
+                {{ cp.name }}
+                <button
+                  type="button"
+                  class="w-2.5 h-2.5 flex items-center justify-center rounded-full hover:bg-primary/20 transition-colors leading-none text-[8px]"
+                  @click="removeContextPart(cp.id)"
+                >✕</button>
+              </span>
+            </div>
+            <div class="relative">
+              <input
+                v-model="contextSearch"
+                type="text"
+                :placeholder="filteredContextParts.length || contextSearch ? 'Přidat z knihovny…' : 'Žádné části'"
+                :disabled="!pipeline.contextParts.length"
+                class="w-full border border-gray-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-gray-400"
+                @focus="showContextDropdown = true"
+                @click="showContextDropdown = true"
+                @blur="onSearchBlur"
+              />
+              <div
+                v-if="showContextDropdown && filteredContextParts.length"
+                class="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden max-h-32 overflow-y-auto"
+              >
+                <button
+                  v-for="cp in filteredContextParts"
+                  :key="cp.id"
+                  type="button"
+                  class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-primary/5 hover:text-primary transition-colors"
+                  @mousedown.prevent="addContextPart(cp.id)"
+                >
+                  {{ cp.name }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 3: custom context + generate -->
+        <div class="space-y-1.5">
+          <div>
+            <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Vlastní kontext</label>
+            <textarea
+              v-model="cfg.manualContext"
+              rows="2"
+              class="w-full border border-gray-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30 resize-none"
+              placeholder="Zadejte vlastní kontext…"
+            />
+          </div>
+          <button
+            :disabled="pipeline.executingStep !== null"
+            class="w-full bg-primary text-white px-4 py-1.5 rounded text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-1.5"
+            @click="handleGenerate"
+          >
+            <svg v-if="pipeline.executingStep === STEP_KEY" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            {{ pipeline.executingStep === STEP_KEY ? 'Generuji…' : 'Generovat' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor area -->
+    <div class="flex-1 p-4 min-h-0 overflow-y-auto">
+      <RichTextEditor
+        v-model="workspace.emailBody.value"
+        placeholder="Vygenerovaný e-mail se zobrazí zde..."
+      />
+    </div>
+  </div>
+</template>

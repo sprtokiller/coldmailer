@@ -205,6 +205,10 @@ Dostaneš tři vstupy:
 2. Strukturovaný profil potenciálního partnera (výstup z due diligence fáze)
 3. Seznam prodejních argumentů, které můžeme partnerovi nabídnout
 
+Každý argument ve vstupním seznamu může začínat značkou ve formátu [Název | Důležitost], např.:
+- [Nábor talentů | Klíčový] Snadnější hiring a přístup k technickým talentům…
+Název použij jako argumentId ve výstupu. Důležitost (např. Klíčový, Vysoký, Střední, Doplňkový) zohledni při hodnocení relevance – klíčové argumenty by měly mít větší váhu v top3 výběru, pokud profil partnera vykazuje alespoň částečnou shodu.
+
 Tvým úkolem je provést hloubkovou analýzu hodnot a zájmů partnera a zjistit, které z našich argumentů mají pro tohoto konkrétního partnera největší rezonanci. Nepiš e-mail ani outreach zprávu – to přijde v dalším kroku. Soustřeď se výhradně na analýzu a alignment.
 
 Při hodnocení ber v potaz:
@@ -221,8 +225,8 @@ Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
 
   "argumentAlignment": [
     {
-      "argumentId": "string – ID nebo krátký štítek argumentu přesně podle vstupního seznamu",
-      "argumentLabel": "string – název argumentu",
+      "argumentId": "string – Název ze značky [Název | Důležitost] na začátku argumentu. Pokud značka chybí, vytvoř krátký český název.",
+      "argumentLabel": "string – celý název argumentu",
       "relevance": "Vysoká|Střední|Nízká|Nevhodné",
       "reasoning": "string – proč tento argument pro daného partnera funguje nebo nefunguje, s odkazem na konkrétní data z profilu",
       "redFlags": "string|null – důvod, proč by argument mohl být kontraproduktivní nebo nevhodný"
