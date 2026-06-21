@@ -6,11 +6,12 @@ interface AssigneeUser { id: string; name: string; image: string | null }
 interface Partner {
   id: string
   canonicalName: string
-  payload: Record<string, string>
+  payload: Record<string, unknown>
   contacts: Contact[]
   assignees: AssigneeUser[]
   lastInteractionAt: string | null
   interactionCount: number
+  dealStage: string | null
 }
 
 const search = ref('')
@@ -19,7 +20,10 @@ const { data: allPartners, pending } = await useFetch<Partner[]>('/api/partners'
 const partners = computed(() => {
   const q = search.value.toLowerCase().trim()
   if (!q) return allPartners.value ?? []
-  return (allPartners.value ?? []).filter(p => p.canonicalName.toLowerCase().includes(q))
+  return (allPartners.value ?? []).filter(p =>
+    p.canonicalName.toLowerCase().includes(q) ||
+    String(p.payload.industry ?? '').toLowerCase().includes(q),
+  )
 })
 
 function primaryEmail(p: Partner) {
@@ -29,14 +33,36 @@ function lastContact(p: Partner) {
   if (!p.lastInteractionAt) return null
   return new Date(p.lastInteractionAt).toLocaleDateString('cs-CZ')
 }
+
+const DEAL_STAGE_LABELS: Record<string, string> = {
+  CONTACTED: 'Osloveno',
+  NEGOTIATING: 'V jednání',
+  NOT_INTERESTED: 'Nezájem',
+  NOT_THIS_TIME: 'Tentokrát ne',
+  PARTNER: 'Partner',
+  COMPLETED: 'Dokončeno',
+}
+
+const DEAL_STAGE_COLORS: Record<string, string> = {
+  CONTACTED: 'bg-blue-100 text-blue-700',
+  NEGOTIATING: 'bg-amber-100 text-amber-700',
+  NOT_INTERESTED: 'bg-red-100 text-red-700',
+  NOT_THIS_TIME: 'bg-orange-100 text-orange-700',
+  PARTNER: 'bg-green-100 text-green-700',
+  COMPLETED: 'bg-gray-100 text-gray-600',
+}
+
+const SIZE_LABELS: Record<string, string> = {
+  micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
+}
 </script>
 
 <template>
   <div>
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-gray-800">Partneři</h1>
-        <p class="text-sm text-gray-400 mt-1">Správa vztahů s partnery a komunikace</p>
+        <h1 class="text-2xl font-semibold text-gray-800">Oslovení partneři</h1>
+        <p class="text-sm text-gray-400 mt-1">Partneři s probíhající komunikací</p>
       </div>
     </div>
 
@@ -44,7 +70,7 @@ function lastContact(p: Partner) {
       <input
         v-model="search"
         type="text"
-        placeholder="Hledat partnera..."
+        placeholder="Hledat partnera nebo odvětví..."
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
     </div>
@@ -54,6 +80,8 @@ function lastContact(p: Partner) {
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50 text-left">
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Primární email</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
@@ -62,11 +90,11 @@ function lastContact(p: Partner) {
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-if="pending">
-            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
+            <td colspan="7" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
           </tr>
           <tr v-else-if="!partners?.length">
-            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">
-              {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní partneři — přidejte je přes Databázi nebo Pipeline' }}
+            <td colspan="7" class="text-center py-12 text-gray-400 text-sm">
+              {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
           <tr
@@ -77,16 +105,38 @@ function lastContact(p: Partner) {
           >
             <td class="px-4 py-3 font-medium text-gray-800">
               <div class="flex items-center gap-2">
-                <span class="truncate max-w-64">{{ p.canonicalName }}</span>
+                <span class="truncate max-w-56">{{ p.canonicalName }}</span>
                 <a
                   v-if="p.payload.website || p.payload.url"
-                  :href="p.payload.website || p.payload.url"
+                  :href="String(p.payload.website || p.payload.url)"
                   target="_blank"
                   rel="noopener"
                   class="text-indigo-400 hover:text-indigo-600 text-xs flex-shrink-0"
                   @click.stop
                 >↗</a>
               </div>
+              <div v-if="p.payload.summary" class="text-[11px] text-gray-400 mt-0.5 line-clamp-1 max-w-56">
+                {{ p.payload.summary }}
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex flex-col gap-0.5">
+                <span v-if="p.payload.industry" class="text-xs text-gray-600">{{ p.payload.industry }}</span>
+                <span v-else class="text-xs text-gray-300">—</span>
+                <span v-if="p.payload.size" class="text-[10px] text-gray-400">
+                  {{ SIZE_LABELS[String(p.payload.size)] ?? p.payload.size }}
+                </span>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <span
+                v-if="p.dealStage"
+                class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
+                :class="DEAL_STAGE_COLORS[p.dealStage] ?? 'bg-gray-100 text-gray-600'"
+              >
+                {{ DEAL_STAGE_LABELS[p.dealStage] ?? p.dealStage }}
+              </span>
+              <span v-else class="text-xs text-gray-300">—</span>
             </td>
             <td class="px-4 py-3 text-xs text-gray-600">
               <span v-if="primaryEmail(p)" class="font-mono">{{ primaryEmail(p) }}</span>

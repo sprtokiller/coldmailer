@@ -15,13 +15,14 @@ export default defineEventHandler(async (event) => {
     where: {
       type: 'PARTNER',
       ...(search && { canonicalName: { contains: search, mode: 'insensitive' } }),
+      interactions: { some: interactionWhere },
     },
     include: {
       contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
       interactions: {
         where: interactionWhere,
-        select: { updatedAt: true, sentAt: true },
-        orderBy: { updatedAt: 'desc' },
+        select: { updatedAt: true, sentAt: true, dealStage: true },
+        orderBy: { createdAt: 'desc' },
         take: 1,
       },
       _count: {
@@ -67,6 +68,7 @@ export default defineEventHandler(async (event) => {
       assignees: [...(assigneesByRecord.get(r.id)?.values() ?? [])],
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
+      dealStage: lastInteraction?.dealStage ?? null,
     }
   })
 })

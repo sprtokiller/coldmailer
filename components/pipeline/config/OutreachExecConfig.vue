@@ -4,6 +4,7 @@ import { pipelineRunKey, type StepDefinition, type usePipelineRunPage } from '~/
 defineProps<{ step: StepDefinition }>()
 
 const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipelineRunPage>>
+const { groupFont } = useActiveProject()
 
 const sigs = computed(() => Array.isArray(pipeline.signatures) ? pipeline.signatures : [])
 const selectedSignatureId = ref(
@@ -79,7 +80,7 @@ function onSignatureChange(id: string) {
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Tělo e-mailu</label>
-            <RichTextEditor v-model="pipeline.step6PreviewBody" />
+            <RichTextEditor v-model="pipeline.step6PreviewBody" :default-font="groupFont" />
           </div>
           <p class="text-[11px] text-gray-400">Kliknutím na „Spustit krok" vytvoříte draft přímo v Gmailu s výše uvedenými daty.</p>
         </div>

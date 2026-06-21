@@ -421,6 +421,9 @@ defineExpose({
   min-height: 200px;
   padding: 12px 16px;
   outline: none;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #374151;
 }
 
 .ProseMirror p {
