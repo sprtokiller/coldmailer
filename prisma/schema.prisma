@@ -15,9 +15,10 @@ model User {
   image        String?
   accessToken  String?
   refreshToken String?
-  tokenExpiry  DateTime?
-  createdAt    DateTime  @default(now())
-  isSuperAdmin Boolean   @default(false)
+  tokenExpiry   DateTime?
+  lastGmailSync DateTime?
+  createdAt     DateTime  @default(now())
+  isSuperAdmin  Boolean   @default(false)
 
   systemPrompts SystemPrompt[]
   contextParts  ContextPart[]
@@ -530,6 +531,7 @@ model Interaction {
 
   assignees InteractionAssignee[]
 
+  @@unique([gmailId, globalRecordId])
   @@index([globalRecordId, projectId])
   @@index([globalRecordId])
   @@index([projectId])

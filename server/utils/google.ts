@@ -3,6 +3,7 @@ const SCOPES = [
   'email',
   'profile',
   'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ].join(' ')
 
 export function buildAuthUrl(clientId: string, redirectUri: string): string {
@@ -74,6 +75,51 @@ export async function refreshAccessToken(
     client_id: clientId,
     client_secret: clientSecret,
     grant_type: 'refresh_token',
+  })
+}
+
+export interface GmailMessageHeader {
+  name: string
+  value: string
+}
+
+export interface GmailMessagePart {
+  partId?: string
+  mimeType: string
+  filename?: string
+  headers?: GmailMessageHeader[]
+  body: { size: number; data?: string; attachmentId?: string }
+  parts?: GmailMessagePart[]
+}
+
+export interface GmailMessage {
+  id: string
+  threadId: string
+  labelIds?: string[]
+  payload: GmailMessagePart
+  internalDate: string
+}
+
+export async function listGmailMessages(
+  accessToken: string,
+  query: string,
+  pageToken?: string,
+): Promise<{ messages?: { id: string }[]; nextPageToken?: string }> {
+  const params = new URLSearchParams({ q: query, maxResults: '100' })
+  if (pageToken) params.set('pageToken', pageToken)
+
+  return $fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+}
+
+export async function getGmailMessage(
+  accessToken: string,
+  messageId: string,
+  format: 'full' | 'metadata' = 'full',
+): Promise<GmailMessage> {
+  return $fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=${format}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
 }
 

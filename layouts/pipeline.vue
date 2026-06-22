@@ -6,3 +6,7 @@
     </main>
   </div>
 </template>
+
+<script setup lang="ts">
+useGmailSync()
+</script>

@@ -8,7 +8,6 @@
 </template>
 
 <script setup lang="ts">
-// Initialize page with default meta tags
-// Individual pages can override these using useHead()
 useHead({})
+useGmailSync()
 </script>
