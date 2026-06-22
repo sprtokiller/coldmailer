@@ -91,7 +91,15 @@ const SIZE_LABELS: Record<string, string> = {
           <!-- Results -->
           <div v-if="!selectedPartner">
             <div v-if="searching" class="text-xs text-gray-400 py-3 text-center">Hledám...</div>
-            <div v-else-if="query.trim().length >= 2 && results.length === 0" class="text-xs text-gray-400 py-3 text-center">Žádní partneři nenalezeni</div>
+            <div v-else-if="query.trim().length >= 2 && results.length === 0" class="py-4 text-center">
+              <p class="text-xs text-gray-400">Žádní partneři nenalezeni</p>
+              <button
+                class="mt-2 text-sm font-medium text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg hover:bg-indigo-50 transition-colors"
+                @click="emit('close'); navigateTo('/records?tab=PARTNER&create=1')"
+              >
+                Vytvořit nového partnera
+              </button>
+            </div>
             <ul v-else class="max-h-60 overflow-y-auto divide-y divide-gray-50">
               <li
                 v-for="r in results"
