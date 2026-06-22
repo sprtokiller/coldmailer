@@ -162,6 +162,12 @@ const { data: meData } = await useFetch<{ effectivePermissions: string[] }>('/ap
 const canCreatePartner = computed(() => meData.value?.effectivePermissions.includes('partners.create') ?? false)
 const showCreatePartnerModal = ref(false)
 
+if (route.query.create === '1' && canCreatePartner.value) {
+  activeTab.value = 'PARTNER'
+  showCreatePartnerModal.value = true
+  router.replace({ query: { ...route.query, create: undefined } })
+}
+
 function onPartnerCreated() {
   showCreatePartnerModal.value = false
   if (activeTab.value === 'PARTNER') fetchRecords(true)
