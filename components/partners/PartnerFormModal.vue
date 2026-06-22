@@ -1,0 +1,287 @@
+<script setup lang="ts">
+const props = defineProps<{
+  mode: 'create' | 'edit'
+  partner?: { id: string; canonicalName: string; payload: Record<string, unknown> }
+}>()
+const emit = defineEmits<{ close: []; saved: [{ id: string }] }>()
+
+interface ContactEntry {
+  firstName: string; lastName: string; role: string; email: string
+  type: string; priority: number; note: string
+}
+
+const SIZE_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'micro', label: 'Mikro (<10)' },
+  { value: 'small', label: 'Malá (10–50)' },
+  { value: 'medium', label: 'Střední (50–500)' },
+  { value: 'large', label: 'Velká (500–5k)' },
+  { value: 'enterprise', label: 'Korporát (>5k)' },
+]
+const CONTACT_TYPE_OPTIONS = ['PR', 'HR', 'Marketing', 'CEO', 'General']
+
+const payload = props.partner?.payload ?? {}
+const form = reactive({
+  canonicalName: props.partner?.canonicalName ?? '',
+  website: String(payload.website ?? payload.url ?? ''),
+  linkedinUrl: String(payload.linkedinUrl ?? ''),
+  instagramUrl: String(payload.instagramUrl ?? ''),
+  industry: String(payload.industry ?? ''),
+  size: String(payload.size ?? ''),
+  sizeNote: String(payload.sizeNote ?? ''),
+  parentCompany: String(payload.parentCompany ?? ''),
+  summary: String(payload.summary ?? ''),
+  activities: String(payload.activities ?? ''),
+  socialInvolvement: String(payload.socialInvolvement ?? ''),
+  researchNotes: String(payload.researchNotes ?? ''),
+})
+
+const contacts = ref<ContactEntry[]>(
+  Array.isArray(payload.contacts)
+    ? (payload.contacts as any[]).map(c => ({
+        firstName: c.firstName ?? '', lastName: c.lastName ?? '',
+        role: c.role ?? '', email: c.email ?? '',
+        type: c.type ?? 'General', priority: c.priority ?? 3,
+        note: c.note ?? '',
+      }))
+    : [],
+)
+
+function addContact() {
+  contacts.value.push({ firstName: '', lastName: '', role: '', email: '', type: 'General', priority: 3, note: '' })
+}
+function removeContact(i: number) {
+  contacts.value.splice(i, 1)
+}
+
+const createInteraction = ref(false)
+const assigneeIds = ref<string[]>([])
+const { data: allUsers } = useFetch<{ id: string; name: string; image: string | null; email: string }[]>('/api/users')
+
+const saving = ref(false)
+const error = ref('')
+const duplicateLink = ref('')
+
+const canSubmit = computed(() => {
+  if (props.mode === 'create') return form.canonicalName.trim().length > 0
+  return true
+})
+
+async function save() {
+  if (!canSubmit.value || saving.value) return
+  saving.value = true
+  error.value = ''
+  duplicateLink.value = ''
+
+  const filteredContacts = contacts.value.filter(c =>
+    c.firstName || c.lastName || c.email || c.role,
+  )
+
+  const payloadData: Record<string, unknown> = {}
+  if (form.website) payloadData.website = form.website
+  if (form.linkedinUrl) payloadData.linkedinUrl = form.linkedinUrl
+  if (form.instagramUrl) payloadData.instagramUrl = form.instagramUrl
+  if (form.industry) payloadData.industry = form.industry
+  if (form.size) payloadData.size = form.size
+  if (form.sizeNote) payloadData.sizeNote = form.sizeNote
+  if (form.parentCompany) payloadData.parentCompany = form.parentCompany
+  if (form.summary) payloadData.summary = form.summary
+  if (form.activities) payloadData.activities = form.activities
+  if (form.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
+  if (form.researchNotes) payloadData.researchNotes = form.researchNotes
+  if (filteredContacts.length > 0) payloadData.contacts = filteredContacts
+
+  try {
+    if (props.mode === 'create') {
+      const res = await $fetch<{ record: { id: string } }>('/api/partners', {
+        method: 'POST',
+        body: {
+          canonicalName: form.canonicalName.trim(),
+          payload: payloadData,
+          createInteraction: createInteraction.value,
+          assigneeIds: createInteraction.value ? assigneeIds.value : undefined,
+        },
+      })
+      emit('saved', { id: res.record.id })
+    } else {
+      const body: Record<string, unknown> = { payload: payloadData }
+      if (form.canonicalName.trim() !== props.partner!.canonicalName) {
+        body.canonicalName = form.canonicalName.trim()
+      }
+      const res = await $fetch<{ id: string }>(`/api/partners/${props.partner!.id}/payload`, {
+        method: 'PATCH',
+        body,
+      })
+      emit('saved', { id: res.id })
+    }
+    emit('close')
+  } catch (e: any) {
+    if (e?.statusCode === 409) {
+      error.value = e.data?.message ?? e.statusMessage ?? 'Partner s tímto názvem již existuje.'
+      if (e.data?.data?.existingId) {
+        duplicateLink.value = `/partners/${e.data.data.existingId}`
+      }
+    } else {
+      error.value = e.statusMessage ?? e.message ?? 'Nepodařilo se uložit.'
+    }
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-12 px-4 overflow-y-auto" @click.self="emit('close')">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl mb-12">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 class="text-lg font-semibold text-gray-800">
+            {{ mode === 'create' ? 'Nový partner' : 'Upravit profil partnera' }}
+          </h2>
+          <button class="text-gray-400 hover:text-gray-600 transition-colors" @click="emit('close')">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div class="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+
+          <!-- Error banner -->
+          <div v-if="error" class="px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
+            {{ error }}
+            <NuxtLink v-if="duplicateLink" :to="duplicateLink" class="ml-2 underline font-medium">Zobrazit existujícího</NuxtLink>
+          </div>
+
+          <!-- Section: Základní info -->
+          <section>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Základní informace</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Název partnera *</label>
+                <input v-model="form.canonicalName" type="text" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" placeholder="Acme s.r.o." />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Web</label>
+                <input v-model="form.website" type="url" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" placeholder="https://..." />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">LinkedIn</label>
+                <input v-model="form.linkedinUrl" type="url" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Instagram</label>
+                <input v-model="form.instagramUrl" type="url" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Odvětví</label>
+                <input v-model="form.industry" type="text" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" placeholder="Technologie, Média, ..." />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Velikost</label>
+                <select v-model="form.size" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 bg-white">
+                  <option v-for="o in SIZE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Poznámka k velikosti</label>
+                <input v-model="form.sizeNote" type="text" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Mateřská společnost</label>
+                <input v-model="form.parentCompany" type="text" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
+              </div>
+            </div>
+          </section>
+
+          <!-- Section: Popis -->
+          <section>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Popis</h3>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Shrnutí</label>
+                <textarea v-model="form.summary" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Aktivity / služby</label>
+                <textarea v-model="form.activities" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Společenská angažovanost</label>
+                <textarea v-model="form.socialInvolvement" rows="2" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Poznámky k výzkumu</label>
+                <textarea v-model="form.researchNotes" rows="2" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y" />
+              </div>
+            </div>
+          </section>
+
+          <!-- Section: Kontakty -->
+          <section>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Kontaktní osoby</h3>
+              <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" @click="addContact">+ Přidat kontakt</button>
+            </div>
+            <div v-if="contacts.length === 0" class="text-xs text-gray-400 py-2">Žádné kontaktní osoby</div>
+            <div v-for="(c, i) in contacts" :key="i" class="border border-gray-100 rounded-lg p-3 mb-3">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-gray-500">Kontakt {{ i + 1 }}</span>
+                <button class="text-xs text-red-500 hover:text-red-700" @click="removeContact(i)">Odebrat</button>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <input v-model="c.firstName" type="text" placeholder="Jméno" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="c.lastName" type="text" placeholder="Příjmení" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="c.role" type="text" placeholder="Pozice" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="c.email" type="email" placeholder="Email" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <select v-model="c.type" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300 bg-white">
+                  <option v-for="t in CONTACT_TYPE_OPTIONS" :key="t" :value="t">{{ t }}</option>
+                </select>
+                <input v-model="c.note" type="text" placeholder="Poznámka" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+              </div>
+            </div>
+          </section>
+
+          <!-- Section: Přiřazení do projektu (create only) -->
+          <section v-if="mode === 'create'">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Přiřazení do projektu</h3>
+            <label class="flex items-center gap-2 text-sm text-gray-700 mb-3 cursor-pointer">
+              <input v-model="createInteraction" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              Přiřadit partnera do aktivního projektu
+            </label>
+            <div v-if="createInteraction" class="ml-6">
+              <label class="block text-xs font-medium text-gray-600 mb-1">Členové obchodního týmu</label>
+              <div class="flex flex-wrap gap-2">
+                <label
+                  v-for="u in allUsers"
+                  :key="u.id"
+                  class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors"
+                  :class="assigneeIds.includes(u.id) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
+                >
+                  <input v-model="assigneeIds" type="checkbox" :value="u.id" class="sr-only" />
+                  <img v-if="u.image" :src="u.image" class="w-4 h-4 rounded-full" referrerpolicy="no-referrer" />
+                  {{ u.name }}
+                </label>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2" @click="emit('close')">Zrušit</button>
+          <button
+            class="text-sm font-medium text-white bg-primary px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            :disabled="!canSubmit || saving"
+            @click="save"
+          >
+            {{ saving ? 'Ukládám...' : mode === 'create' ? 'Vytvořit' : 'Uložit' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>

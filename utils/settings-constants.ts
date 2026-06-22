@@ -52,6 +52,7 @@ export const PERMISSION_GROUPS = [
   { label: 'Mailové šablony', keys: ['drafts.own.read', 'drafts.own.edit', 'drafts.others.read', 'drafts.others.edit'] },
   { label: 'Podpisy', keys: ['signatures.own.edit', 'signatures.system.edit'] },
   { label: 'Pipeline', keys: ['pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail'] },
+  { label: 'Partneři', keys: ['partners.create', 'partners.edit'] },
   { label: 'Správa', keys: ['admin.roles'] },
 ]
 
@@ -80,6 +81,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'pipeline.deep_research': 'Spouštět deep-research kroky (o4-mini)',
   'pipeline.claude': 'Spouštět Claude kroky',
   'pipeline.gmail': 'Vytvářet Gmail drafty',
+  'partners.create': 'Vytvářet partnery ručně',
+  'partners.edit': 'Upravovat profily partnerů',
   'admin.roles': 'Správa rolí a oprávnění uživatelů',
 }
 

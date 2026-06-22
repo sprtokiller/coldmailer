@@ -155,13 +155,33 @@ function toggleExpand(id: string) {
   s.has(id) ? s.delete(id) : s.add(id)
   expandedIds.value = s
 }
+
+// ── Permissions ─────────────────────────────────────────────────────────────
+
+const { data: meData } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me')
+const canCreatePartner = computed(() => meData.value?.effectivePermissions.includes('partners.create') ?? false)
+const showCreatePartnerModal = ref(false)
+
+function onPartnerCreated() {
+  showCreatePartnerModal.value = false
+  if (activeTab.value === 'PARTNER') fetchRecords(true)
+}
 </script>
 
 <template>
   <div>
-    <div class="mb-6">
-      <h1 class="text-2xl font-semibold text-gray-800">Databáze</h1>
-      <p class="text-sm text-gray-400 mt-1">Všechny záznamy uložené napříč pipeline</p>
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-800">Databáze</h1>
+        <p class="text-sm text-gray-400 mt-1">Všechny záznamy uložené napříč pipeline</p>
+      </div>
+      <button
+        v-if="canCreatePartner && activeTab === 'PARTNER'"
+        class="text-sm font-medium text-white bg-primary px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+        @click="showCreatePartnerModal = true"
+      >
+        Nový partner
+      </button>
     </div>
 
     <!-- Tabs -->
@@ -469,5 +489,7 @@ function toggleExpand(id: string) {
         {{ loading ? 'Načítám...' : 'Načíst další' }}
       </button>
     </div>
+
+    <PartnersPartnerFormModal v-if="showCreatePartnerModal" mode="create" @close="showCreatePartnerModal = false" @saved="onPartnerCreated" />
   </div>
 </template>

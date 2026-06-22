@@ -59,6 +59,8 @@ const { data: partner, refresh: refreshPartner } = await useFetch<Partner>(`/api
 const { data: interactionsData, refresh: refreshInteractions } = await useFetch<InteractionsResponse>(`/api/partners/${id}/interactions`)
 const { data: allUsers } = await useFetch<AppUser[]>('/api/users')
 const { user: me } = useUserSession()
+const { data: meSettings } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me')
+const canEditPartner = computed(() => meSettings.value?.effectivePermissions.includes('partners.edit') ?? false)
 
 async function refresh() {
   await Promise.all([refreshPartner(), refreshInteractions()])
@@ -68,6 +70,7 @@ async function refresh() {
 
 const showContactsPanel = ref(false)
 const showProfileModal = ref(false)
+const showEditModal = ref(false)
 const expandedEvents = ref(new Set<string>())
 const showCrossProject = ref(false)
 
@@ -325,6 +328,13 @@ const TYPE_COLORS: Record<string, string> = {
             @click="showProfileModal = true"
           >
             Profil
+          </button>
+          <button
+            v-if="canEditPartner"
+            class="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+            @click="showEditModal = true"
+          >
+            Upravit profil
           </button>
         </div>
       </div>
@@ -633,4 +643,12 @@ const TYPE_COLORS: Record<string, string> = {
   </div>
 
   <div v-else class="text-center py-16 text-gray-400 text-sm">Načítám...</div>
+
+  <PartnersPartnerFormModal
+    v-if="showEditModal && partner"
+    mode="edit"
+    :partner="{ id: partner.id, canonicalName: partner.canonicalName, payload: partner.payload }"
+    @close="showEditModal = false"
+    @saved="showEditModal = false; refreshPartner()"
+  />
 </template>
