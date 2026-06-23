@@ -12,6 +12,14 @@ export default defineEventHandler(async (event) => {
     projectId?: string | null
     groupId?: string | null
   }>(event)
+
+  if (!body.content.includes('<[[SCHEMA]]>')) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
+    })
+  }
+
   const scope = await resolveLibraryScope(event, body)
 
   return prisma.systemPrompt.create({

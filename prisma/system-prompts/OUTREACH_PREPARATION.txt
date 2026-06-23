@@ -112,25 +112,6 @@ a znovu nastav hodnotu na true.
 
 Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:
 
-{
-  "analysis": {
-    "recipientProfile": "string",
-    "topArgument": "string",
-    "hookAnalysis": "string",
-    "personalizationDetail": "string",
-    "templateConstraints": ["string"]
-  },
-  "to": "string – e-mailová adresa příjemce; prázdný řetězec pokud není k dispozici",
-  "subject": "string",
-  "body": "HTML string – formátovaný dle sekce HTML formátování",
-  "selfCheck": {
-    "opensWithPersonalization": true,
-    "topArgumentPresent": true,
-    "clearCTA": true,
-    "templateRespected": true,
-    "underWordLimit": true,
-    "noForbiddenPhrases": true
-  }
-}
+<[[SCHEMA]]>
 
 Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj. Výstup bude v češtině.

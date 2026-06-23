@@ -36,6 +36,12 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://coldmailer:coldmailer@db:5432/coldmailer
+      NUXT_GOOGLE_CLIENT_ID: ${NUXT_GOOGLE_CLIENT_ID}
+      NUXT_GOOGLE_CLIENT_SECRET: ${NUXT_GOOGLE_CLIENT_SECRET}
+      NUXT_GOOGLE_REDIRECT_URI: ${NUXT_GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/callback/google}
+      NUXT_OPEN_ROUTER_API_KEY: ${NUXT_OPEN_ROUTER_API_KEY}
+      NUXT_OPEN_ROUTER_MANAGEMENT_KEY: ${NUXT_OPEN_ROUTER_MANAGEMENT_KEY}
+      NUXT_SERP_API_KEYS: ${NUXT_SERP_API_KEYS}
     depends_on:
       db:
         condition: service_healthy

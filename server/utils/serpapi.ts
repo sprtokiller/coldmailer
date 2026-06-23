@@ -13,7 +13,10 @@ let _keyIndex = 0
 
 function getNextApiKey(): string {
   const config = useRuntimeConfig()
-  const keys: string[] = Array.isArray(config.serpApiKeys) ? config.serpApiKeys : []
+  const raw = config.serpApiKeys
+  const keys: string[] = typeof raw === 'string'
+    ? raw.split(',').map(k => k.trim()).filter(Boolean)
+    : Array.isArray(raw) ? raw : []
 
   if (keys.length === 0) {
     throw new Error('No SerpAPI keys configured. Set SERPAPI_KEYS in your .env file (comma-separated).')

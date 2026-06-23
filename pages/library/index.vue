@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 definePageMeta({ middleware: 'auth' })
@@ -74,7 +74,7 @@ const STEP_TYPES = [
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
 // ── Placeholder validation ────────────────────────────────────────────────────
-const VALID_PLACEHOLDERS = ['<[[CONTEXT]]>', '<[[DATA]]>']
+const VALID_PLACEHOLDERS = ['<[[SCHEMA]]>', '<[[CONTEXT]]>', '<[[DATA]]>', '<[[TEMPLATE]]>']
 const PLACEHOLDER_RE = /<\[\[[A-Z_]+\]\]>/g
 
 const contentPlaceholders = computed(() => {
@@ -92,17 +92,41 @@ const duplicatePlaceholders = computed(() => {
   return Object.keys(counts).filter(p => counts[p] > 1)
 })
 
+const missingPlaceholders = computed(() => {
+  if (tab.value !== 'prompts') return []
+  const required = ['<[[DATA]]>']
+  if (currentStepSchema.value) required.push('<[[SCHEMA]]>')
+  if (form.value.stepType === 'OUTREACH_PREPARATION') required.push('<[[TEMPLATE]]>')
+  return required.filter(p => !contentPlaceholders.value.includes(p))
+})
+
 const placeholderError = computed<string | null>(() => {
   if (invalidPlaceholders.value.length)
     return `Neznámý placeholder: ${invalidPlaceholders.value.join(', ')}`
   if (duplicatePlaceholders.value.length)
     return `Placeholder smí být použit nejvýše jednou: ${duplicatePlaceholders.value.join(', ')}`
+  if (missingPlaceholders.value.length)
+    return `Chybí povinný placeholder: ${missingPlaceholders.value.join(', ')}`
   return null
 })
 
 const validFoundPlaceholders = computed(() =>
   VALID_PLACEHOLDERS.filter(p => contentPlaceholders.value.includes(p)),
 )
+
+const currentStepSchema = computed(() => {
+  if (tab.value !== 'prompts') return null
+  return STEP_OUTPUT_SCHEMAS[form.value.stepType] ?? null
+})
+
+const schemaPreviewExpanded = ref(false)
+
+function highlightPlaceholders(text: string): string {
+  return text.replace(
+    /<\[\[([A-Z_]+)\]\]>/g,
+    '<span class="inline-block px-1 py-px rounded bg-violet-100 text-violet-700 border border-violet-200 text-[9px] font-semibold">&lt;[[$1]]&gt;</span>',
+  )
+}
 
 // ── Form state ────────────────────────────────────────────────────────────────
 const showForm = ref(false)
@@ -509,7 +533,7 @@ const tabs = computed(() => {
               <span
                 v-for="p in validFoundPlaceholders"
                 :key="p"
-                class="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                class="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200"
               >
                 <svg class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
                 {{ p }}
@@ -533,6 +557,23 @@ const tabs = computed(() => {
               </span>
             </div>
             <p v-if="placeholderError" class="mt-1 text-xs text-red-600">{{ placeholderError }}</p>
+          </div>
+          <!-- Read-only output schema preview -->
+          <div v-if="tab === 'prompts' && currentStepSchema" class="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+            <button
+              type="button"
+              class="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              @click="schemaPreviewExpanded = !schemaPreviewExpanded"
+            >
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                Výstupní schéma (read-only)
+              </span>
+              <svg class="w-3.5 h-3.5 transition-transform" :class="schemaPreviewExpanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            <div v-if="schemaPreviewExpanded" class="border-t border-gray-200 px-3 py-2">
+              <pre class="text-[11px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-y-auto">{{ JSON.stringify(currentStepSchema, null, 2) }}</pre>
+            </div>
           </div>
         </template>
 
@@ -702,9 +743,7 @@ const tabs = computed(() => {
             </template>
           </div>
 
-          <p class="text-xs text-gray-500 line-clamp-3 font-mono">
-            {{ item.content ?? item.subject }}
-          </p>
+          <p class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" />
           <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
             ↗ odvozeno z jiného dokumentu
           </div>

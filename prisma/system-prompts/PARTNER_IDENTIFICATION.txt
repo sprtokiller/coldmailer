@@ -33,13 +33,4 @@ Hledej organizace v těchto kontextech (seřazeno od nejsilnějšího důkazu):
 
 ## VÝSTUP
 
-```json
-[
-  {
-    "name": "string — oficiální název organizace",
-    "website": "string|null — URL jejich webu, pokud je na stránce uvedena",
-    "description": "string — jaký typ partnera jsou (1–2 věty)",
-    "type": "string — např. 'generální partner', 'mediální partner'"
-  }
-]
-```
+<[[SCHEMA]]>

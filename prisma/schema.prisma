@@ -187,6 +187,7 @@ model SystemPrompt {
   id            String         @id @default(cuid())
   name          String
   content       String
+  outputSchema  Json?
   stepType      StepType
   isSystem      Boolean        @default(false)
   authorId      String

@@ -1,4 +1,4 @@
-FROM oven/bun:1-alpine AS base
+FROM oven/bun:1-debian AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -14,6 +14,7 @@ RUN bun run build
 
 FROM base AS runner
 ENV NODE_ENV=production
+RUN bunx playwright install --with-deps chromium
 COPY --from=builder /app/.output ./.output
 EXPOSE 3000
 CMD ["bun", ".output/server/index.mjs"]

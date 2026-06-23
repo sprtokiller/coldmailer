@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { pipelineRunKey, type StepDefinition, type usePipelineRunPage } from '~/composables/usePipelineRunPage'
+import { STEP_OUTPUT_SCHEMAS } from '~/config/pipeline'
 
 const props = defineProps<{
   step: StepDefinition
@@ -10,6 +11,16 @@ const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipeline
 if (!pipeline) {
   throw new Error('Pipeline run context is missing')
 }
+
+function highlightPlaceholders(text: string): string {
+  return text.replace(
+    /<\[\[([A-Z_]+)\]\]>/g,
+    '<span class="inline-block px-1 py-px rounded bg-violet-100 text-violet-700 border border-violet-200 text-[9px] font-semibold">&lt;[[$1]]&gt;</span>',
+  )
+}
+
+const stepSchema = computed(() => STEP_OUTPUT_SCHEMAS[props.step.key] ?? null)
+const schemaPreviewExpanded = ref(false)
 
 // ── Context part combobox ─────────────────────────────────────────────────────
 const contextSearch = ref('')
@@ -164,7 +175,7 @@ async function confirmEditContextPart() {
               </a>
             </div>
             <div class="relative group/pre">
-              <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">{{ pipeline.selectedPrompt(step.key)?.content }}</pre>
+              <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(pipeline.selectedPrompt(step.key)?.content ?? '')" />
               <button
                 type="button"
                 class="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors opacity-0 group-hover/pre:opacity-100"
@@ -172,6 +183,18 @@ async function confirmEditContextPart() {
               >
                 {{ pipeline.copiedPromptKey === 'prompt_preview_' + step.key ? 'Zkopírováno!' : 'Kopírovat' }}
               </button>
+            </div>
+            <!-- Schema preview -->
+            <div v-if="stepSchema" class="mt-2">
+              <button
+                type="button"
+                class="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                @click.stop="schemaPreviewExpanded = !schemaPreviewExpanded"
+              >
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                {{ schemaPreviewExpanded ? 'Skrýt schéma' : 'Výstupní schéma (read-only)' }}
+              </button>
+              <pre v-if="schemaPreviewExpanded" class="mt-1 text-[10px] text-gray-500 bg-gray-50 rounded-lg p-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed border border-gray-200">{{ JSON.stringify(stepSchema, null, 2) }}</pre>
             </div>
           </div>
           </div>

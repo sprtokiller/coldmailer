@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import type { StepConfigState, PromptOption, Step3Candidate } from './types'
+import { STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
 
 export function usePromptBuilding(
   contextParts: Ref<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>,
@@ -13,11 +14,17 @@ export function usePromptBuilding(
 
   const PLACEHOLDER_CONTEXT = '<[[CONTEXT]]>'
   const PLACEHOLDER_DATA = '<[[DATA]]>'
+  const PLACEHOLDER_SCHEMA = '<[[SCHEMA]]>'
 
   function buildFullPrompt(stepKey: string, userMessage: string): string {
     const cfg = getConfig(stepKey)
     const prompt = selectedPrompt(stepKey)
-    const systemContent = prompt?.content ?? STEP_SYSTEM_PROMPTS[stepKey] ?? ''
+    let systemContent = prompt?.content ?? STEP_SYSTEM_PROMPTS[stepKey] ?? ''
+
+    const schema = STEP_OUTPUT_SCHEMAS[stepKey]
+    if (schema && systemContent.includes(PLACEHOLDER_SCHEMA)) {
+      systemContent = systemContent.replace(PLACEHOLDER_SCHEMA, formatSchemaForPrompt(schema))
+    }
 
     const selectedCtxParts = contextParts.value.filter(cp => cfg.contextPartIds.includes(cp.id))
     const contextBlock = selectedCtxParts.length

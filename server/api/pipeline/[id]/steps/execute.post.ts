@@ -10,7 +10,7 @@ import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
-import { STEP_SYSTEM_PROMPTS, GROUP_FONTS } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, GROUP_FONTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
 
 const STEP_PERMISSION_MAP: Record<string, 'pipeline.serpapi' | 'pipeline.deep_research' | 'pipeline.claude' | 'pipeline.gmail'> = {
   PARTNER_IDENTIFICATION: 'pipeline.serpapi',
@@ -112,11 +112,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Vybraná e-mailová šablona není dostupná pro tento projekt.' })
   }
 
-  const systemPromptText =
+  const rawPromptText =
     customPrompt?.content ??
     dbSystemPrompt?.content ??
     STEP_SYSTEM_PROMPTS[body.stepType] ??
     'You are a helpful assistant.'
+
+  const outputSchema =
+    (customPrompt?.outputSchema as object | null) ??
+    (dbSystemPrompt?.outputSchema as object | null) ??
+    STEP_OUTPUT_SCHEMAS[body.stepType] ??
+    null
+
+  const systemPromptText = outputSchema
+    ? rawPromptText.replace('<[[SCHEMA]]>', formatSchemaForPrompt(outputSchema))
+    : rawPromptText
 
   // Inject canonical partner industry tags for PARTNER_PROFILING
   let industryTagsContext: string[] = []
@@ -445,9 +455,12 @@ export default defineEventHandler(async (event) => {
                   `Předmět: ${emailDraft.subject}`,
                   `Tělo:\n${emailDraft.body}`,
                 ].join('\n')
-              : null
+              : ''
 
             const fontFamily = GROUP_FONTS[run.project.group.slug] ?? ''
+            const contextBlock = allContextParts.length
+              ? allContextParts.join('\n\n')
+              : ''
 
             const allEmails: unknown[] = []
             const opProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
@@ -460,24 +473,24 @@ export default defineEventHandler(async (event) => {
               prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
+              const partnerDataBlock = '```json\n' + JSON.stringify(ip, null, 2) + '\n```'
+
+              const outreachSystemPrompt = systemPromptText
+                .replace('<[[DATA]]>', partnerDataBlock)
+                .replace('<[[CONTEXT]]>', contextBlock)
+                .replace('<[[TEMPLATE]]>', templateSection)
+
               const userMsg = [
-                'Vytvoř personalizovaný cold e-mail pro tohoto partnera. Vrať JSON objekt s poli na nejvyšší úrovni: to (e-mailová adresa příjemce, pokud je k dispozici, jinak prázdný řetězec), subject (string), body (HTML – každý odstavec v <p>, text v <span> s inline font-family).',
+                'Vytvoř personalizovaný cold e-mail pro tohoto partnera dle systémového promptu.',
                 fontFamily ? `Font pro HTML formátování: ${fontFamily}` : null,
-                '',
-                templateSection,
-                '',
-                'Alignment data partnera (použij top argumenty a doporučený kontakt):',
-                '```json',
-                JSON.stringify(ip, null, 2),
-                '```',
               ].filter(s => s !== null).join('\n')
 
               try {
                 let emailOutput = ''
                 const { stream: aiStream, getCost } = streamStepAI({
                   stepType: body.stepType,
-                  systemPrompt: systemPromptText,
-                  contextParts: allContextParts,
+                  systemPrompt: outreachSystemPrompt,
+                  contextParts: [],
                   userMessage: userMsg,
                 })
                 for await (const chunk of aiStream) {

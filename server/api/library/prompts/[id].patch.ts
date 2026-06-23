@@ -25,6 +25,13 @@ export default defineEventHandler(async (event) => {
   }
   if (!prompt.isSystem) await requireResourceScopeAccess(event, prompt)
 
+  if (!body.content.includes('<[[SCHEMA]]>')) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
+    })
+  }
+
   const scope = ('projectId' in body || 'groupId' in body)
     ? await resolveLibraryScope(event, body)
     : {}

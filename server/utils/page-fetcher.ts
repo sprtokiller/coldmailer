@@ -22,6 +22,11 @@ export async function fetchPages(urls: string[]): Promise<PageContent[]> {
       navigationTimeoutSecs: 30,
       requestHandlerTimeoutSecs: 60,
       browserPoolOptions: { useFingerprints: false },
+      launchContext: {
+        launchOptions: {
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        },
+      },
       requestHandler: async ({ page, request }) => {
         try {
           await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})

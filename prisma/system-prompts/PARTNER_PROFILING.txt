@@ -31,53 +31,6 @@ U každého kontaktu:
 
 Pokud najdeš pouze lead, například osoba publikovala tiskovou zprávu, vystoupila v podcastu, organizovala event nebo je uvedena jako media kontakt, můžeš ji zařadit jako kandidátní kontakt, ale označ confidence jako Medium nebo Low podle síly důkazu.
 
-Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:
-
-{
-  "name": "string – oficiální název společnosti/organizace",
-  "website": "string|null – URL oficiálního webu",
-  "linkedinUrl": "string|null – URL firemní stránky na LinkedIn",
-  "instagramUrl": "string|null – URL profilu na Instagramu",
-  "industry": "string – primární odvětví nebo sektor",
-  "size": "micro|small|medium|large|enterprise",
-  "sizeNote": "string – doklad pro odhad velikosti, např. '~120 zaměstnanců dle LinkedIn 2026'",
-  "parentCompany": "string|null – pokud jde o dceřinou firmu, uveď mateřskou korporaci",
-  "summary": "string – 3–5 vět: co firma dělá, její pozicování a cílová skupina",
-  "activities": "string – podrobný popis produktů, služeb a klíčových aktivit",
-  "recentHighlights": [
-    "string – nedávná novinka, milník nebo pozoruhodný příspěvek, max 5 položek"
-  ],
-  "contacts": [
-    {
-      "firstName": "string|null",
-      "lastName": "string|null",
-      "role": "string|null",
-      "email": "string|null",
-      "linkedin": "string|null",
-      "alternativeContact": "string|null – např. telefon, kontaktní formulář, profil na jiné síti",
-      "type": "PR|HR|Marketing|CEO|General",
-      "priority": 1,
-      "confidence": "High|Medium|Low",
-      "source": "string – URL zdroje",
-      "sourceDate": "string|null – rok nebo datum, pokud je zřejmé",
-      "note": "string – stručně vysvětli, proč je kontakt relevantní a jak byl ověřen"
-    }
-  ],
-  "partnershipStyle": [
-    "string – např. 'generální partner', 'mediální partner', 'finanční sponzor', 'věcné ceny', 'technologický partner'"
-  ],
-  "partnershipEvidence": [
-    {
-      "event": "string – název akce, soutěže nebo charity",
-      "role": "string – jejich role, např. 'Generální partner', 'Sponzor cen'",
-      "year": "string|null",
-      "source": "string|null – URL, kde byl tento zdroj nalezen"
-    }
-  ],
-  "socialInvolvement": "string – shrnutí komunitních, vzdělávacích nebo charitativních aktivit",
-  "researchNotes": "string – výhrady, mezery v datech nebo důležitý kontext pro výzkumníka"
-}
-
 Škála velikosti:
 - micro = <10 zaměstnanců
 - small = 10–50 zaměstnanců
@@ -95,3 +48,9 @@ DŮLEŽITÉ:
 - Seřaď contacts podle priority vzestupně a potom podle confidence od High po Low.
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
 - Výstup bude v češtině.
+
+## VÝSTUP
+
+Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:
+
+<[[SCHEMA]]>

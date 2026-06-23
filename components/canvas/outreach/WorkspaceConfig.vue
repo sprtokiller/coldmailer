@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
 import { outreachWorkspaceKey, outreachActionsKey } from '~/composables/canvas/useOutreachWorkspace'
-import { GROUP_FONTS } from '~/config/pipeline'
+import { GROUP_FONTS, STEP_OUTPUT_SCHEMAS } from '~/config/pipeline'
 
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 const workspace = inject(outreachWorkspaceKey)!
@@ -111,6 +111,16 @@ const defaultFont = computed(() => {
   return slug ? GROUP_FONTS[slug] ?? '' : ''
 })
 
+const outputSchema = computed(() => STEP_OUTPUT_SCHEMAS[STEP_KEY] ?? null)
+
+function highlightPlaceholders(text: string): string {
+  return text.replace(
+    /<\[\[([A-Z_]+)\]\]>/g,
+    '<span class="inline-block px-1 py-px rounded bg-violet-100 text-violet-700 border border-violet-200 text-[9px] font-semibold">&lt;[[$1]]&gt;</span>',
+  )
+}
+const schemaPreviewExpanded = ref(false)
+
 const hasBody = computed(() => !!workspace.emailBody.value.trim())
 const hasTo = computed(() => !!workspace.emailTo.value.trim())
 const canSave = computed(() => hasBody.value && !!workspace.selectedPartner.value)
@@ -151,7 +161,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
                 <div v-if="previewField === 'prompt' && selectedPrompt" class="absolute right-0 top-full z-50 pt-1 w-80">
                   <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-60 overflow-y-auto">
                     <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedPrompt.name }}</p>
-                    <pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed">{{ selectedPrompt.content }}</pre>
+                    <pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(selectedPrompt.content)" />
                   </div>
                 </div>
               </div>
@@ -165,6 +175,20 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
                 <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
               </NuxtLink>
             </div>
+          </div>
+
+          <!-- Output schema preview -->
+          <button
+            v-if="outputSchema"
+            type="button"
+            class="w-full flex items-center gap-1 text-[9px] text-gray-400 hover:text-gray-600 transition-colors -mt-0.5 mb-0.5"
+            @click="schemaPreviewExpanded = !schemaPreviewExpanded"
+          >
+            <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+            {{ schemaPreviewExpanded ? 'Skrýt schéma' : 'Výstupní schéma' }}
+          </button>
+          <div v-if="schemaPreviewExpanded && outputSchema" class="rounded border border-gray-200 bg-gray-50 px-2 py-1.5 mb-1 max-h-40 overflow-y-auto">
+            <pre class="text-[9px] text-gray-500 whitespace-pre-wrap font-mono leading-relaxed">{{ JSON.stringify(outputSchema, null, 2) }}</pre>
           </div>
 
           <!-- Email template -->

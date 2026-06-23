@@ -2,6 +2,10 @@
 // Pipeline configuration — single source of truth for models, prompts, UI badges
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export function formatSchemaForPrompt(schema: object): string {
+  return '```json\n' + JSON.stringify(schema, null, 2) + '\n```'
+}
+
 // ── OpenRouter client settings ────────────────────────────────────────────────
 export const OPENROUTER = {
   baseURL:   'https://openrouter.ai/api/v1',
@@ -49,6 +53,140 @@ export const GROUP_FONTS: Record<string, string> = {
   ppt: 'Figtree',
 }
 
+// ── Default output schemas per step (read-only, injected via <[[SCHEMA]]>) ───
+export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
+  MARKET_SCANNING: [
+    {
+      url: 'string — domovská stránka soutěže/akce/kanálu',
+      name: 'string — plný oficiální název (v původním jazyce)',
+      type: 'string — kategorie, např. "programování", "matematika", "robotika"',
+      level: 'string — jedno z "lokální" | "regionální" | "národní" | "mezinárodní"',
+      status: 'string — jedno z "aktivní" | "neaktivní" | "neznámé"',
+      frequency: 'string — např. "ročně", "pololetně", "jednorázová"',
+      organizer: 'string — název pořádající instituce',
+      description: 'string — 1–2 věty popisující soutěž a co účastníci dělají',
+      target_group: 'string — primární cílová skupina, např. "SŠ", "ZŠ", "SŠ+ZŠ"',
+    },
+  ],
+
+  PARTNER_IDENTIFICATION: [
+    {
+      name: 'string — oficiální název organizace',
+      website: 'string|null — URL jejich webu, pokud je na stránce uvedena',
+      description: 'string — jaký typ partnera jsou (1–2 věty)',
+      type: 'string — např. "generální partner", "mediální partner"',
+    },
+  ],
+
+  PARTNER_PROFILING: {
+    name: 'string – oficiální název společnosti/organizace',
+    website: 'string|null – URL oficiálního webu',
+    linkedinUrl: 'string|null – URL firemní stránky na LinkedIn',
+    instagramUrl: 'string|null – URL profilu na Instagramu',
+    industry: 'string – primární odvětví nebo sektor',
+    size: 'micro|small|medium|large|enterprise',
+    sizeNote: 'string – doklad pro odhad velikosti',
+    parentCompany: 'string|null – pokud jde o dceřinou firmu, uveď mateřskou korporaci',
+    summary: 'string – 3–5 vět: co firma dělá, její pozicování a cílová skupina',
+    activities: 'string – podrobný popis produktů, služeb a klíčových aktivit',
+    recentHighlights: ['string – nedávná novinka, milník nebo pozoruhodný příspěvek, max 5 položek'],
+    contacts: [
+      {
+        firstName: 'string|null',
+        lastName: 'string|null',
+        role: 'string|null',
+        email: 'string|null',
+        linkedin: 'string|null',
+        alternativeContact: 'string|null',
+        type: 'PR|HR|Marketing|CEO|General',
+        priority: 1,
+        confidence: 'High|Medium|Low',
+        source: 'string – URL zdroje',
+        sourceDate: 'string|null',
+        note: 'string – stručně vysvětli, proč je kontakt relevantní',
+      },
+    ],
+    partnershipStyle: ['string – např. "generální partner", "mediální partner"'],
+    partnershipEvidence: [
+      {
+        event: 'string – název akce, soutěže nebo charity',
+        role: 'string – jejich role',
+        year: 'string|null',
+        source: 'string|null – URL zdroje',
+      },
+    ],
+    socialInvolvement: 'string – shrnutí komunitních, vzdělávacích nebo charitativních aktivit',
+    researchNotes: 'string – výhrady, mezery v datech nebo důležitý kontext',
+  },
+
+  VALUE_ALIGNMENT: {
+    partnerSnapshot: 'string – 2–3 věty: kdo je tento partner a na čem mu záleží',
+    argumentAlignment: [
+      {
+        argumentId: 'string – Název ze značky [Název | Důležitost]',
+        argumentLabel: 'string – celý název argumentu',
+        relevance: 'Vysoká|Střední|Nízká|Nevhodné',
+        reasoning: 'string – proč tento argument funguje nebo nefunguje',
+        redFlags: 'string|null',
+      },
+    ],
+    top3Arguments: [
+      {
+        rank: 1,
+        argumentId: 'string',
+        whyItFits: 'string – konkrétní důkaz z profilu partnera',
+        howToFrame: 'string – doporučený úhel pohledu',
+        whatToAvoid: 'string – co neříkat',
+      },
+    ],
+    argumentsToDrop: [
+      {
+        argumentId: 'string',
+        reason: 'string – proč argument vynechat',
+      },
+    ],
+    hookHypothesis: 'string – 1–2 věty: nejpřesvědčivější důvod pro reakci',
+    recommendedContact: {
+      primary: {
+        name: 'string|null',
+        role: 'string',
+        reasoning: 'string – proč je tato osoba nejlepší první kontakt',
+      },
+      alternatives: [
+        {
+          name: 'string|null',
+          role: 'string',
+          tradeoff: 'string – kdy zvážit tuto osobu',
+        },
+      ],
+    },
+    flagsAndRisks: ['string – konkrétní nesoulad nebo citlivost'],
+    overallFitScore: 'Vysoký|Střední|Nízký',
+    overallFitReasoning: 'string – 2–3 věty shrnující celkovou míru shody',
+  },
+
+  OUTREACH_PREPARATION: {
+    analysis: {
+      recipientProfile: 'string',
+      topArgument: 'string',
+      hookAnalysis: 'string',
+      personalizationDetail: 'string',
+      templateConstraints: ['string'],
+    },
+    to: 'string – e-mailová adresa příjemce; prázdný řetězec pokud není k dispozici',
+    subject: 'string',
+    body: 'HTML string – formátovaný dle sekce HTML formátování',
+    selfCheck: {
+      opensWithPersonalization: true,
+      topArgumentPresent: true,
+      clearCTA: true,
+      templateRespected: true,
+      underWordLimit: true,
+      noForbiddenPhrases: true,
+    },
+  },
+}
+
 // ── Default system-prompt display names (used by prisma/seed.ts) ──────────────
 export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
   MARKET_SCANNING:        'Výchozí',
@@ -61,48 +199,28 @@ export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
 
 // ── System prompt content ─────────────────────────────────────────────────────
 export const STEP_SYSTEM_PROMPTS: Record<string, string> = {
-  MARKET_SCANNING: `Jsi expert na průzkum trhu s přímým přístupem k internetu. Vyhledej středoškolské soutěže, akce a kanály aktivní v České republice. Využij svou schopnost prohledávat web k nalezení skutečných, aktuálních příkladů.
+MARKET_SCANNING: `Jsi expert na průzkum trhu s přímým přístupem k internetu. Vyhledej středoškolské soutěže, akce a kanály aktivní v České republice. Využij svou schopnost prohledávat web k nalezení skutečných, aktuálních příkladů.
 
-Vrať JSON pole. Každá položka musí obsahovat přesně tato pole:
-- url: string — domovská stránka soutěže/akce/kanálu
-- name: string — plný oficiální název (v původním jazyce)
-- type: string — kategorie, např. "programování", "matematika", "robotika", "věda", "jazyky", "business"
-- level: string — jedno z "lokální" | "regionální" | "národní" | "mezinárodní"
-- status: string — jedno z "aktivní" | "neaktivní" | "neznámé"
-- frequency: string — např. "ročně", "pololetně", "jednorázová"
-- organizer: string — název pořádající instituce
-- description: string — 1–2 věty popisující soutěž a co účastníci dělají
-- target_group: string — primární cílová skupina, např. "SŠ", "ZŠ", "SŠ+ZŠ"
+<[[DATA]]>
 
-Ukázkový výstup:
-\`\`\`json
-[
-  {
-    "url": "https://olympiada.ksp.mff.cuni.cz",
-    "name": "Olympiáda v informatice",
-    "type": "programování",
-    "level": "národní",
-    "status": "aktivní",
-    "frequency": "ročně",
-    "organizer": "MŠMT (ve spolupráci s MFF UK)",
-    "description": "Celostátní soutěž pro středoškoláky v řešení algoritmických úloh pomocí programování.",
-    "target_group": "SŠ"
-  }
-]
-\`\`\`
+Vrať JSON pole. Každá položka musí obsahovat přesně tato pole dle schématu níže.
+
+## VÝSTUP
+
+<[[SCHEMA]]>
 
 Vrať POUZE JSON pole, bez jiného textu nebo markdownu mimo blok kódu.`,
 
   PARTNER_IDENTIFICATION: `Jsi specialista na průzkum partnerů. Analyzuj obsah poskytnuté webové stránky a vytěž sponzory, partnery nebo podpůrné organizace spojené s danou soutěží.
 
-Vrať JSON pole. Každá položka musí obsahovat:
-- name: string — oficiální název organizace
-- website: string|null — URL jejich webu, pokud je na stránce uvedena
-- description: string — jaký typ partnera jsou (1–2 věty)
-- type: string — např. "generální partner", "mediální partner", "finanční partner", "technologický partner"
+<[[DATA]]>
 
 Pokud na stránce nejsou nalezeni žádní partneři, vrať prázdné pole [].
-Vrať POUZE JSON pole, bez jiného textu.`,
+Vrať POUZE JSON pole, bez jiného textu.
+
+## VÝSTUP
+
+<[[SCHEMA]]>`,
 
   PARTNER_PROFILING: `Jsi analytik due diligence s přímým přístupem k internetu. Proveď hloubkový průzkum zadaného potenciálního partnerského kandidáta a vrať strukturovanou JSON zprávu.
 
@@ -137,53 +255,6 @@ U každého kontaktu:
 
 Pokud najdeš pouze lead, například osoba publikovala tiskovou zprávu, vystoupila v podcastu, organizovala event nebo je uvedena jako media kontakt, můžeš ji zařadit jako kandidátní kontakt, ale označ confidence jako Medium nebo Low podle síly důkazu.
 
-Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
-
-{
-  "name": "string – oficiální název společnosti/organizace",
-  "website": "string|null – URL oficiálního webu",
-  "linkedinUrl": "string|null – URL firemní stránky na LinkedIn",
-  "instagramUrl": "string|null – URL profilu na Instagramu",
-  "industry": "string – primární odvětví nebo sektor",
-  "size": "micro|small|medium|large|enterprise",
-  "sizeNote": "string – doklad pro odhad velikosti, např. '~120 zaměstnanců dle LinkedIn 2026'",
-  "parentCompany": "string|null – pokud jde o dceřinou firmu, uveď mateřskou korporaci",
-  "summary": "string – 3–5 vět: co firma dělá, její pozicování a cílová skupina",
-  "activities": "string – podrobný popis produktů, služeb a klíčových aktivit",
-  "recentHighlights": [
-    "string – nedávná novinka, milník nebo pozoruhodný příspěvek, max 5 položek"
-  ],
-  "contacts": [
-    {
-      "firstName": "string|null",
-      "lastName": "string|null",
-      "role": "string|null",
-      "email": "string|null",
-      "linkedin": "string|null",
-      "alternativeContact": "string|null – např. telefon, kontaktní formulář, profil na jiné síti",
-      "type": "PR|HR|Marketing|CEO|General",
-      "priority": 1,
-      "confidence": "High|Medium|Low",
-      "source": "string – URL zdroje",
-      "sourceDate": "string|null – rok nebo datum, pokud je zřejmé",
-      "note": "string – stručně vysvětli, proč je kontakt relevantní a jak byl ověřen"
-    }
-  ],
-  "partnershipStyle": [
-    "string – např. 'generální partner', 'mediální partner', 'finanční sponzor', 'věcné ceny', 'technologický partner'"
-  ],
-  "partnershipEvidence": [
-    {
-      "event": "string – název akce, soutěže nebo charity",
-      "role": "string – jejich role, např. 'Generální partner', 'Sponzor cen'",
-      "year": "string|null",
-      "source": "string|null – URL, kde byl tento zdroj nalezen"
-    }
-  ],
-  "socialInvolvement": "string – shrnutí komunitních, vzdělávacích nebo charitativních aktivit",
-  "researchNotes": "string – výhrady, mezery v datech nebo důležitý kontext pro výzkumníka"
-}
-
 Škála velikosti:
 - micro = <10 zaměstnanců
 - small = 10–50 zaměstnanců
@@ -199,10 +270,19 @@ DŮLEŽITÉ:
 - Pokud informace nejsou nalezeny, použij null nebo [].
 - Pokud najdeš jen obecný info mail, uveď ho jako type = "General", priority = 5.
 - Seřaď contacts podle priority vzestupně a potom podle confidence od High po Low.
-- Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.`,
+- Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
+- Výstup bude v češtině.
 
-  VALUE_ALIGNMENT: `
-  Jsi expert na partnerský business development a hodnocení strategické shody mezi organizacemi.
+## VSTUPNÍ DATA
+<[[DATA]]>
+
+## VÝSTUP
+
+Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
+
+<[[SCHEMA]]>`,
+
+  VALUE_ALIGNMENT: `Jsi expert na partnerský business development a hodnocení strategické shody mezi organizacemi.
 
 Dostaneš tři vstupy:
 1. Kontext naší organizace a soutěže
@@ -222,70 +302,32 @@ Při hodnocení ber v potaz:
 - Geografický, kulturní nebo regulatorní kontext, který může ovlivnit relevanci argumentů
 - Timing – existuje aktuální důvod, proč by partner mohl být otevřenější právě teď?
 
-Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
-
-{
-  "partnerSnapshot": "string – 2–3 věty: kdo je tento partner a na čem mu skutečně záleží podle dostupných dat, ne jen popis odvětví",
-
-  "argumentAlignment": [
-    {
-      "argumentId": "string – Název ze značky [Název | Důležitost] na začátku argumentu. Pokud značka chybí, vytvoř krátký český název.",
-      "argumentLabel": "string – celý název argumentu",
-      "relevance": "Vysoká|Střední|Nízká|Nevhodné",
-      "reasoning": "string – proč tento argument pro daného partnera funguje nebo nefunguje, s odkazem na konkrétní data z profilu",
-      "redFlags": "string|null – důvod, proč by argument mohl být kontraproduktivní nebo nevhodný"
-    }
-  ],
-
-  "top3Arguments": [
-    {
-      "rank": 1,
-      "argumentId": "string",
-      "whyItFits": "string – konkrétní důkaz z profilu partnera, proč tento argument rezonuje",
-      "howToFrame": "string – doporučený úhel pohledu a jazyk, jak argument formulovat pro tohoto partnera",
-      "whatToAvoid": "string – co neříkat nebo jak argument nezformulovat"
-    }
-  ],
-
-  "argumentsToDrop": [
-    {
-      "argumentId": "string",
-      "reason": "string – proč tento argument u tohoto partnera vynechat nebo odložit na later"
-    }
-  ],
-
-  "hookHypothesis": "string – 1–2 věty dokončující tuto větu: 'Jediný nejpřesvědčivější důvod, proč by [název partnera] měl na náš outreach reagovat právě teď, je...' Musí být konkrétní, aktuální a zaměřený na partnera – ne na nás.",
-
-  "recommendedContact": {
-    "primary": {
-      "name": "string|null",
-      "role": "string",
-      "reasoning": "string – proč je tato osoba nejlepší první kontakt pro tento konkrétní typ oslovení"
-    },
-    "alternatives": [
-      {
-        "name": "string|null",
-        "role": "string",
-        "tradeoff": "string – kdy a proč zvážit tuto osobu místo primárního kontaktu"
-      }
-    ]
-  },
-
-  "flagsAndRisks": [
-    "string – konkrétní nesoulad, citlivost nebo věc k ověření před odesláním outreache"
-  ],
-
-  "overallFitScore": "Vysoký|Střední|Nízký",
-  "overallFitReasoning": "string – 2–3 věty shrnující celkovou míru shody a hlavní důvod pro nebo proti oslovení tohoto partnera"
-}
-
 DŮLEŽITÉ:
 - Každý argument hodnoť na základě dat z profilu partnera, ne obecných předpokladů.
 - Pokud v profilu chybí data potřebná pro hodnocení, explicitně to uveď v poli reasoning nebo flagsAndRisks – nedomýšlej si.
 - hookHypothesis musí být specifická pro tohoto partnera a tento moment – ne generická fráze.
 - Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v top3 (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
-`,
+- Výstup bude v češtině.
 
-  OUTREACH_PREPARATION: `Jsi expert na psaní cold e-mailů. Vytvoř vysoce přizpůsobený oslovovací e-mail na základě poskytnuté šablony, kontaktu a náznakůsouladu. Vrať JSON objekt s poli: to (e-mailová adresa), subject (string), body (HTML string – každý odstavec v <p> tagu, text zabalený v <span> s inline font-family dle uživatelské zprávy).`,
+## VSTUPNÍ DATA
+<[[DATA]]>
+
+## VÝSTUP
+
+Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
+
+<[[SCHEMA]]>`,
+
+  OUTREACH_PREPARATION: `Jsi expert na psaní cold e-mailů. Vytvoř vysoce přizpůsobený oslovovací e-mail na základě poskytnuté šablony, kontaktu a náznakůsouladu.
+
+<[[DATA]]>
+
+<[[TEMPLATE]]>
+
+## VÝSTUP
+
+Vrať JSON objekt s touto přesnou strukturou:
+
+<[[SCHEMA]]>`,
 }

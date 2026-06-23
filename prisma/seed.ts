@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { DEFAULT_PROMPT_NAMES } from '../config/pipeline'
+import { DEFAULT_PROMPT_NAMES, STEP_OUTPUT_SCHEMAS } from '../config/pipeline'
 import { readFileSync, readdirSync } from 'fs'
 import { join, basename, extname } from 'path'
 
@@ -59,6 +59,7 @@ async function main() {
 
   for (const [stepType, content] of Object.entries(prompts)) {
     const name = DEFAULT_PROMPT_NAMES[stepType] ?? 'Výchozí'
+    const outputSchema = STEP_OUTPUT_SCHEMAS[stepType] ?? null
     const existing = await prisma.systemPrompt.findFirst({
       where: { stepType: stepType as never, isSystem: true, authorId: systemUser.id },
     })
@@ -66,7 +67,7 @@ async function main() {
     if (existing) {
       await prisma.systemPrompt.update({
         where: { id: existing.id },
-        data: { name, content, isSystem: true },
+        data: { name, content, isSystem: true, outputSchema: outputSchema as any },
       })
       console.log(`  ↻ Updated: ${stepType} → "${name}"`)
     } else {
@@ -77,6 +78,7 @@ async function main() {
           stepType: stepType as never,
           authorId: systemUser.id,
           isSystem: true,
+          outputSchema: outputSchema as any,
         },
       })
       console.log(`  ✓ Created: ${stepType} → "${name}"`)
