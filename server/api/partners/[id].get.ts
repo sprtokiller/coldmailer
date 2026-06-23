@@ -12,21 +12,35 @@ export default defineEventHandler(async (event) => {
     where: { id },
     include: {
       contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+      pipelineRefs: {
+        where: projectId ? { pipelineRun: { projectId } } : undefined,
+        orderBy: { addedAt: 'desc' },
+        take: 1,
+        include: {
+          assignee: { select: { id: true, name: true, image: true } },
+          coAssignees: { select: { id: true, name: true, image: true } }
+        }
+      }
     },
   })
 
   if (!record) throw createError({ statusCode: 404, statusMessage: 'Not found' })
 
-  const assigneeRows = projectId
-    ? await prisma.interactionAssignee.findMany({
-        where: { interaction: { globalRecordId: id, projectId } },
-        select: { user: { select: { id: true, name: true, image: true } } },
-        distinct: ['userId'],
-      })
-    : []
+  const currentRef = record.pipelineRefs[0]
+
+  const solutionAssignees = []
+  if (currentRef?.assignee) solutionAssignees.push(currentRef.assignee)
+  if (currentRef?.coAssignees) {
+    for (const ca of currentRef.coAssignees) {
+      if (ca.id !== currentRef.assignee?.id) solutionAssignees.push(ca)
+    }
+  }
 
   return {
     ...record,
-    assignees: assigneeRows.map(a => a.user),
+    pipelineRefId: currentRef?.id ?? null,
+    actionStatus: currentRef?.actionStatus ?? null,
+    dealStage: currentRef?.dealStage ?? null,
+    assignees: solutionAssignees,
   }
 })

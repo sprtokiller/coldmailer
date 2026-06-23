@@ -16,8 +16,19 @@ function escapeHtml(s: string): string {
 
 function renderLinks(text: string | null | undefined): string {
   if (!text) return ''
-  const escaped = escapeHtml(String(text))
-  return escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">$1</a>')
+  const raw = String(text)
+  const re = /\\?\[([^\[\]\n]+?)\\?\]\s*\(\s*<?((?:https?:\/\/|www\.)[^\s)>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g
+  const parts: string[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) parts.push(escapeHtml(raw.slice(last, m.index)))
+    const href = m[2].startsWith('www.') ? `https://${m[2]}` : m[2]
+    parts.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:opacity-80">${escapeHtml(m[1])}</a>`)
+    last = re.lastIndex
+  }
+  if (last < raw.length) parts.push(escapeHtml(raw.slice(last)))
+  return parts.join('')
 }
 
 const selectedRows = ref<Set<number>>(new Set())

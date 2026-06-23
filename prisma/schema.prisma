@@ -45,6 +45,8 @@ model User {
   interactionsCreated    Interaction[]         @relation("InteractionCreator")
   interactionAssignments InteractionAssignee[]
   projectRoles           UserProjectRole[]
+  assignedRefs           PipelineRecordRef[]   @relation("RefAssignee")
+  coAssignedRefs         PipelineRecordRef[]   @relation("RefCoAssignees")
 }
 
 model Role {
@@ -441,6 +443,12 @@ model PipelineRecordRef {
   addMethod               AddMethod
   localNote               String?
 
+  assigneeId              String?
+  assignee                User?        @relation("RefAssignee", fields: [assigneeId], references: [id])
+  coAssignees             User[]       @relation("RefCoAssignees")
+  actionStatus            ActionStatus?
+  dealStage               DealStage?
+
   @@unique([pipelineRunId, stepId, globalRecordId])
   @@index([stepId, isSelectedForProcessing])
 }
@@ -508,8 +516,6 @@ model Interaction {
   projectId      String
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type           InteractionType
-  actionStatus   ActionStatus?
-  dealStage      DealStage?
 
   content   String?
   createdBy String

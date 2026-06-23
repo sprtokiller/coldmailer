@@ -13,8 +13,6 @@ interface InteractionAssignee { userId: string; user: AssigneeUser }
 interface Interaction {
   id: string
   type: 'NOTE' | 'EMAIL' | 'FULFILLMENT'
-  actionStatus: 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'BEFORE_MEETING' | 'NONE' | null
-  dealStage: 'CONTACTED' | 'NEGOTIATING' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | 'PARTNER' | 'COMPLETED' | null
   content: string | null
   createdAt: string
   updatedAt: string
@@ -37,8 +35,6 @@ interface CrossProjectMeta {
   projectName: string
   interactionCount: number
   lastActivityAt: string | null
-  dealStages: string[]
-  actionStatuses: string[]
   assigneeNames: string[]
 }
 interface InteractionsResponse {
@@ -50,6 +46,8 @@ interface Partner {
   id: string; canonicalName: string; payload: Record<string, string>
   contacts: Contact[]
   assignees: AssigneeUser[]
+  actionStatus: 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'BEFORE_MEETING' | 'NONE' | null
+  dealStage: 'CONTACTED' | 'NEGOTIATING' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | 'PARTNER' | 'COMPLETED' | null
 }
 interface AppUser { id: string; name: string; image: string | null; email: string }
 
@@ -104,11 +102,10 @@ const primaryContact = computed(() => partner.value?.contacts.find(c => c.isPrim
 
 // ── Filter ───────────────────────────────────────────────────────────────────
 
-type TypeFilter = 'ALL' | 'NOTE' | 'EMAIL' | 'FULFILLMENT'
-const typeFilter = ref<TypeFilter>('ALL')
+type TypeFilter = 'NOTE' | 'EMAIL' | 'FULFILLMENT'
+const typeFilter = ref<TypeFilter>('EMAIL')
 
 const filteredInteractions = computed(() => {
-  if (typeFilter.value === 'ALL') return interactions.value
   return interactions.value.filter(i => i.type === typeFilter.value)
 })
 
@@ -220,12 +217,12 @@ async function saveEdit() {
   await refreshInteractions()
 }
 
-async function updateStatus(iId: string, field: 'actionStatus' | 'dealStage', value: string | null) {
-  await $fetch(`/api/partners/${id}/interactions/${iId}`, {
+async function updateStatus(field: 'actionStatus' | 'dealStage', value: string | null) {
+  await $fetch(`/api/partners/${id}/pipeline-ref`, {
     method: 'PATCH',
     body: { [field]: value },
   })
-  await refreshInteractions()
+  await refreshPartner()
 }
 
 async function updateFulfillment(iId: string, myToThem: string | null, themToUs: string | null) {
@@ -237,24 +234,31 @@ async function updateFulfillment(iId: string, myToThem: string | null, themToUs:
 }
 
 async function deleteInteraction(iId: string) {
+  if (!confirm('Opravdu chcete smazat tuto položku? Tato akce je nevratná.')) return
   await $fetch(`/api/partners/${id}/interactions/${iId}`, { method: 'DELETE' })
   await refresh()
 }
 
-async function addAssignee(iId: string) {
+const showAddAssignee = ref(false)
+
+async function addSolutionAssignee() {
   if (!addAssigneeUserId.value) return
-  await $fetch(`/api/partners/${id}/interactions/${iId}/assignees`, {
-    method: 'POST',
-    body: { userId: addAssigneeUserId.value },
+  await $fetch(`/api/partners/${id}/pipeline-ref`, {
+    method: 'PATCH',
+    body: { addCoAssigneeId: addAssigneeUserId.value },
   })
   addAssigneeUserId.value = ''
-  addAssigneeInteractionId.value = null
-  await refreshInteractions()
+  showAddAssignee.value = false
+  await refreshPartner()
 }
 
-async function removeAssignee(iId: string, userId: string) {
-  await $fetch(`/api/partners/${id}/interactions/${iId}/assignees/${userId}`, { method: 'DELETE' })
-  await refreshInteractions()
+async function removeSolutionAssignee(userId: string) {
+  if (!confirm('Odstranit tohoto uživatele z řešitelů partnera?')) return
+  await $fetch(`/api/partners/${id}/pipeline-ref`, {
+    method: 'PATCH',
+    body: { removeCoAssigneeId: userId },
+  })
+  await refreshPartner()
 }
 
 function toggleEvent(evId: string) {
@@ -263,10 +267,10 @@ function toggleEvent(evId: string) {
   expandedEvents.value = s
 }
 
-function unassignedUsersFor(i: Interaction) {
-  const assigned = new Set(i.assignees.map(a => a.userId))
+const unassignedSolutionUsers = computed(() => {
+  const assigned = new Set(partner.value?.assignees.map(a => a.id))
   return (allUsers.value ?? []).filter(u => !assigned.has(u.id))
-}
+})
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -370,27 +374,71 @@ const TYPE_COLORS: Record<string, string> = {
         </div>
       </div>
 
-      <!-- Souhrnné přiřazení (read-only) -->
-      <div v-if="partner.assignees.length" class="mt-4 flex items-center gap-3 flex-wrap">
+      <!-- Partner Status (Pipeline) -->
+      <div v-if="canEditPartner || partner.dealStage || partner.actionStatus" class="mt-4 flex items-center gap-4 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500 font-medium">Fáze:</span>
+          <select
+            v-if="canEditPartner"
+            :value="partner.dealStage ?? ''"
+            class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
+            @change="updateStatus('dealStage', ($event.target as HTMLSelectElement).value || null)"
+          >
+            <option value="">—</option>
+            <option v-for="(label, key) in DEAL_STAGE_LABELS" :key="key" :value="key">{{ label }}</option>
+          </select>
+          <span v-else :class="['text-xs px-2 py-1 rounded font-medium', DEAL_STAGE_COLORS[partner.dealStage ?? ''] ?? 'bg-gray-100 text-gray-600']">{{ partner.dealStage ? DEAL_STAGE_LABELS[partner.dealStage] : '—' }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500 font-medium">Akce:</span>
+          <select
+            v-if="canEditPartner"
+            :value="partner.actionStatus ?? ''"
+            class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
+            @change="updateStatus('actionStatus', ($event.target as HTMLSelectElement).value || null)"
+          >
+            <option value="">—</option>
+            <option v-for="(label, key) in ACTION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+          </select>
+          <span v-else class="text-xs px-2 py-1 rounded font-medium bg-gray-100 text-gray-600">{{ partner.actionStatus ? ACTION_STATUS_LABELS[partner.actionStatus] : '—' }}</span>
+        </div>
+      </div>
+
+      <!-- Souhrnné přiřazení -->
+      <div v-if="partner.assignees.length || canEditPartner" class="mt-4 flex items-center gap-3 flex-wrap">
         <span class="text-xs text-gray-400 font-medium">Přiřazeni:</span>
-        <div class="flex items-center -space-x-1">
+        <div class="flex items-center gap-1">
           <template v-for="a in partner.assignees" :key="a.id">
-            <img
-              v-if="a.image"
-              :src="a.image"
-              :alt="a.name"
+            <button
+              v-if="canEditPartner"
+              class="group relative"
               :title="a.name"
-              class="w-7 h-7 rounded-full ring-2 ring-white object-cover"
-              referrerpolicy="no-referrer"
-            />
-            <div
-              v-else
-              :title="a.name"
-              class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-xs font-medium"
+              @click="removeSolutionAssignee(a.id)"
             >
-              {{ a.name.charAt(0).toUpperCase() }}
-            </div>
+              <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover group-hover:opacity-60" referrerpolicy="no-referrer" />
+              <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium group-hover:opacity-60">{{ a.name.charAt(0).toUpperCase() }}</div>
+              <span class="absolute -top-0.5 -right-0.5 hidden group-hover:flex w-3.5 h-3.5 bg-red-400 rounded-full items-center justify-center text-white text-[9px]">×</span>
+            </button>
+            <span v-else :title="a.name">
+              <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover" referrerpolicy="no-referrer" />
+              <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium">{{ a.name.charAt(0).toUpperCase() }}</div>
+            </span>
           </template>
+          <button
+            v-if="canEditPartner && !showAddAssignee"
+            class="w-7 h-7 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:border-indigo-300 text-xs transition-colors ml-1"
+            @click="showAddAssignee = true"
+          >+</button>
+          <select
+            v-if="showAddAssignee"
+            v-model="addAssigneeUserId"
+            class="text-xs px-1.5 py-0.5 ml-1 border border-gray-200 rounded text-gray-500 focus:outline-none focus:border-indigo-300 bg-white"
+            @change="addSolutionAssignee"
+            @blur="showAddAssignee = false"
+          >
+            <option value="">Přidat...</option>
+            <option v-for="u in unassignedSolutionUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
+          </select>
         </div>
       </div>
     </div>
@@ -423,11 +471,11 @@ const TYPE_COLORS: Record<string, string> = {
     <div class="flex items-center justify-between gap-4 mb-6">
       <div class="flex gap-1">
         <button
-          v-for="f in (['ALL', 'NOTE', 'EMAIL', 'FULFILLMENT'] as TypeFilter[])"
+          v-for="f in (['EMAIL', 'NOTE', 'FULFILLMENT'] as TypeFilter[])"
           :key="f"
           :class="['px-3 py-1.5 text-xs font-medium rounded-lg transition-colors', typeFilter === f ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100']"
           @click="typeFilter = f"
-        >{{ f === 'ALL' ? 'Vše' : TYPE_LABELS[f] }}</button>
+        >{{ TYPE_LABELS[f] }}</button>
       </div>
       <div class="flex gap-2">
         <button
@@ -506,12 +554,9 @@ const TYPE_COLORS: Record<string, string> = {
         <!-- Header row -->
         <div class="flex items-start justify-between gap-2 mb-2">
           <div class="flex items-center gap-2 flex-wrap">
-            <span :class="['text-[10px] px-1.5 py-0.5 rounded font-medium', TYPE_COLORS[i.type]]">{{ TYPE_LABELS[i.type] }}</span>
             <span v-if="i.type === 'EMAIL' && i.direction" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium', i.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
               {{ i.direction === 'SENT' ? '↑ Odesláno' : '↓ Obdrženo' }}
             </span>
-            <span v-if="i.dealStage" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium', DEAL_STAGE_COLORS[i.dealStage] ?? 'bg-gray-100 text-gray-600']">{{ DEAL_STAGE_LABELS[i.dealStage] ?? i.dealStage }}</span>
-            <span v-if="i.actionStatus && i.actionStatus !== 'NONE'" class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">{{ ACTION_STATUS_LABELS[i.actionStatus] }}</span>
           </div>
           <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
             <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click="startEdit(i)">upravit</button>
@@ -563,71 +608,20 @@ const TYPE_COLORS: Record<string, string> = {
           <span class="text-xs text-gray-300">{{ fmtDate(i.type === 'EMAIL' && i.sentAt ? i.sentAt : i.createdAt) }}</span>
           <span v-if="i.createdAt !== i.updatedAt" class="text-xs text-gray-300">(upraveno)</span>
 
-          <!-- Assignee chips -->
+          <!-- Assignee chips (co-authors) -->
           <div class="flex items-center gap-1 ml-auto">
             <template v-for="a in i.assignees" :key="a.userId">
-              <button
-                v-if="i.canEdit"
-                class="group relative"
-                :title="a.user.name"
-                @click="removeAssignee(i.id, a.userId)"
-              >
-                <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" class="w-5 h-5 rounded-full ring-1 ring-white object-cover group-hover:opacity-60" referrerpolicy="no-referrer" />
-                <div v-else class="w-5 h-5 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[9px] font-medium group-hover:opacity-60">{{ a.user.name.charAt(0).toUpperCase() }}</div>
-                <span class="absolute -top-0.5 -right-0.5 hidden group-hover:flex w-3 h-3 bg-red-400 rounded-full items-center justify-center text-white text-[7px]">×</span>
-              </button>
-              <span v-else :title="a.user.name">
+              <span :title="a.user.name + ' (spoluautor)'">
                 <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" class="w-5 h-5 rounded-full ring-1 ring-white object-cover" referrerpolicy="no-referrer" />
                 <div v-else class="w-5 h-5 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[9px] font-medium">{{ a.user.name.charAt(0).toUpperCase() }}</div>
               </span>
             </template>
-            <button
-              v-if="i.canEdit && addAssigneeInteractionId !== i.id"
-              class="w-5 h-5 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:border-indigo-300 text-[10px] transition-colors"
-              @click="addAssigneeInteractionId = i.id"
-            >+</button>
-            <select
-              v-if="addAssigneeInteractionId === i.id"
-              v-model="addAssigneeUserId"
-              class="text-xs px-1.5 py-0.5 border border-gray-200 rounded text-gray-500 focus:outline-none focus:border-indigo-300 bg-white"
-              @change="addAssignee(i.id)"
-              @blur="addAssigneeInteractionId = null"
-            >
-              <option value="">Přidat...</option>
-              <option v-for="u in unassignedUsersFor(i)" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Status controls (inline) -->
-        <div v-if="i.canEdit" class="flex items-center gap-3 mt-2 pt-2 border-t border-gray-50">
-          <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-gray-400">Stav:</span>
-            <select
-              :value="i.dealStage ?? ''"
-              class="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded text-gray-600 focus:outline-none focus:border-indigo-300 bg-white"
-              @change="updateStatus(i.id, 'dealStage', ($event.target as HTMLSelectElement).value || null)"
-            >
-              <option value="">—</option>
-              <option v-for="(label, key) in DEAL_STAGE_LABELS" :key="key" :value="key">{{ label }}</option>
-            </select>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-gray-400">Akce:</span>
-            <select
-              :value="i.actionStatus ?? ''"
-              class="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded text-gray-600 focus:outline-none focus:border-indigo-300 bg-white"
-              @change="updateStatus(i.id, 'actionStatus', ($event.target as HTMLSelectElement).value || null)"
-            >
-              <option value="">—</option>
-              <option v-for="(label, key) in ACTION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
-            </select>
           </div>
         </div>
       </div>
 
       <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm">
-        {{ typeFilter === 'ALL' ? 'Zatím žádná jednání — přidejte první interakci' : 'Žádná jednání tohoto typu' }}
+        Žádná jednání tohoto typu
       </p>
     </div>
 
@@ -652,7 +646,6 @@ const TYPE_COLORS: Record<string, string> = {
           </div>
           <div class="flex items-center gap-3 flex-wrap text-xs text-gray-500">
             <span v-if="cp.lastActivityAt">Poslední aktivita: {{ fmtDateShort(cp.lastActivityAt) }}</span>
-            <span v-for="ds in cp.dealStages" :key="ds" :class="['px-1.5 py-0.5 rounded', DEAL_STAGE_COLORS[ds] ?? 'bg-gray-100 text-gray-600']">{{ DEAL_STAGE_LABELS[ds] ?? ds }}</span>
             <span v-if="cp.assigneeNames.length" class="text-gray-400">{{ cp.assigneeNames.join(', ') }}</span>
           </div>
         </div>

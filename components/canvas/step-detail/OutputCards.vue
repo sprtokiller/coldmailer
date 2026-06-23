@@ -49,7 +49,7 @@ const { stepType, ppProfiles, vaAlignments, opEmails, oeResult, expandedCardIdx,
         </div>
         <div v-if="getArr(profile, 'recentHighlights').length > 0" class="mb-2">
           <div class="text-xs font-medium text-gray-400 mb-1">Novinky</div>
-          <ul class="space-y-0.5 text-xs text-gray-500 list-disc list-inside"><li v-for="(hl, hi) in getArr(profile, 'recentHighlights')" :key="hi">{{ hl }}</li></ul>
+          <ul class="space-y-0.5 text-xs text-gray-500 list-disc list-inside"><li v-for="(hl, hi) in getArr(profile, 'recentHighlights')" :key="hi" v-html="renderLinks(String(hl))" /></ul>
         </div>
         <p v-if="getStr(profile, 'activities')" class="text-xs text-gray-500 mb-2" v-html="renderLinks(getStr(profile, 'activities'))" />
         <p v-if="getStr(profile, 'researchNotes')" class="text-xs text-gray-400 italic" v-html="'Poznámky: ' + renderLinks(getStr(profile, 'researchNotes'))" />

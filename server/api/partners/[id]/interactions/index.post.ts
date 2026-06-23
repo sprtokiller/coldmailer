@@ -46,11 +46,6 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(session.id, projectId)
   const assigneeIds = body.assigneeIds ?? []
 
-  // Auto-add creator as assignee if they don't have edit_all and aren't already in the list
-  if (!access.canEditAll && !access.isAdmin && !assigneeIds.includes(session.id)) {
-    assigneeIds.push(session.id)
-  }
-
   const interaction = await prisma.interaction.create({
     data: {
       globalRecordId,

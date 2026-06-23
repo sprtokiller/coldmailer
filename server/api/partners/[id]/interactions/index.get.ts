@@ -6,8 +6,6 @@ import { getInteractionAccess } from '~/server/utils/projectPermissions'
 const META_SELECT = {
   id: true,
   type: true,
-  actionStatus: true,
-  dealStage: true,
   createdAt: true,
   updatedAt: true,
   createdBy: true,
@@ -68,8 +66,6 @@ export default defineEventHandler(async (event) => {
       return {
         id: i.id,
         type: i.type,
-        actionStatus: i.actionStatus,
-        dealStage: i.dealStage,
         createdAt: i.createdAt,
         updatedAt: i.updatedAt,
         createdBy: i.createdBy,
@@ -102,8 +98,6 @@ export default defineEventHandler(async (event) => {
     select: {
       projectId: true,
       project: { select: { id: true, name: true } },
-      actionStatus: true,
-      dealStage: true,
       updatedAt: true,
       assignees: {
         select: { userId: true, user: { select: { name: true } } },
@@ -126,8 +120,6 @@ export default defineEventHandler(async (event) => {
       projectName: string
       interactionCount: number
       lastActivityAt: Date | null
-      dealStages: Set<string>
-      actionStatuses: Set<string>
       assigneeNames: Set<string>
     }>()
 
@@ -139,8 +131,6 @@ export default defineEventHandler(async (event) => {
           projectName: i.project.name,
           interactionCount: 0,
           lastActivityAt: null,
-          dealStages: new Set(),
-          actionStatuses: new Set(),
           assigneeNames: new Set(),
         }
         byProject.set(i.projectId, entry)
@@ -149,15 +139,11 @@ export default defineEventHandler(async (event) => {
       if (!entry.lastActivityAt || i.updatedAt > entry.lastActivityAt) {
         entry.lastActivityAt = i.updatedAt
       }
-      if (i.dealStage) entry.dealStages.add(i.dealStage)
-      if (i.actionStatus) entry.actionStatuses.add(i.actionStatus)
       for (const a of i.assignees) entry.assigneeNames.add(a.user.name)
     }
 
     crossProjectSummary = [...byProject.values()].map(e => ({
       ...e,
-      dealStages: [...e.dealStages],
-      actionStatuses: [...e.actionStatuses],
       assigneeNames: [...e.assigneeNames],
     }))
   }

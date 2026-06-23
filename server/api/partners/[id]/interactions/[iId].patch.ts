@@ -3,12 +3,10 @@ import { requireInteractionAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const iId = getRouterParam(event, 'iId')!
-  await requireInteractionAccess(event, iId, 'edit')
+  const { session, interaction } = await requireInteractionAccess(event, iId, 'edit')
 
   const body = await readBody<{
     content?: string
-    actionStatus?: string | null
-    dealStage?: string | null
     direction?: 'SENT' | 'RECEIVED'
     subject?: string
     sentAt?: string
@@ -20,9 +18,15 @@ export default defineEventHandler(async (event) => {
 
   const data: Record<string, any> = {}
 
+  // If someone other than the creator edits, add them as a co-author (InteractionAssignee)
+  const isCreator = interaction.createdBy === session.id
+  const isAlreadyAssignee = interaction.assignees.some(a => a.userId === session.id)
+  
+  if (!isCreator && !isAlreadyAssignee) {
+    data.assignees = { create: { userId: session.id } }
+  }
+
   if (body.content !== undefined) data.content = body.content?.trim() || null
-  if (body.actionStatus !== undefined) data.actionStatus = body.actionStatus
-  if (body.dealStage !== undefined) data.dealStage = body.dealStage
   if (body.direction !== undefined) data.direction = body.direction
   if (body.subject !== undefined) data.subject = body.subject?.trim() || null
   if (body.sentAt !== undefined) data.sentAt = body.sentAt ? new Date(body.sentAt) : null

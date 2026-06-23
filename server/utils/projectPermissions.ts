@@ -83,16 +83,17 @@ export async function requireInteractionAccess(
 
   const access = await getInteractionAccess(session.id, interaction.projectId)
   const isAssignee = interaction.assignees.some(a => a.userId === session.id)
+  const isCreator = interaction.createdBy === session.id
 
   if (mode === 'view') {
-    if (!access.canViewAll && !isAssignee && !access.isAdmin) {
+    if (!access.canViewAll && !isAssignee && !isCreator && !access.isAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'K tomuto jednání nemáte přístup.' })
     }
   } else {
-    if (!access.canEditAll && !isAssignee && !access.isAdmin) {
+    if (!access.canEditAll && !isAssignee && !isCreator && !access.isAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění editovat toto jednání.' })
     }
   }
 
-  return { session, interaction, access, isAssignee }
+  return { session, interaction, access, isAssignee, isCreator }
 }

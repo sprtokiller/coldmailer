@@ -196,54 +196,28 @@ async function collectPartnerEmails(
   userId: string,
   isSuperAdmin: boolean,
 ): Promise<Map<string, PartnerEmailEntry[]>> {
-  let projectIds: string[]
-
-  if (isSuperAdmin) {
-    const projects = await prisma.project.findMany({ select: { id: true } })
-    projectIds = projects.map(p => p.id)
-  } else {
-    const directProjects = await prisma.userProject.findMany({
-      where: { userId },
-      select: { projectId: true },
-    })
-    const userGroups = await prisma.userGroup.findMany({
-      where: { userId },
-      select: { groupId: true },
-    })
-    const groupProjects = userGroups.length > 0
-      ? await prisma.project.findMany({
-          where: { groupId: { in: userGroups.map(g => g.groupId) } },
-          select: { id: true },
-        })
-      : []
-
-    projectIds = [...new Set([
-      ...directProjects.map(p => p.projectId),
-      ...groupProjects.map(p => p.id),
-    ])]
-  }
-
-  if (projectIds.length === 0) return new Map()
-
+  // Find GlobalRecords where the user is primary assignee or co-assignee
   const globalRecords = await prisma.globalRecord.findMany({
     where: {
-      OR: [
-        { interactions: { some: { projectId: { in: projectIds } } } },
-        { pipelineRefs: { some: { pipelineRun: { projectId: { in: projectIds } } } } },
-        { createdBy: userId },
-      ],
+      pipelineRefs: {
+        some: {
+          OR: [
+            { assigneeId: userId },
+            { coAssignees: { some: { id: userId } } },
+          ],
+        },
+      },
     },
     select: {
       id: true,
       contacts: { select: { address: true } },
-      interactions: {
-        where: { projectId: { in: projectIds } },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { projectId: true },
-      },
       pipelineRefs: {
-        where: { pipelineRun: { projectId: { in: projectIds } } },
+        where: {
+          OR: [
+            { assigneeId: userId },
+            { coAssignees: { some: { id: userId } } },
+          ],
+        },
         orderBy: { addedAt: 'desc' },
         take: 1,
         select: { pipelineRun: { select: { projectId: true } } },
@@ -254,10 +228,8 @@ async function collectPartnerEmails(
   const map = new Map<string, PartnerEmailEntry[]>()
 
   for (const record of globalRecords) {
-    const projectId =
-      record.interactions[0]?.projectId
-      ?? record.pipelineRefs[0]?.pipelineRun.projectId
-      ?? projectIds[0]
+    const projectId = record.pipelineRefs[0]?.pipelineRun.projectId
+    if (!projectId) continue
 
     for (const contact of record.contacts) {
       const email = contact.address.toLowerCase()
