@@ -7,7 +7,6 @@ const STEP_LABELS: Record<string, string> = {
   PARTNER_PROFILING: 'Profilování partnerů',
   VALUE_ALIGNMENT: 'Value Alignment',
   OUTREACH_PREPARATION: 'Příprava oslovení',
-  OUTREACH_EXECUTION: 'Odeslání oslovení',
 }
 
 const STEP_ORDER = [
@@ -16,7 +15,6 @@ const STEP_ORDER = [
   'PARTNER_PROFILING',
   'VALUE_ALIGNMENT',
   'OUTREACH_PREPARATION',
-  'OUTREACH_EXECUTION',
 ]
 
 // Counts from outputData when no PipelineRecordRefs exist yet (legacy runs)
@@ -41,12 +39,6 @@ function countsFromOutputData(stepType: string, outputData: unknown) {
 
   if (stepType === 'PARTNER_PROFILING' || stepType === 'VALUE_ALIGNMENT' || stepType === 'OUTREACH_PREPARATION') {
     const total = Array.isArray(outputData) ? outputData.length : 0
-    return total > 0 ? { total } : null
-  }
-
-  if (stepType === 'OUTREACH_EXECUTION') {
-    const obj = outputData as Record<string, unknown> | null
-    const total = (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.gmailDraftId) ? 1 : 0
     return total > 0 ? { total } : null
   }
 

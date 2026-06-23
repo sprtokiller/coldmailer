@@ -15,21 +15,8 @@ const draftKeys = computed(() => {
   return set
 })
 
-const sentKeys = computed(() => {
-  const set = new Set<string>()
-  if (!pipeline.run?.steps) return set
-  for (const s of pipeline.run.steps) {
-    if (s.stepType === 'OUTREACH_EXECUTION' && s.status === 'COMPLETED' && s.outputData) {
-      const data = s.outputData as Record<string, unknown>
-      if (data.partnerName) set.add(normalizeKey(data.partnerName))
-    }
-  }
-  return set
-})
-
-function getTag(name: string): 'sent' | 'draft' | null {
+function getTag(name: string): 'draft' | null {
   const key = normalizeKey(name)
-  if (sentKeys.value.has(key)) return 'sent'
   if (draftKeys.value.has(key)) return 'draft'
   return null
 }
@@ -120,11 +107,7 @@ function selectPartner(name: string) {
 
         <!-- Tag -->
         <span
-          v-if="getTag(p.name) === 'sent'"
-          class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-green-100 text-green-600"
-        >Odesláno</span>
-        <span
-          v-else-if="getTag(p.name) === 'draft'"
+          v-if="getTag(p.name) === 'draft'"
           class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-600"
         >Draft</span>
 

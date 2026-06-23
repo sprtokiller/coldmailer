@@ -48,10 +48,6 @@ export default defineEventHandler(async (event) => {
       return seen.size
     }
 
-    const sentCount = run.steps.filter(
-      s => s.stepType === 'OUTREACH_EXECUTION' && s.status === 'COMPLETED',
-    ).length
-
     return {
       id: run.id,
       name: run.name,
@@ -64,7 +60,6 @@ export default defineEventHandler(async (event) => {
         profiles: arrayCount('PARTNER_PROFILING'),
         alignments: arrayCount('VALUE_ALIGNMENT'),
         outreach: arrayCount('OUTREACH_PREPARATION'),
-        sent: sentCount > 0 ? sentCount : null,
       },
     }
   })

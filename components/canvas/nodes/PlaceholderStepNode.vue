@@ -30,19 +30,17 @@ const STEP_NUMBERS: Record<string, string> = {
   PARTNER_PROFILING:    'Krok 3',
   VALUE_ALIGNMENT:      'Krok 4',
   OUTREACH_PREPARATION: 'Krok 5',
-  OUTREACH_EXECUTION:   'Krok 6',
 }
 
 const OUTPUT_LABELS: Record<string, string> = {
   PARTNER_PROFILING:    'profilů',
   VALUE_ALIGNMENT:      'alignmentů',
   OUTREACH_PREPARATION: 'e-mailů',
-  OUTREACH_EXECUTION:   'odesláno',
 }
 
 const total = computed(() => props.data.recordCounts.total)
 const outputLabel = computed(() => OUTPUT_LABELS[props.data.stepType] ?? 'záznamů')
-const isLast = computed(() => props.data.stepType === 'OUTREACH_EXECUTION')
+const isLast = computed(() => props.data.stepType === 'OUTREACH_PREPARATION')
 </script>
 
 <template>

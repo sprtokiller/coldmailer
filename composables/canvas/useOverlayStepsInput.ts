@@ -41,10 +41,6 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
   const s5Alignments = computed(() =>
     stepType.value === 'OUTREACH_PREPARATION' && pl ? (pl.step5Alignments?.() ?? []) : []
   )
-  const s6Emails = computed(() =>
-    stepType.value === 'OUTREACH_EXECUTION' && pl ? (pl.outreachEmails?.() ?? []) : []
-  )
-
   // Output data for result cards
   const ppProfiles = computed((): Array<Record<string, unknown>> =>
     stepType.value === 'PARTNER_PROFILING' ? (pl?.profilingOutputProfiles?.('PARTNER_PROFILING') ?? []) : []
@@ -55,12 +51,6 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
   const opEmails = computed((): Array<Record<string, unknown>> =>
     stepType.value === 'OUTREACH_PREPARATION' ? (pl?.outreachEmails?.() ?? []) : []
   )
-  const oeResult = computed((): Record<string, unknown> | null => {
-    if (stepType.value !== 'OUTREACH_EXECUTION') return null
-    const d = pl?.getStepResult?.('OUTREACH_EXECUTION')?.outputData
-    return (d && typeof d === 'object' && !Array.isArray(d)) ? d as Record<string, unknown> : null
-  })
-
   // PI output items (for "Zpracováno" badge and partner→source mapping)
   const piOutputItems = computed(() => {
     const data = pl?.getStepResult?.('PARTNER_IDENTIFICATION')?.outputData as { items?: unknown[] } | null
@@ -164,8 +154,8 @@ export function useOverlayStepsInput(core: OverlayCoreState) {
   }
 
   return {
-    pl, s3Candidates, s4Partners, s5Alignments, s6Emails,
-    ppProfiles, vaAlignments, opEmails, oeResult,
+    pl, s3Candidates, s4Partners, s5Alignments,
+    ppProfiles, vaAlignments, opEmails,
     piOutputItems, piProcessedItemNames, piPartnerSources,
     piNode, piStepId, piRecords, piPartnerMap,
     partnerRunCount, piPipelineCount, piPayload, recordProvenance,

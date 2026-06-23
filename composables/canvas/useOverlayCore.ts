@@ -5,7 +5,7 @@ import type { StepRecord } from '~/composables/usePipelineCanvas'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const STEP_ORDER = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
+export const STEP_ORDER = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION']
 
 export const SOURCE_CONFIG: Record<string, { label: string; cls: string }> = {
   MINI_DEEP_RESEARCH: { label: 'AI Výsledek', cls: 'bg-blue-100 text-blue-700' },
@@ -38,7 +38,7 @@ export const SIZE_LABELS: Record<string, string> = {
 const STEP_LABELS: Record<string, string> = {
   MARKET_SCANNING: 'Market Scanning', PARTNER_IDENTIFICATION: 'Identifikace partnerů',
   PARTNER_PROFILING: 'Profilování partnerů', VALUE_ALIGNMENT: 'Value Alignment',
-  OUTREACH_PREPARATION: 'Příprava oslovení', OUTREACH_EXECUTION: 'Odeslání oslovení',
+  OUTREACH_PREPARATION: 'Příprava oslovení',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ export function useOverlayCore() {
     return undefined
   })
   const isOutputStep = computed(() =>
-    ['PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(stepType.value ?? '')
+    ['PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'].includes(stepType.value ?? '')
   )
   const activeTab = ref<'input' | 'result' | 'config'>('result')
   const allRecords = computed<StepRecord[]>(() => stepId.value ? canvas.stepRecords.value[stepId.value] ?? [] : [])

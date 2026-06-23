@@ -32,7 +32,7 @@ const SIZE_LABELS: Record<string, string> = {
 const STEP_LABELS: Record<string, string> = {
   MARKET_SCANNING: 'Market Scanning', PARTNER_IDENTIFICATION: 'Identifikace partnerů',
   PARTNER_PROFILING: 'Profilování', VALUE_ALIGNMENT: 'Value Alignment',
-  OUTREACH_PREPARATION: 'Příprava oslovení', OUTREACH_EXECUTION: 'Odeslání',
+  OUTREACH_PREPARATION: 'Příprava oslovení',
 }
 
 interface PipelineRef {

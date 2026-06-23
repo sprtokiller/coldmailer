@@ -13,7 +13,7 @@ export function useOverlay() {
   const edge = useOverlayEdge(core)
 
   const { canvas, pipeline, stepType, stepId, activeTab, activeNode, activeEdgeId, isOutputStep, totalRecords } = core
-  const { pl, s4Partners, s5Alignments, s6Emails, ppProfiles, vaAlignments, opEmails, oeResult } = stepsInput
+  const { pl, s4Partners, s5Alignments, ppProfiles, vaAlignments, opEmails } = stepsInput
   const { msTotalSelected, msRecords } = msInput
 
   // PI result records (depends on both stepsInput.piPartnerSources and records.searchFilter)
@@ -36,14 +36,12 @@ export function useOverlay() {
   const inputTabLabel = computed(() => {
     if (stepType.value === 'PARTNER_IDENTIFICATION') return 'Vstup'
     if (stepType.value === 'VALUE_ALIGNMENT') return s4Partners.value.length > 0 ? `Vstup (${pl?.step4SelectedCount?.() ?? 0}/${s4Partners.value.length})` : 'Vstup'
-    if (stepType.value === 'OUTREACH_PREPARATION') return s5Alignments.value.length > 0 ? `Vstup (${pl?.step5SelectedCount?.() ?? 0}/${s5Alignments.value.length})` : 'Vstup'
-    return s6Emails.value.length > 0 ? `Vstup (${s6Emails.value.length})` : 'Vstup'
+    return s5Alignments.value.length > 0 ? `Vstup (${pl?.step5SelectedCount?.() ?? 0}/${s5Alignments.value.length})` : 'Vstup'
   })
   const resultTabLabel = computed(() => {
     if (stepType.value === 'PARTNER_PROFILING') return ppProfiles.value.length > 0 ? `Výsledek (${ppProfiles.value.length})` : 'Výsledek'
     if (stepType.value === 'VALUE_ALIGNMENT') return vaAlignments.value.length > 0 ? `Výsledek (${vaAlignments.value.length})` : 'Výsledek'
     if (stepType.value === 'OUTREACH_PREPARATION') return opEmails.value.length > 0 ? `Výsledek (${opEmails.value.length})` : 'Výsledek'
-    if (stepType.value === 'OUTREACH_EXECUTION') return oeResult.value ? 'Výsledek (1)' : 'Výsledek'
     return totalRecords.value > 0 ? `Výsledek (${totalRecords.value})` : 'Výsledek'
   })
   const tabItems = computed(() => {
@@ -78,7 +76,7 @@ export function useOverlay() {
     if (!node) { canvas.expandedSourceIds.value = new Set(); canvas.selectedNodeBorderId.value = null; return }
     const hasSourceFilter = !!canvas.activeSourceFilter.value
     const isPiExtraNode = canvas.selectedNodeId.value === 'pi-imported' || canvas.selectedNodeId.value === 'pi-globaldb'
-    const stepsWithInput = ['PARTNER_IDENTIFICATION', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION']
+    const stepsWithInput = ['PARTNER_IDENTIFICATION', 'OUTREACH_PREPARATION']
     activeTab.value = hasSourceFilter ? 'result'
       : node.stepType === 'MARKET_SCANNING' || node.stepType === 'PARTNER_PROFILING' || node.stepType === 'VALUE_ALIGNMENT' || isPiExtraNode ? 'config'
       : stepsWithInput.includes(node.stepType) ? 'input' : 'result'
@@ -98,7 +96,7 @@ export function useOverlay() {
     core.expandedCardIdx.value = null
     syncBorder()
     // Pre-load PI records for cross-pipeline indicator in steps 3-6
-    if (['PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(node.stepType)) {
+    if (['PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'].includes(node.stepType)) {
       if (stepsInput.piStepId.value && !canvas.stepRecords.value[stepsInput.piStepId.value]) {
         canvas.fetchStepRecords(stepsInput.piStepId.value)
       }

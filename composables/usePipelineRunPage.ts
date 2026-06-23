@@ -17,7 +17,6 @@ export const STEPS = [
   { key: 'PARTNER_PROFILING', label: 'Partner Profiling', description: 'Hloubkový průzkum konkrétního partnera včetně nalezení kontaktních osob.' },
   { key: 'VALUE_ALIGNMENT', label: 'Value Alignment', description: 'Seřadí prodejní argumenty podle relevance pro partnera.' },
   { key: 'OUTREACH_PREPARATION', label: 'Outreach Preparation', description: 'Vygeneruje přizpůsobený návrh e-mailu.' },
-  { key: 'OUTREACH_EXECUTION', label: 'Outreach Execution', description: 'Vytvoří návrh přímo v Gmailu.' },
 ] as const
 
 export type StepKey = typeof STEPS[number]['key']
@@ -289,14 +288,6 @@ export async function usePipelineRunPage() {
       }
       if (val === 'OUTREACH_PREPARATION') {
         selection.initStep5Selection()
-      }
-      if (val === 'OUTREACH_EXECUTION') {
-        if (!selection.step6SelectedPartnerName.value && outputUtils.outreachEmails().length > 0) {
-          const first = outputUtils.outreachEmails()[0]
-          const name = String(first.partnerName ?? first.name ?? '')
-          selection.step6SelectedPartnerName.value = name
-          initStep6Preview(name)
-        }
       }
     })
 

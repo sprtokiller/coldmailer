@@ -589,40 +589,6 @@ async function deleteSelectedRows() {
       </div>
     </template>
 
-    <template v-else-if="step.key === 'OUTREACH_EXECUTION'">
-      <div v-if="pipeline.getStepResult(step.key)?.outputData" class="rounded-xl border border-success/30 bg-success/5 p-5">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center shrink-0">
-            <svg class="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <p class="font-semibold text-success text-sm">Gmail draft vytvořen</p>
-        </div>
-        <div class="space-y-1.5 text-sm">
-          <div class="flex gap-3">
-            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Komu</span>
-            <span class="text-gray-700">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.to }}</span>
-          </div>
-          <div class="flex gap-3">
-            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Předmět</span>
-            <span class="text-gray-700 font-medium">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.subject }}</span>
-          </div>
-          <div class="flex gap-3">
-            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide w-16 shrink-0 pt-0.5">Draft ID</span>
-            <span class="text-gray-500 font-mono text-xs">{{ (pipeline.getStepResult(step.key)?.outputData as Record<string, unknown>)?.gmailDraftId }}</span>
-          </div>
-        </div>
-        <a
-          class="mt-4 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-          href="https://mail.google.com/mail/u/0/#drafts"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Otevřít drafty v Gmailu ↗
-        </a>
-      </div>
-    </template>
 
   </div>
 </template>

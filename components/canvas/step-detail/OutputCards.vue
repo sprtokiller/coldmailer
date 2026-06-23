@@ -2,7 +2,7 @@
 import { overlayKey } from '~/composables/canvas/useOverlay'
 import { getStr, getArr, getObj, renderLinks, CONTACT_TYPE_COLORS, CONFIDENCE_COLORS, SIZE_LABELS } from '~/composables/canvas/useOverlayCore'
 const o = inject(overlayKey)!
-const { stepType, ppProfiles, vaAlignments, opEmails, oeResult, expandedCardIdx, toggleCard, partnerRunCount } = o
+const { stepType, ppProfiles, vaAlignments, opEmails, expandedCardIdx, toggleCard, partnerRunCount } = o
 </script>
 
 <template>
@@ -129,19 +129,4 @@ const { stepType, ppProfiles, vaAlignments, opEmails, oeResult, expandedCardIdx,
     </div>
   </div>
 
-  <!-- OUTREACH_EXECUTION -->
-  <div v-else-if="stepType === 'OUTREACH_EXECUTION'" class="flex-1 overflow-y-auto p-5">
-    <CanvasEmptyState v-if="!oeResult" message="Nebyl vytvořen žádný draft. Spusťte krok." />
-    <div v-else class="space-y-3">
-      <div class="flex items-center gap-2">
-        <span class="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">✓ Draft vytvořen</span>
-        <span class="text-xs text-gray-400">Gmail Draft ID: {{ getStr(oeResult, 'gmailDraftId') }}</span>
-      </div>
-      <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-        <div><span class="text-xs text-gray-400 uppercase tracking-wide">Komu</span><p class="font-medium text-gray-800 mt-0.5">{{ getStr(oeResult, 'to') }}</p></div>
-        <div><span class="text-xs text-gray-400 uppercase tracking-wide">Předmět</span><p class="font-medium text-gray-800 mt-0.5">{{ getStr(oeResult, 'subject') }}</p></div>
-      </div>
-      <p class="text-xs text-gray-400 text-center">Draft je dostupný v Gmail v sekci Koncepty.</p>
-    </div>
-  </div>
 </template>

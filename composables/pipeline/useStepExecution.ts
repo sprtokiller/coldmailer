@@ -105,18 +105,6 @@ export function useStepExecution(
       const done = processedKeySet(outreachEmails(), ['partnerName', 'name'])
       rerunsExisting = selectedAlignments.some(a => done.has(String(a.name ?? '').toLowerCase().trim()))
       inputData = { partners: selectedAlignments }
-    } else if (stepKey === 'OUTREACH_EXECUTION') {
-      if (!step6PreviewTo.value || !step6PreviewSubject.value || !step6PreviewBody.value) {
-        alert('Vyplňte příjemce, předmět a tělo e-mailu v náhledu.')
-        return
-      }
-      rerunsExisting = hasExistingOutput(stepKey)
-      inputData = {
-        to: step6PreviewTo.value,
-        subject: step6PreviewSubject.value,
-        body: step6PreviewBody.value,
-        partnerName: step6SelectedPartnerName.value,
-      }
     } else {
       try {
         inputData = JSON.parse(cfg.inputData || '{}')

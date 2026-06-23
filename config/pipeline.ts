@@ -15,7 +15,6 @@ export const MODELS = {
   CLAUDE_SONNET: 'anthropic/claude-sonnet-4.6',
   CLAUDE_HAIKU:  'anthropic/claude-haiku-4.5',
   PIPELINE:      'pipeline',  // SerpAPI + Playwright + AI (display only)
-  GMAIL:         'gmail',     // Gmail API          (display only)
 } as const
  
 // ── Step → model mapping ──────────────────────────────────────────────────────
@@ -26,7 +25,6 @@ export const STEP_MODEL: Record<string, string> = {
 
   VALUE_ALIGNMENT:        MODELS.CLAUDE_SONNET,
   OUTREACH_PREPARATION:   MODELS.CLAUDE_SONNET,
-  OUTREACH_EXECUTION:     MODELS.GMAIL,
 }
 
 // Steps that use the deep-research model (live web search, long-running).
@@ -41,7 +39,6 @@ export const DEEP_RESEARCH_STEPS = new Set(
 export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
   [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',     cls: 'bg-blue-100 text-blue-700'      },
   [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet 4.5',         cls: 'bg-emerald-100 text-emerald-700' },
-  [MODELS.GMAIL]:         { label: 'Gmail API',                 cls: 'bg-red-100 text-red-700'         },
   [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
 }
 

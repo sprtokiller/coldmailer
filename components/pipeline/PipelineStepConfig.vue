@@ -352,18 +352,18 @@ async function confirmEditContextPart() {
     </Teleport>
 
     <!-- ── Step-specific config sections ───────────────────────────────────── -->
-    <ValueAlignmentConfig
+    <PipelineConfigValueAlignmentConfig
       v-if="step.key === 'VALUE_ALIGNMENT'"
       :step="step"
       :submit-attempted="submitAttempted"
     />
 
-    <PartnerProfilingConfig
+    <PipelineConfigPartnerProfilingConfig
       v-if="step.key === 'PARTNER_PROFILING'"
       :step="step"
     />
 
-    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'OUTREACH_EXECUTION'].includes(step.key)" class="mt-4">
+    <div v-if="idx > 0 && !['PARTNER_PROFILING', 'PARTNER_IDENTIFICATION', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'].includes(step.key)" class="mt-4">
       <label class="block text-xs font-medium text-gray-500 mb-1">
         Vstupní data (JSON)
         <button type="button" class="ml-2 text-primary hover:underline" @click="pipeline.getConfig(step.key).inputData = pipeline.prevStepOutput(step.key)">
@@ -378,21 +378,16 @@ async function confirmEditContextPart() {
       />
     </div>
 
-    <OutreachPrepConfig
+    <PipelineConfigOutreachPrepConfig
       v-if="step.key === 'OUTREACH_PREPARATION'"
       :step="step"
       :submit-attempted="submitAttempted"
     />
 
-    <OutreachExecConfig
-      v-if="step.key === 'OUTREACH_EXECUTION'"
-      :step="step"
-    />
-
     <!-- ── Execute button ──────────────────────────────────────────────────── -->
     <div class="flex items-center gap-2 flex-wrap mt-4">
       <button
-        :disabled="pipeline.executingStep !== null || (step.key === 'OUTREACH_EXECUTION' && (!pipeline.step6SelectedPartnerName || !pipeline.step6PreviewTo || !pipeline.step6PreviewSubject || !pipeline.step6PreviewBody))"
+        :disabled="pipeline.executingStep !== null"
         class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
         @click="handleExecute"
       >
@@ -424,6 +419,6 @@ async function confirmEditContextPart() {
     </div>
 
     <!-- ── Progress display ────────────────────────────────────────────────── -->
-    <StepProgressDisplay :step="step" />
+    <PipelineConfigStepProgressDisplay :step="step" />
   </div>
 </template>
