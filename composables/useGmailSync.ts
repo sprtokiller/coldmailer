@@ -1,10 +1,22 @@
 export function useGmailSync() {
+  const syncError = useState<'auth-error' | 'error' | null>('gmail-sync-error', () => null)
   const interval = ref<ReturnType<typeof setInterval>>()
 
   async function sync() {
     try {
-      await $fetch('/api/gmail/sync', { method: 'POST' })
-    } catch {}
+      const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST' })
+      if (res.skipped === 'auth-error') {
+        syncError.value = 'auth-error'
+      } else if (res.skipped === 'error') {
+        syncError.value = 'error'
+      } else {
+        syncError.value = null
+      }
+      return res
+    } catch {
+      syncError.value = 'error'
+      return { synced: 0 }
+    }
   }
 
   onMounted(() => {
@@ -15,4 +27,6 @@ export function useGmailSync() {
   onUnmounted(() => {
     if (interval.value) clearInterval(interval.value)
   })
+
+  return { syncError, triggerSync: sync }
 }

@@ -4,6 +4,7 @@ import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
   const session = await requirePermission(event, 'partners.create')
@@ -49,6 +50,25 @@ export default defineEventHandler(async (event) => {
     eventType: 'MANUAL_CREATE',
   })
 
+  const contacts = Array.isArray((body.payload as any)?.contacts) ? (body.payload as any).contacts : []
+  const emailContacts = contacts.filter((c: any) => c.email?.trim())
+
+  for (let i = 0; i < emailContacts.length; i++) {
+    const email = emailContacts[i].email.trim()
+    try {
+      await prisma.partnerContact.create({
+        data: {
+          globalRecordId: record.id,
+          address: email,
+          label: [emailContacts[i].firstName, emailContacts[i].lastName].filter(Boolean).join(' ') || null,
+          isPrimary: i === 0,
+        },
+      })
+    } catch (e: any) {
+      if (e?.code !== 'P2002') throw e
+    }
+  }
+
   let interaction = null
   if (body.createInteraction) {
     const scope = await getActiveScope(event)
@@ -72,6 +92,15 @@ export default defineEventHandler(async (event) => {
         },
       })
     }
+  }
+
+  if (emailContacts.length > 0) {
+    getEmailSyncHistoryDays().then(historyDays => {
+      for (const c of emailContacts) {
+        syncGmailForPartnerEmail(session.id, record.id, c.email.trim(), historyDays)
+          .catch(err => console.warn('[gmail-sync] Targeted sync failed:', err.message ?? err))
+      }
+    })
   }
 
   return { record, interaction }

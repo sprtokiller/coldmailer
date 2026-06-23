@@ -66,6 +66,27 @@ async function refresh() {
   await Promise.all([refreshPartner(), refreshInteractions()])
 }
 
+// ── Sync ─────────────────────────────────────────────────────────────────────
+
+const syncing = ref(false)
+const syncResult = ref<string | null>(null)
+
+async function syncNow() {
+  syncing.value = true
+  syncResult.value = null
+  try {
+    const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST' })
+    syncResult.value = res.skipped ? 'Sync přeskočen' : `${res.synced} emailů`
+    await refreshInteractions()
+    setTimeout(() => { syncResult.value = null }, 3000)
+  } catch {
+    syncResult.value = 'Sync selhal'
+    setTimeout(() => { syncResult.value = null }, 3000)
+  } finally {
+    syncing.value = false
+  }
+}
+
 // ── UI state ──────────────────────────────────────────────────────────────────
 
 const showContactsPanel = ref(false)
@@ -316,6 +337,16 @@ const TYPE_COLORS: Record<string, string> = {
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
+          <button
+            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+            :disabled="syncing"
+            @click="syncNow"
+          >
+            <svg v-if="syncing" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+            <svg v-else class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            {{ syncing ? 'Sync...' : 'Sync' }}
+          </button>
+          <span v-if="syncResult" class="text-xs text-green-600">{{ syncResult }}</span>
           <button
             class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
             @click="showContactsPanel = !showContactsPanel"

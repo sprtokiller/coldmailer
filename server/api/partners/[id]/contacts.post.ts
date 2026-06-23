@@ -1,8 +1,9 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const session = await requireAuth(event)
   const globalRecordId = getRouterParam(event, 'id')!
   const { address, label, isPrimary } = await readBody(event)
 
@@ -15,7 +16,14 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return prisma.partnerContact.create({
+  const contact = await prisma.partnerContact.create({
     data: { globalRecordId, address, label: label || null, isPrimary: !!isPrimary },
   })
+
+  getEmailSyncHistoryDays().then(historyDays =>
+    syncGmailForPartnerEmail(session.id, globalRecordId, address, historyDays)
+      .catch(err => console.warn('[gmail-sync] Targeted sync failed:', err.message ?? err)),
+  )
+
+  return contact
 })

@@ -29,16 +29,16 @@ export async function syncGmailForUser(userId: string): Promise<{ synced: number
 
   const accessToken = await ensureFreshToken(user)
 
-  const afterDate = computeSyncStart(user.lastGmailSync, user.createdAt)
+  const historyDays = await getEmailSyncHistoryDays()
+  const afterDate = computeSyncStart(user.lastGmailSync, user.createdAt, historyDays)
   const partnerEmailMap = await collectPartnerEmails(user.id, user.isSuperAdmin)
 
   if (partnerEmailMap.size === 0) {
-    await prisma.user.update({ where: { id: userId }, data: { lastGmailSync: new Date() } })
     return { synced: 0 }
   }
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
-  const query = `after:${afterTimestamp}`
+  const query = `after:${afterTimestamp} -in:draft`
 
   let synced = 0
   let pageToken: string | undefined
@@ -97,16 +97,97 @@ async function ensureFreshToken(user: {
   return user.accessToken
 }
 
-function computeSyncStart(lastSync: Date | null, createdAt: Date): Date {
+export async function getEmailSyncHistoryDays(): Promise<number> {
+  const row = await prisma.systemConfig.findUnique({ where: { key: 'email.syncHistoryDays' } })
+  return typeof row?.value === 'number' ? (row.value as number) : 30
+}
+
+function computeSyncStart(lastSync: Date | null, createdAt: Date, historyDays: number): Date {
   if (lastSync) return lastSync
 
-  const oneMonthBeforeCreation = new Date(createdAt)
-  oneMonthBeforeCreation.setMonth(oneMonthBeforeCreation.getMonth() - 1)
+  const lookback = new Date(createdAt)
+  lookback.setDate(lookback.getDate() - historyDays)
 
   const oneYearAgo = new Date()
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
 
-  return oneMonthBeforeCreation < oneYearAgo ? oneYearAgo : oneMonthBeforeCreation
+  return lookback < oneYearAgo ? oneYearAgo : lookback
+}
+
+export async function syncGmailForPartnerEmail(
+  userId: string,
+  globalRecordId: string,
+  emailAddress: string,
+  lookbackDays: number,
+): Promise<{ synced: number }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      accessToken: true,
+      refreshToken: true,
+      tokenExpiry: true,
+    },
+  })
+
+  if (!user?.accessToken) return { synced: 0 }
+
+  const accessToken = await ensureFreshToken(user)
+
+  const record = await prisma.globalRecord.findUnique({
+    where: { id: globalRecordId },
+    select: {
+      interactions: { orderBy: { createdAt: 'desc' }, take: 1, select: { projectId: true } },
+      pipelineRefs: { orderBy: { addedAt: 'desc' }, take: 1, select: { pipelineRun: { select: { projectId: true } } } },
+    },
+  })
+
+  const projectId =
+    record?.interactions[0]?.projectId
+    ?? record?.pipelineRefs[0]?.pipelineRun.projectId
+
+  if (!projectId) return { synced: 0 }
+
+  const normalizedEmail = emailAddress.toLowerCase()
+  const partnerEmailMap = new Map<string, PartnerEmailEntry[]>()
+  partnerEmailMap.set(normalizedEmail, [{ globalRecordId, projectId }])
+
+  const lookbackDate = new Date()
+  lookbackDate.setDate(lookbackDate.getDate() - lookbackDays)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const afterDate = lookbackDate < oneYearAgo ? oneYearAgo : lookbackDate
+
+  const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
+  const query = `(from:${normalizedEmail} OR to:${normalizedEmail}) after:${afterTimestamp} -in:draft`
+
+  let synced = 0
+  let pageToken: string | undefined
+
+  do {
+    const listing = await listGmailMessages(accessToken, query, pageToken)
+    const messageIds = listing.messages ?? []
+    pageToken = listing.nextPageToken
+
+    for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      const batch = messageIds.slice(i, i + BATCH_SIZE)
+      const results = await Promise.all(
+        batch.map(m => getGmailMessage(accessToken, m.id).catch(() => null)),
+      )
+
+      for (const msg of results) {
+        if (!msg) continue
+        synced += await processMessage(msg, userId, user.email, partnerEmailMap)
+      }
+
+      if (i + BATCH_SIZE < messageIds.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
+      }
+    }
+  } while (pageToken)
+
+  return { synced }
 }
 
 type PartnerEmailEntry = { globalRecordId: string; projectId: string }

@@ -29,7 +29,30 @@ function removeTag(tag: string) {
   saveTags(industryTags.value.filter(t => t !== tag))
 }
 
-onMounted(() => fetchTags())
+const emailSyncDays = ref(30)
+const emailSyncSaving = ref(false)
+
+async function fetchEmailSyncDays() {
+  try {
+    const data = await $fetch<{ emailSyncHistoryDays: number }>('/api/settings/email-sync')
+    emailSyncDays.value = data.emailSyncHistoryDays
+  } catch {}
+}
+
+async function saveEmailSyncDays() {
+  emailSyncSaving.value = true
+  try {
+    const data = await $fetch<{ emailSyncHistoryDays: number }>('/api/settings/email-sync', {
+      method: 'PUT',
+      body: { days: emailSyncDays.value },
+    })
+    emailSyncDays.value = data.emailSyncHistoryDays
+  } finally {
+    emailSyncSaving.value = false
+  }
+}
+
+onMounted(() => { fetchTags(); fetchEmailSyncDays() })
 </script>
 
 <template>
@@ -69,6 +92,29 @@ onMounted(() => fetchTags())
             :disabled="!newTag.trim()"
             class="px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 disabled:opacity-40 transition-colors"
           >Přidat</button>
+        </form>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100">
+        <h2 class="text-base font-semibold text-gray-800">Hloubka synchronizace emailů</h2>
+        <p class="text-sm text-gray-400 mt-1">Kolik dní zpětně hledat emaily při první synchronizaci nebo přidání nového kontaktu.</p>
+      </div>
+      <div class="px-6 py-5">
+        <form class="flex items-center gap-3" @submit.prevent="saveEmailSyncDays">
+          <input
+            v-model.number="emailSyncDays"
+            type="number"
+            min="1"
+            max="365"
+            class="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          />
+          <span class="text-sm text-gray-500">dní</span>
+          <button
+            type="submit"
+            :disabled="emailSyncSaving"
+            class="px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 disabled:opacity-40 transition-colors"
+          >{{ emailSyncSaving ? 'Ukládám...' : 'Uložit' }}</button>
         </form>
       </div>
     </div>
