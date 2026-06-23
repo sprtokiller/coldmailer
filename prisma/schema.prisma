@@ -174,7 +174,6 @@ enum StepType {
 
   VALUE_ALIGNMENT
   OUTREACH_PREPARATION
-  OUTREACH_EXECUTION
 }
 
 enum StepStatus {
@@ -258,6 +257,7 @@ model EmailDraft {
 model PipelineRun {
   id           String              @id @default(cuid())
   name         String
+  visibility   String              @default("private")
   authorId     String
   author       User                @relation(fields: [authorId], references: [id])
   projectId    String

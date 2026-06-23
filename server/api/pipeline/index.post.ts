@@ -4,7 +4,7 @@ import { requireProjectAccess } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
-  const body = await readBody<{ name: string; projectId?: string }>(event)
+  const body = await readBody<{ name: string; projectId?: string; visibility?: string }>(event)
 
   if (!body.projectId) {
     throw createError({
@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
   return prisma.pipelineRun.create({
     data: {
       name: body.name,
+      visibility: body.visibility === 'public' ? 'public' : 'private',
       authorId: user.id,
       projectId: body.projectId,
     },

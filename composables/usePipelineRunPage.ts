@@ -206,10 +206,6 @@ export async function usePipelineRunPage() {
     selection.step5Alignments,
     selection.step5SelectedIds,
     outputUtils.outreachEmails,
-    selection.step6PreviewTo,
-    selection.step6PreviewSubject,
-    selection.step6PreviewBody,
-    selection.step6SelectedPartnerName,
     executingStep,
     executingRunner,
     streamOutputs,
@@ -234,32 +230,8 @@ export async function usePipelineRunPage() {
     return outputUtils.stepResultOutput(stepKey)
   }
 
-  // ── Step 6 signature helpers ─────────────────────────────────────────────────
-
-  const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
-
-  const step6BaseBody = ref('')
-
-  function applySignatureToBody(baseBody: string, signatureContent: string): string {
-    if (!signatureContent) return baseBody
-    return baseBody + SIGNATURE_SEPARATOR + signatureContent
-  }
-
-  function initStep6Preview(partnerName: string) {
-    selection.initStep6Preview(partnerName)
-    const base = selection.step6PreviewBody.value
-    step6BaseBody.value = base
-    const defaultSig = signatures.value.find(s => s.isDefault)
-    if (defaultSig) {
-      selection.step6PreviewBody.value = applySignatureToBody(base, defaultSig.content)
-    }
-  }
-
-  function applySignature(signatureId: string) {
-    const sig = signatureId ? signatures.value.find(s => s.id === signatureId) : null
-    selection.step6PreviewBody.value = sig
-      ? applySignatureToBody(step6BaseBody.value, sig.content)
-      : step6BaseBody.value
+  function applySignature(_signatureId: string) {
+    // Signature is now applied server-side in schedule-send
   }
 
   // ── Lifecycle hooks & watchers (must run inside Nuxt context) ───────────────
@@ -383,11 +355,6 @@ export async function usePipelineRunPage() {
     step5DeselectAll: selection.step5DeselectAll,
     step5SelectUnprocessed: selection.step5SelectUnprocessed,
     step5SelectedCount: selection.step5SelectedCount,
-    step6SelectedPartnerName: selection.step6SelectedPartnerName,
-    step6PreviewTo: selection.step6PreviewTo,
-    step6PreviewSubject: selection.step6PreviewSubject,
-    step6PreviewBody: selection.step6PreviewBody,
-    initStep6Preview,
     applySignature,
     // ai import
     ...aiImport,

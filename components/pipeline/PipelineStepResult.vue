@@ -554,14 +554,6 @@ async function deleteSelectedRows() {
               <span class="font-semibold text-gray-800 text-sm truncate">{{ email.partnerName }}</span>
               <span v-if="email.error" class="text-[11px] bg-danger/10 text-danger px-2 py-0.5 rounded-full">chyba</span>
             </div>
-            <button
-              v-if="!email.error"
-              type="button"
-              class="shrink-0 text-[11px] text-primary hover:underline"
-              @click="pipeline.step6SelectedPartnerName = String(email.partnerName ?? ''); pipeline.initStep6Preview(String(email.partnerName ?? ''))"
-            >
-              Použít v Kroku 6 →
-            </button>
           </div>
 
           <div v-if="email.error" class="px-4 py-3 text-sm text-danger">{{ email.error }}</div>

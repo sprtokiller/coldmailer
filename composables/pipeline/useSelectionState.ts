@@ -322,21 +322,6 @@ export function useSelectionState(
     return step5Alignments().filter(a => step5SelectedIds.value[String(a.name ?? '')]).length
   }
 
-  // Step 6 (OUTREACH_EXECUTION)
-  const step6SelectedPartnerName = ref<string | null>(null)
-  const step6PreviewTo = ref('')
-  const step6PreviewSubject = ref('')
-  const step6PreviewBody = ref('')
-
-  function initStep6Preview(partnerName: string) {
-    const email = outreachEmails().find(e => String(e.partnerName ?? e.name ?? '') === partnerName)
-    if (email) {
-      step6PreviewTo.value = String(email.to ?? '')
-      step6PreviewSubject.value = String(email.subject ?? '')
-      step6PreviewBody.value = String(email.body ?? '')
-    }
-  }
-
   return {
     // Step 2
     step2SelectedItems,
@@ -377,11 +362,5 @@ export function useSelectionState(
     step5DeselectAll,
     step5SelectUnprocessed,
     step5SelectedCount,
-    // Step 6
-    step6SelectedPartnerName,
-    step6PreviewTo,
-    step6PreviewSubject,
-    step6PreviewBody,
-    initStep6Preview,
   }
 }

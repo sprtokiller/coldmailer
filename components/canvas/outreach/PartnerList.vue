@@ -7,18 +7,26 @@ const workspace = inject(outreachWorkspaceKey)!
 
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 
-const draftKeys = computed(() => {
-  const set = new Set<string>()
+const emailMap = computed(() => {
+  const map = new Map<string, { draft: boolean; saved: boolean; sent: boolean }>()
   for (const e of pipeline.outreachEmails()) {
-    if (!e.error) set.add(normalizeKey(e.partnerName ?? e.name))
+    if (e.error) continue
+    const key = normalizeKey(e.partnerName ?? e.name)
+    map.set(key, {
+      draft: true,
+      saved: !!e.savedAt,
+      sent: !!e.sentAt,
+    })
   }
-  return set
+  return map
 })
 
-function getTag(name: string): 'draft' | null {
-  const key = normalizeKey(name)
-  if (draftKeys.value.has(key)) return 'draft'
-  return null
+function getTag(name: string): 'sent' | 'saved' | 'draft' | null {
+  const entry = emailMap.value.get(normalizeKey(name))
+  if (!entry) return null
+  if (entry.sent) return 'sent'
+  if (entry.saved) return 'saved'
+  return 'draft'
 }
 
 const alignments = computed(() => {
@@ -107,7 +115,15 @@ function selectPartner(name: string) {
 
         <!-- Tag -->
         <span
-          v-if="getTag(p.name) === 'draft'"
+          v-if="getTag(p.name) === 'sent'"
+          class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-600"
+        >Odesláno</span>
+        <span
+          v-else-if="getTag(p.name) === 'saved'"
+          class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-green-100 text-green-600"
+        >Uloženo</span>
+        <span
+          v-else-if="getTag(p.name) === 'draft'"
           class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-600"
         >Draft</span>
 

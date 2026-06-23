@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
     return {
       id: run.id,
       name: run.name,
+      visibility: run.visibility,
       createdAt: run.createdAt,
       author: run.author,
       project: run.project,

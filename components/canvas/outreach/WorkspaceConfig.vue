@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
-import { outreachWorkspaceKey } from '~/composables/canvas/useOutreachWorkspace'
+import { outreachWorkspaceKey, outreachActionsKey } from '~/composables/canvas/useOutreachWorkspace'
 
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 const workspace = inject(outreachWorkspaceKey)!
+const actions = inject(outreachActionsKey)!
 
 const STEP_KEY = 'OUTREACH_PREPARATION'
 
@@ -71,10 +72,43 @@ watch(sigs, (val) => {
   }
 }, { immediate: true })
 
+watch(selectedSignatureId, (id) => {
+  ;(cfg.value as any)._selectedSignatureId = id
+}, { immediate: true })
+
+// ── Saved state ──────────────────────────────────────────────────────────────
+const savedInfo = computed(() => {
+  const name = workspace.selectedPartner.value
+  if (!name) return null
+  const emails = pipeline.outreachEmails() as Array<Record<string, unknown>>
+  const match = emails.find(e => String(e.partnerName ?? e.name ?? '') === name)
+  if (!match?.savedAt) return null
+  return {
+    name: (match.savedBy as { name: string } | undefined)?.name ?? 'neznámý',
+    at: match.savedAt as string,
+    sentAt: match.sentAt as string | undefined,
+  }
+})
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'právě teď'
+  if (mins < 60) return `před ${mins} min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `před ${hours} h`
+  return `před ${Math.floor(hours / 24)} d`
+}
+
 // ── Execute ───────────────────────────────────────────────────────────────────
 function handleGenerate() {
   pipeline.executeStep(STEP_KEY)
 }
+
+const hasBody = computed(() => !!workspace.emailBody.value.trim())
+const hasTo = computed(() => !!workspace.emailTo.value.trim())
+const canSave = computed(() => hasBody.value && !!workspace.selectedPartner.value)
+const canSend = computed(() => canSave.value && hasTo.value && !!workspace.emailSubject.value.trim())
 </script>
 
 <template>
@@ -341,12 +375,73 @@ function handleGenerate() {
       </div>
     </div>
 
+    <!-- Subject + To fields -->
+    <div v-if="workspace.selectedPartner.value" class="border-b border-gray-100 px-4 py-2">
+      <div class="flex items-center gap-2">
+        <label class="text-[10px] font-medium text-gray-400 shrink-0 w-16">Předmět</label>
+        <input
+          v-model="workspace.emailSubject.value"
+          type="text"
+          class="flex-1 border border-gray-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+          placeholder="Předmět e-mailu…"
+        />
+      </div>
+      <div class="flex items-center gap-2 mt-1">
+        <label class="text-[10px] font-medium text-gray-400 shrink-0 w-16">Komu</label>
+        <input
+          v-model="workspace.emailTo.value"
+          type="email"
+          class="flex-1 border border-gray-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+          placeholder="E-mailová adresa příjemce…"
+        />
+      </div>
+    </div>
+
     <!-- Editor area -->
     <div class="flex-1 p-4 min-h-0 overflow-y-auto">
       <RichTextEditor
         v-model="workspace.emailBody.value"
         placeholder="Vygenerovaný e-mail se zobrazí zde..."
       />
+    </div>
+
+    <!-- Footer: saved info + action buttons -->
+    <div class="border-t border-gray-100 px-4 py-2 flex items-center shrink-0">
+      <!-- Left: saved by info -->
+      <div class="flex-1 flex items-center gap-2 text-[10px] text-gray-400 min-w-0">
+        <template v-if="savedInfo">
+          <template v-if="savedInfo.sentAt">
+            <svg class="w-3 h-3 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Odesláno {{ relativeTime(savedInfo.sentAt) }}</span>
+            <span class="text-gray-300">·</span>
+          </template>
+          <span>Uložil/a {{ savedInfo.name }} {{ relativeTime(savedInfo.at) }}</span>
+        </template>
+      </div>
+
+      <!-- Right: action buttons -->
+      <div v-if="hasBody" class="flex items-center gap-1.5 shrink-0">
+        <button
+          :disabled="!canSave || actions.saving.value"
+          class="px-3 py-1.5 rounded text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1"
+          @click="actions.handleSaveAndClose()"
+        >
+          <svg v-if="actions.saving.value" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Uložit a zavřít
+        </button>
+        <button
+          :disabled="!canSend || actions.saving.value || actions.sendToastVisible.value"
+          class="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-1 whitespace-nowrap"
+          @click="actions.handleSaveAndSend()"
+        >
+          Ulož a odeslat
+        </button>
+      </div>
     </div>
   </div>
 </template>

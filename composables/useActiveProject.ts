@@ -55,8 +55,6 @@ export function useActiveProject() {
     if (project) {
       const val = `project:${project.id}`
       if (cookie.value !== val) cookie.value = val
-    } else {
-      cookie.value = null
     }
   }, { immediate: true })
 

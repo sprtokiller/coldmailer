@@ -4,7 +4,6 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { requirePermission } from '~/server/utils/permissions'
 import { streamStepAI, modelForStep } from '~/server/utils/ai'
-import { createGmailDraft, refreshAccessToken } from '~/server/utils/google'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
@@ -19,7 +18,6 @@ const STEP_PERMISSION_MAP: Record<string, 'pipeline.serpapi' | 'pipeline.deep_re
   PARTNER_PROFILING: 'pipeline.deep_research',
   VALUE_ALIGNMENT: 'pipeline.claude',
   OUTREACH_PREPARATION: 'pipeline.claude',
-  OUTREACH_EXECUTION: 'pipeline.gmail',
 }
 
 interface ExecuteBody {
@@ -169,15 +167,7 @@ export default defineEventHandler(async (event) => {
 
       const execute = async () => {
         try {
-          if (body.stepType === 'OUTREACH_EXECUTION') {
-            write({ chunk: '⟳ Creating draft in Gmail…' })
-            const result = await executeGmailStep(user.id, body.inputData)
-            write({ chunk: '\n✓ Draft created.' })
-            await prisma.pipelineStep.update({
-              where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: result as never, completedAt: new Date() },
-            })
-          } else if (body.stepType === 'PARTNER_IDENTIFICATION') {
+          if (body.stepType === 'PARTNER_IDENTIFICATION') {
             // Read actual selection from DB — overrides client-sent inputData
             const msStep = await prisma.pipelineStep.findFirst({
               where: { pipelineRunId: runId, stepType: 'MARKET_SCANNING' },
@@ -638,36 +628,3 @@ async function trackCost(
   }
 }
 
-async function executeGmailStep(
-  userId: string,
-  inputData?: Record<string, unknown>,
-): Promise<unknown> {
-  const dbUser = await prisma.user.findUnique({ where: { id: userId } })
-  if (!dbUser?.accessToken) throw new Error('No Gmail access token — re-authenticate.')
-
-  let accessToken = dbUser.accessToken
-  if (dbUser.tokenExpiry && dbUser.tokenExpiry < new Date() && dbUser.refreshToken) {
-    const config = useRuntimeConfig()
-    const refreshed = await refreshAccessToken(
-      dbUser.refreshToken,
-      config.googleClientId,
-      config.googleClientSecret,
-    )
-    accessToken = refreshed.access_token
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        accessToken: refreshed.access_token,
-        tokenExpiry: new Date(Date.now() + refreshed.expires_in * 1000),
-      },
-    })
-  }
-
-  const to = String(inputData?.to ?? '')
-  const subject = String(inputData?.subject ?? '')
-  const body = String(inputData?.body ?? '')
-  if (!to || !subject || !body) throw new Error('inputData must include to, subject, and body')
-
-  const draft = await createGmailDraft(accessToken, to, subject, body)
-  return { gmailDraftId: draft.id, threadId: draft.threadId, to, subject }
-}

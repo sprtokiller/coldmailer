@@ -129,7 +129,7 @@ export async function createGmailDraft(
   subject: string,
   body: string,
 ): Promise<{ id: string; threadId: string }> {
-  const raw = btoa(
+  const raw = Buffer.from(
     [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -137,10 +137,7 @@ export async function createGmailDraft(
       '',
       body,
     ].join('\r\n'),
-  )
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  ).toString('base64url')
 
   const res = await $fetch<{ id: string; message: { id: string; threadId: string } }>(
     'https://gmail.googleapis.com/gmail/v1/users/me/drafts',
@@ -151,4 +148,31 @@ export async function createGmailDraft(
     },
   )
   return res.message
+}
+
+export async function sendGmailMessage(
+  accessToken: string,
+  to: string,
+  subject: string,
+  body: string,
+): Promise<{ id: string; threadId: string }> {
+  const raw = Buffer.from(
+    [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/html; charset=UTF-8',
+      '',
+      body,
+    ].join('\r\n'),
+  ).toString('base64url')
+
+  const res = await $fetch<{ id: string; threadId: string }>(
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: { raw },
+    },
+  )
+  return res
 }

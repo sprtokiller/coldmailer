@@ -70,7 +70,6 @@ const STEP_TYPES = [
   'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION',
 ]
 
-const PROMPT_STEP_TYPES = STEP_TYPES
 
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
@@ -451,7 +450,7 @@ const tabs = computed(() => {
         <div v-if="tab === 'prompts'">
           <label class="block text-xs font-medium text-gray-500 mb-1">Typ kroku</label>
           <select v-model="form.stepType" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <option v-for="s in PROMPT_STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+            <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
           </select>
         </div>
 
@@ -558,7 +557,7 @@ const tabs = computed(() => {
         class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
       >
         <option value="">Všechny typy kroků</option>
-        <option v-for="s in PROMPT_STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
+        <option v-for="s in STEP_TYPES" :key="s" :value="s">{{ s.replace(/_/g, ' ') }}</option>
       </select>
       <select
         v-if="scopeOptions.length > 0"

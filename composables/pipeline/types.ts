@@ -148,10 +148,6 @@ export interface PipelineRunContext {
   step4Initialized: boolean
   step5SelectedIds: Record<string, boolean>
   step5Initialized: boolean
-  step6SelectedPartnerName: string | null
-  step6PreviewTo: string
-  step6PreviewSubject: string
-  step6PreviewBody: string
   expandedProfileName: string | null
   promptPreviewStep: string | null
   outputViewMode: Record<string, string>
@@ -201,7 +197,6 @@ export interface PipelineRunContext {
   step5SelectUnprocessed: () => void
   step5SelectedCount: () => number
   outreachEmails: () => Array<Record<string, unknown>>
-  initStep6Preview: (partnerName: string) => void
   applySignature: (signatureId: string) => void
   updatePartnerItem: (stepKey: string, item: PartnerProgressItem) => void
   updateAlignmentItem: (stepKey: string, item: AlignmentProgressItem) => void
