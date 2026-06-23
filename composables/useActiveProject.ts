@@ -1,3 +1,5 @@
+import { GROUP_FONTS } from '~/config/pipeline'
+
 export type ActiveProjectInfo = {
   id: string
   name: string
@@ -67,12 +69,6 @@ export function useActiveProject() {
     } else {
       await refreshNuxtData()
     }
-  }
-
-  const GROUP_FONTS: Record<string, string> = {
-    tda: 'Inter Tight',
-    xo: 'Dosis',
-    ppt: 'Figtree',
   }
 
   const groupFont = computed(() => {

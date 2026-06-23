@@ -73,6 +73,23 @@ TÓNOVÁ PRAVIDLA:
 
 DÉLKA: max 180 slov v těle e-mailu (bez předmětu a podpisu)
 
+### HTML formátování
+
+Pole `body` vrať jako HTML, ne jako prostý text.
+- Každý odstavec zabal do `<p>` tagu
+- Text uvnitř každého `<p>` zabal do `<span>` s inline stylem `font-family`,
+  jehož hodnotu vezmi z uživatelské zprávy (řádek "Font pro HTML formátování")
+- Pokud font není uveden, vynechej atribut `style` a vrať jen `<p>text</p>`
+- Nepoužívej `<br>` pro odřádkování – každý odstavec je samostatný `<p>` blok
+- Nepoužívej `<div>`, `<html>`, `<body>` ani jiné wrapper elementy
+
+Ukázka výstupu (pro font "Inter Tight"):
+
+<p><span style="font-family: 'Inter Tight', sans-serif;">Dobrý den, pane Nováku,</span></p>
+<p><span style="font-family: 'Inter Tight', sans-serif;">všiml jsem si, že vaše firma XY nedávno spustila program pro školy. V Tour de App propojujeme středoškoláky s technologickými firmami prostřednictvím 48hodinového hackathonu.</span></p>
+<p><span style="font-family: 'Inter Tight', sans-serif;">Vaše zaměření na vzdělávání a rozvoj juniorních talentů se přirozeně propojuje s tím, co děláme – účastníci řeší reálné zadání a firmy získávají přístup k motivovaným studentům.</span></p>
+<p><span style="font-family: 'Inter Tight', sans-serif;">Byl byste otevřený krátkému hovoru příští týden?</span></p>
+
 ### Sebekontrola
 
 Vyplň jako boolean — model musí explicitně potvrdit každé kritérium:
@@ -103,11 +120,9 @@ Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:
     "personalizationDetail": "string",
     "templateConstraints": ["string"]
   },
-  "email": {
-    "subject": "string",
-    "body": "string",
-    "signature": "string – podle šablony nebo placeholder"
-  },
+  "to": "string – e-mailová adresa příjemce; prázdný řetězec pokud není k dispozici",
+  "subject": "string",
+  "body": "HTML string – formátovaný dle sekce HTML formátování",
   "selfCheck": {
     "opensWithPersonalization": true,
     "topArgumentPresent": true,

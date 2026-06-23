@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import { StarterKit } from '@tiptap/starter-kit'
-import { Underline } from '@tiptap/extension-underline'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
 import { Highlight } from '@tiptap/extension-highlight'
 import { TextAlign } from '@tiptap/extension-text-align'
-import { Link } from '@tiptap/extension-link'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -81,8 +79,14 @@ const toolbarRef = ref<InstanceType<typeof import('./RichTextToolbar.vue').defau
 const editor = useEditor({
   content: props.modelValue,
   extensions: [
-    StarterKit,
-    Underline,
+    StarterKit.configure({
+      link: {
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
+      },
+    }),
     TextStyle,
     FontFamily,
     FontSize,
@@ -91,12 +95,6 @@ const editor = useEditor({
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ...(props.placeholder ? [Placeholder.configure({ placeholder: props.placeholder })] : []),
     TemplateVariableHighlight,
-    Link.configure({
-      openOnClick: false,
-      autolink: true,
-      linkOnPaste: true,
-      HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
-    }),
   ],
   editorProps: {
     transformPastedHTML(html) {

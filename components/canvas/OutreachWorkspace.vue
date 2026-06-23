@@ -69,21 +69,21 @@ watch(selectedPartner, (name) => {
   if (Array.isArray(top3) && top3.length > 0) {
     selectedArgumentIds.value = new Set([String(top3[0].argumentId ?? '')])
   }
+  const savedTo = emailMatch?.savedAt ? String(emailMatch.to ?? '') : ''
   const key = normalizeKey(name)
   const profiles = pipeline.profilingOutputProfiles('PARTNER_PROFILING') as Array<Record<string, unknown>>
   const profile = profiles.find(p => normalizeKey(p.name) === key)
-  if (profile) {
+  if (savedTo) {
+    emailTo.value = savedTo
+  } else if (profile) {
     const contacts = profile.contacts as Array<{ email?: string; priority?: number }> | undefined
     if (Array.isArray(contacts)) {
       const withEmail = contacts
-        .map((c, i) => ({ ...c, _origIdx: i }))
         .filter(c => c.email)
         .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
       if (withEmail.length > 0) {
         selectedContactIdx.value = 0
         emailTo.value = withEmail[0].email!
-      } else {
-        emailTo.value = ''
       }
     }
   }

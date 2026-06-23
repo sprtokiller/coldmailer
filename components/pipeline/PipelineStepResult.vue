@@ -571,7 +571,7 @@ async function deleteSelectedRows() {
             <!-- Body -->
             <div class="px-4 pb-4 pt-2 border-t border-gray-50">
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Tělo e-mailu</p>
-              <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-[Parkinsans,sans-serif] max-h-64 overflow-y-auto">{{ email.body }}</div>
+              <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700 leading-relaxed font-[Parkinsans,sans-serif] max-h-64 overflow-y-auto" v-html="email.body" />
             </div>
           </template>
         </div>

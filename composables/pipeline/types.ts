@@ -16,7 +16,7 @@ export interface RunStepResult {
 export interface PipelineRunResponse {
   name: string
   projectId: string
-  project: { id: string; name: string; group: { id: string; name: string } }
+  project: { id: string; name: string; group: { id: string; name: string; slug: string } }
   author: { name: string }
   createdAt: string
   steps: RunStepResult[]

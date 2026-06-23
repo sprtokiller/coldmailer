@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { useUserSession } from '#imports'
 import type { StepConfigState, Step3Candidate, PartnerProgressItem, ProfilingProgressItem, AlignmentProgressItem, RunStepResult } from './types'
 
 const RERUN_WARNING = 'Tato operace je nákladná a položka již má výsledky. Jste si opravdu jistí, že ji chcete spustit znovu?'

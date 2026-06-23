@@ -36,21 +36,6 @@ export const pipelineRunKey = Symbol('pipelineRun')
 export async function usePipelineRunPage() {
   const nuxtApp = useNuxtApp()
   const route = useRoute()
-  const runResult = await useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`)
-  const projectQuery = computed(() => ({ projectId: runResult.data.value?.projectId }))
-  const [promptsResult, contextPartsResult, sellingPointsResult, emailDraftsResult, signaturesResult] = await nuxtApp.runWithContext(() => Promise.all([
-    useFetch<PromptOption[]>('/api/library/prompts', { query: projectQuery, default: () => [] }),
-    useFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { query: projectQuery, default: () => [] }),
-    useFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { query: projectQuery, default: () => [] }),
-    useFetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { query: projectQuery, default: () => [] }),
-    useFetch<Array<{ id: string; name: string; content: string; isDefault: boolean }>>('/api/library/signatures', { default: () => [] }),
-  ]))
-  const { data: run, refresh } = runResult
-  const { data: prompts } = promptsResult
-  const { data: contextParts } = contextPartsResult
-  const { data: sellingPoints } = sellingPointsResult
-  const { data: emailDrafts } = emailDraftsResult
-  const { data: signatures } = signaturesResult
 
   const activeStep = ref<string | null>(null)
   const executingStep = ref<string | null>(null)
@@ -62,6 +47,43 @@ export async function usePipelineRunPage() {
   const candidateHoverIdx = ref<number | null>(null)
 
   const stepConfig = ref<Record<string, StepConfigState>>({})
+  const piExtraRefs = ref<PiExtraRef[]>([])
+
+  const runResult = useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`)
+  const { data: run, refresh } = runResult
+
+  const libraryResult = useAsyncData(`pipeline-library-${route.params.id}`, async () => {
+    await runResult
+    const projectId = run.value?.projectId
+
+    const [prompts, contextParts, sellingPoints, emailDrafts, signatures] = await Promise.all([
+      $fetch<PromptOption[]>('/api/library/prompts', { query: { projectId } }),
+      $fetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { query: { projectId } }),
+      $fetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { query: { projectId } }),
+      $fetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { query: { projectId } }),
+      $fetch<Array<{ id: string; name: string; content: string; isDefault: boolean }>>('/api/library/signatures')
+    ])
+    return { prompts, contextParts, sellingPoints, emailDrafts, signatures }
+  }, {
+    default: () => ({ prompts: [], contextParts: [], sellingPoints: [], emailDrafts: [], signatures: [] })
+  })
+
+  const prompts = ref(libraryResult.data.value?.prompts ?? [])
+  const contextParts = ref(libraryResult.data.value?.contextParts ?? [])
+  const sellingPoints = ref(libraryResult.data.value?.sellingPoints ?? [])
+  const emailDrafts = ref(libraryResult.data.value?.emailDrafts ?? [])
+  const signatures = ref(libraryResult.data.value?.signatures ?? [])
+
+  // Update refs if data changes (e.g. on client hydration or navigation)
+  watch(() => libraryResult.data.value, (newVal) => {
+    if (newVal) {
+      prompts.value = newVal.prompts
+      contextParts.value = newVal.contextParts
+      sellingPoints.value = newVal.sellingPoints
+      emailDrafts.value = newVal.emailDrafts
+      signatures.value = newVal.signatures
+    }
+  }, { deep: true })
 
   function getConfig(stepKey: string) {
     if (!stepConfig.value[stepKey]) {
@@ -162,7 +184,6 @@ export async function usePipelineRunPage() {
   )
 
   // PI record refs added via Import / global DB — synced from canvas step records (useOverlayStepsInput)
-  const piExtraRefs = ref<PiExtraRef[]>([])
 
   const selection = useSelectionState(
     getStepResult,
@@ -234,9 +255,7 @@ export async function usePipelineRunPage() {
     // Signature is now applied server-side in schedule-send
   }
 
-  // ── Lifecycle hooks & watchers (must run inside Nuxt context) ───────────────
-
-  nuxtApp.runWithContext(() => {
+  // ── Lifecycle hooks & watchers ───────────────
     useExecutionPolling(
       route.params.id as string,
       executingStep,
@@ -278,7 +297,6 @@ export async function usePipelineRunPage() {
       },
       { deep: true }
     )
-  })
 
   // ── Assemble context ─────────────────────────────────────────────────────────
 
@@ -373,6 +391,8 @@ export async function usePipelineRunPage() {
     modelBadge,
     executeStep,
   }) as unknown as PipelineRunContext
+
+  await Promise.all([runResult, libraryResult])
 
   return pipeline
 }

@@ -8,7 +8,7 @@ const workspace = inject(outreachWorkspaceKey)!
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 
 const emailMap = computed(() => {
-  const map = new Map<string, { draft: boolean; saved: boolean; sent: boolean }>()
+  const map = new Map<string, { draft: boolean; saved: boolean; sent: boolean; partnerId?: string }>()
   for (const e of pipeline.outreachEmails()) {
     if (e.error) continue
     const key = normalizeKey(e.partnerName ?? e.name)
@@ -16,6 +16,7 @@ const emailMap = computed(() => {
       draft: true,
       saved: !!e.savedAt,
       sent: !!e.sentAt,
+      partnerId: e.partnerId as string | undefined,
     })
   }
   return map
@@ -114,8 +115,15 @@ function selectPartner(name: string) {
         </button>
 
         <!-- Tag -->
+        <NuxtLink
+          v-if="getTag(p.name) === 'sent' && emailMap.get(normalizeKey(p.name))?.partnerId"
+          :to="`/partners/${emailMap.get(normalizeKey(p.name))!.partnerId}`"
+          class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+          title="Zobrazit plnění partnera"
+          @click.stop
+        >Odesláno →</NuxtLink>
         <span
-          v-if="getTag(p.name) === 'sent'"
+          v-else-if="getTag(p.name) === 'sent'"
           class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-600"
         >Odesláno</span>
         <span
@@ -125,7 +133,7 @@ function selectPartner(name: string) {
         <span
           v-else-if="getTag(p.name) === 'draft'"
           class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-600"
-        >Draft</span>
+        >Koncept</span>
 
         <!-- Name -->
         <span

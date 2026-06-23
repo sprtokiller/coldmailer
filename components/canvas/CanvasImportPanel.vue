@@ -14,18 +14,32 @@ const canvas = inject(canvasKey)!
 const importText    = ref('')
 const importLoading = ref(false)
 const importError   = ref('')
+const showPartnerModal = ref(false)
 
-const FORMAT_HINTS: Record<string, string> = {
-  MARKET_SCANNING:        '[{ "name": "...", "url": "..." }]',
-  PARTNER_IDENTIFICATION: '[{ "itemName": "...", "partners": [{ "name": "..." }] }]',
-  PARTNER_PROFILING:      '[{ "name": "...", "summary": "..." }]',
+async function onPartnerSaved(result: { id: string }) {
+  if (props.stepId) {
+    await canvas.addFromGlobalDB(props.stepId, result.id)
+  }
+  showPartnerModal.value = false
+}
+
+const FORMAT_HINTS: Record<string, { json: string; text?: string }> = {
+  MARKET_SCANNING:        { json: '[{ "name": "...", "url": "..." }]' },
+  PARTNER_IDENTIFICATION: {
+    json: '[{ "itemName": "...", "partners": [{ "name": "..." }] }]',
+    text: 'Nebo vložte textový popis, např.:\nSoutěž Zlatý Ámos — partneři: Česká spořitelna (generální partner), T-Mobile (mediální partner), Deloitte (odborný partner).\nHackathon Junction Prague — partneři: Microsoft, JetBrains (technologický partner), PwC.',
+  },
+  PARTNER_PROFILING:      {
+    json: '[{ "name": "...", "summary": "..." }]',
+    text: 'Nebo vložte textový popis, např.:\nFirma XY, s.r.o. — technologická firma z Prahy, ~50 zaměstnanců. Zaměřuje se na IoT řešení pro průmysl. Kontakt: Jan Novák, PR manažer, jan@firmaxy.cz. Partnerství: generální partner konference Smart Industry 2025.',
+  },
 }
 
 const placeholder = computed(() => {
   const hint = props.stepType ? FORMAT_HINTS[props.stepType] : undefined
-  return hint
-    ? `Vložte JSON (např. ${hint}) nebo text k parsování...`
-    : 'Vložte JSON nebo text k parsování...'
+  if (!hint) return 'Vložte JSON nebo text k parsování...'
+  const base = `Vložte JSON (např. ${hint.json}) nebo text k parsování...`
+  return hint.text ? `${base}\n\n${hint.text}` : base
 })
 
 onMounted(() => {
@@ -68,6 +82,17 @@ async function doImport() {
         @click="doImport()"
       >{{ importLoading ? 'Importuji...' : 'Importovat' }}</button>
       <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors" @click="emit('close')">Zrušit</button>
+      <button
+        v-if="stepType === 'PARTNER_IDENTIFICATION'"
+        class="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors ml-auto"
+        @click="showPartnerModal = true"
+      >+ Vyplnit manuálně</button>
     </div>
+    <PartnersPartnerFormModal
+      v-if="showPartnerModal"
+      mode="create"
+      @close="showPartnerModal = false"
+      @saved="onPartnerSaved"
+    />
   </div>
 </template>

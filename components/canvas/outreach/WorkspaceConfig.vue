@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
 import { outreachWorkspaceKey, outreachActionsKey } from '~/composables/canvas/useOutreachWorkspace'
+import { GROUP_FONTS } from '~/config/pipeline'
 
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 const workspace = inject(outreachWorkspaceKey)!
@@ -104,6 +105,11 @@ function relativeTime(iso: string): string {
 function handleGenerate() {
   pipeline.executeStep(STEP_KEY)
 }
+
+const defaultFont = computed(() => {
+  const slug = pipeline.run?.project?.group?.slug
+  return slug ? GROUP_FONTS[slug] ?? '' : ''
+})
 
 const hasBody = computed(() => !!workspace.emailBody.value.trim())
 const hasTo = computed(() => !!workspace.emailTo.value.trim())
@@ -402,6 +408,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
       <RichTextEditor
         v-model="workspace.emailBody.value"
         placeholder="Vygenerovaný e-mail se zobrazí zde..."
+        :default-font="defaultFont"
       />
     </div>
 

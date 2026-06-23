@@ -10,7 +10,7 @@ import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
-import { STEP_SYSTEM_PROMPTS } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, GROUP_FONTS } from '~/config/pipeline'
 
 const STEP_PERMISSION_MAP: Record<string, 'pipeline.serpapi' | 'pipeline.deep_research' | 'pipeline.claude' | 'pipeline.gmail'> = {
   PARTNER_IDENTIFICATION: 'pipeline.serpapi',
@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
 
   const run = await prisma.pipelineRun.findUnique({
     where: { id: runId },
-    include: { project: true },
+    include: { project: { include: { group: true } } },
   })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
   const scopeFilter = libraryScopeForProject(run.project)
@@ -447,6 +447,8 @@ export default defineEventHandler(async (event) => {
                 ].join('\n')
               : null
 
+            const fontFamily = GROUP_FONTS[run.project.group.slug] ?? ''
+
             const allEmails: unknown[] = []
             const opProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
 
@@ -459,7 +461,8 @@ export default defineEventHandler(async (event) => {
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
               const userMsg = [
-                'Vytvoř personalizovaný cold e-mail pro tohoto partnera. Vrať JSON objekt s poli: to (e-mailová adresa, pokud je k dispozici, jinak prázdný řetězec), subject (string), body (prostý text).',
+                'Vytvoř personalizovaný cold e-mail pro tohoto partnera. Vrať JSON objekt s poli na nejvyšší úrovni: to (e-mailová adresa příjemce, pokud je k dispozici, jinak prázdný řetězec), subject (string), body (HTML – každý odstavec v <p>, text v <span> s inline font-family).',
+                fontFamily ? `Font pro HTML formátování: ${fontFamily}` : null,
                 '',
                 templateSection,
                 '',

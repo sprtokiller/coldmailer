@@ -42,6 +42,13 @@ export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
   [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
 }
 
+// ── Group → font mapping (used in outreach email generation) ─────────────────
+export const GROUP_FONTS: Record<string, string> = {
+  tda: 'Inter Tight',
+  xo:  'Dosis',
+  ppt: 'Figtree',
+}
+
 // ── Default system-prompt display names (used by prisma/seed.ts) ──────────────
 export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
   MARKET_SCANNING:        'Výchozí',
@@ -280,5 +287,5 @@ DŮLEŽITÉ:
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
 `,
 
-  OUTREACH_PREPARATION: `Jsi expert na psaní cold e-mailů. Vytvoř vysoce přizpůsobený oslovovací e-mail na základě poskytnuté šablony, kontaktu a náznakůsouladu. Vrať JSON objekt s poli: to (e-mailová adresa), subject (string), body (prostý text).`,
+  OUTREACH_PREPARATION: `Jsi expert na psaní cold e-mailů. Vytvoř vysoce přizpůsobený oslovovací e-mail na základě poskytnuté šablony, kontaktu a náznakůsouladu. Vrať JSON objekt s poli: to (e-mailová adresa), subject (string), body (HTML string – každý odstavec v <p> tagu, text zabalený v <span> s inline font-family dle uživatelské zprávy).`,
 }

@@ -149,7 +149,7 @@ function hasProfileImportHint(candidate: Step3Candidate): boolean {
     </div>
   </Teleport>
 
-  <ProfileImportModal
+  <PipelineConfigProfileImportModal
     v-if="profileImportCandidate"
     :global-record-id="profileImportCandidate.partnerId"
     :partner-name="profileImportCandidate.name"
