@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
       interactions: {
         where: interactionWhere,
         select: { updatedAt: true, sentAt: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { sentAt: 'desc' },
         take: 1,
       },
       pipelineRefs: {

@@ -165,7 +165,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
                 <div v-if="previewField === 'prompt' && selectedPrompt" class="absolute right-0 top-full z-50 pt-1 w-80">
                   <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-60 overflow-y-auto">
                     <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedPrompt.name }}</p>
-                    <pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(selectedPrompt.content)" />
+                    <ClientOnly><pre class="text-[10px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(selectedPrompt.content)" /></ClientOnly>
                   </div>
                 </div>
               </div>
@@ -296,7 +296,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
                 <div v-if="previewField === 'sig' && selectedSig" class="absolute right-0 top-full z-50 pt-1 w-72">
                   <div class="bg-white rounded-xl border border-gray-200 shadow-xl p-3 max-h-48 overflow-y-auto">
                     <p class="text-[11px] font-medium text-gray-800 mb-1">{{ selectedSig.name }}</p>
-                    <div class="text-[10px] text-gray-600 leading-relaxed" v-html="selectedSig.content" />
+                    <ClientOnly><div class="text-[10px] text-gray-600 leading-relaxed" v-html="selectedSig.content" /></ClientOnly>
                   </div>
                 </div>
               </div>

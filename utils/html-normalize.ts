@@ -77,6 +77,37 @@ export function sanitizeHtml(html: string): string {
   })
 }
 
+const EMAIL_ALLOWED_TAGS = [
+  ...ALLOWED_TAGS,
+  'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'caption', 'colgroup', 'col',
+  'img', 'hr', 'center',
+]
+
+const EMAIL_ALLOWED_ATTR = [
+  ...ALLOWED_ATTR,
+  'src', 'alt', 'width', 'height', 'align', 'valign',
+  'border', 'cellpadding', 'cellspacing', 'colspan', 'rowspan',
+  'bgcolor',
+]
+
+let _emailMode = false
+
+export function sanitizeEmailHtml(html: string): string {
+  if (!html) return ''
+  if (typeof window === 'undefined') return html
+
+  ensurePurifyHooks()
+
+  _emailMode = true
+  const result = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: EMAIL_ALLOWED_TAGS,
+    ALLOWED_ATTR: EMAIL_ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: false,
+  })
+  _emailMode = false
+  return result
+}
+
 export function normalizeHtml(html: string): string {
   if (!html) return ''
   if (typeof DOMParser === 'undefined') return html
@@ -113,11 +144,18 @@ function ensurePurifyHooks(): void {
 
   DOMPurify.addHook('afterSanitizeAttributes', (node: Element) => {
     if (node.hasAttribute('style')) {
-      const filtered = filterStyleString(node.getAttribute('style')!)
-      if (filtered) {
-        node.setAttribute('style', filtered)
+      if (_emailMode) {
+        const raw = node.getAttribute('style')!
+        if (UNSAFE_CSS_VALUE_RE.test(raw)) {
+          node.removeAttribute('style')
+        }
       } else {
-        node.removeAttribute('style')
+        const filtered = filterStyleString(node.getAttribute('style')!)
+        if (filtered) {
+          node.setAttribute('style', filtered)
+        } else {
+          node.removeAttribute('style')
+        }
       }
     }
 
@@ -128,6 +166,13 @@ function ensurePurifyHooks(): void {
       }
       if (node.getAttribute('target') === '_blank') {
         node.setAttribute('rel', 'noopener noreferrer')
+      }
+    }
+
+    if (node.tagName === 'IMG') {
+      const src = node.getAttribute('src')
+      if (src && UNSAFE_PROTOCOL_RE.test(src)) {
+        node.removeAttribute('src')
       }
     }
   })

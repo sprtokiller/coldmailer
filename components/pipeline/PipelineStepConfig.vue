@@ -175,7 +175,7 @@ async function confirmEditContextPart() {
               </a>
             </div>
             <div class="relative group/pre">
-              <pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(pipeline.selectedPrompt(step.key)?.content ?? '')" />
+              <ClientOnly><pre class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed" v-html="highlightPlaceholders(pipeline.selectedPrompt(step.key)?.content ?? '')" /></ClientOnly>
               <button
                 type="button"
                 class="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors opacity-0 group-hover/pre:opacity-100"

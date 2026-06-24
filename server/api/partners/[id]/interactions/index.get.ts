@@ -32,6 +32,8 @@ const FULL_SELECT = {
   gmailId: true,
   myToThem: true,
   themToUs: true,
+  isUnknownContact: true,
+  unknownContactAddress: true,
 } as const
 
 export default defineEventHandler(async (event) => {
@@ -51,14 +53,14 @@ export default defineEventHandler(async (event) => {
     items = await prisma.interaction.findMany({
       where: { globalRecordId, projectId },
       select: FULL_SELECT,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ sentAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
     items = items.map(i => ({ ...i, canEdit: access.canEditAll || access.isAdmin || i.assignees.some(a => a.userId === session.id) }))
   } else {
     const all = await prisma.interaction.findMany({
       where: { globalRecordId, projectId },
       select: FULL_SELECT,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ sentAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
     items = all.map((i) => {
       const isAssignee = i.assignees.some(a => a.userId === session.id)
@@ -83,6 +85,8 @@ export default defineEventHandler(async (event) => {
         myToThem: null,
         themToUs: null,
         globalRecordId: i.globalRecordId,
+        isUnknownContact: i.isUnknownContact,
+        unknownContactAddress: i.unknownContactAddress,
         canEdit: false,
       }
     })

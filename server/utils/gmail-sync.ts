@@ -10,7 +10,89 @@ import {
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 200
 
-export async function syncGmailForUser(userId: string): Promise<{ synced: number }> {
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'seznam.cz', 'email.cz', 'post.cz',
+  'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'yahoo.co.uk',
+  'centrum.cz', 'atlas.cz', 'volny.cz', 'tiscali.cz',
+  'icloud.com', 'me.com', 'mac.com', 'aol.com', 'protonmail.com',
+  'proton.me', 'mail.com', 'zoho.com', 'yandex.com', 'gmx.com', 'gmx.de',
+])
+
+function getDomainFromEmail(email: string): string {
+  return email.split('@')[1]?.toLowerCase() ?? ''
+}
+
+function getDomainFromUrl(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    return hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+type PartnerDomainContext = {
+  domains: Set<string>
+  knownEmails: Set<string>
+  blacklistedEmails: Set<string>
+  projectId: string
+}
+
+async function buildDomainContext(
+  globalRecordIds: string[],
+): Promise<Map<string, PartnerDomainContext>> {
+  if (globalRecordIds.length === 0) return new Map()
+
+  const records = await prisma.globalRecord.findMany({
+    where: { id: { in: globalRecordIds } },
+    select: {
+      id: true,
+      payload: true,
+      contacts: { select: { address: true } },
+      fulfillments: { select: { contactBlacklist: true } },
+    },
+  })
+
+  const result = new Map<string, PartnerDomainContext>()
+
+  for (const rec of records) {
+    const domains = new Set<string>()
+    const knownEmails = new Set<string>()
+    const blacklistedEmails = new Set<string>()
+
+    for (const c of rec.contacts) {
+      const addr = c.address.toLowerCase()
+      knownEmails.add(addr)
+      const domain = getDomainFromEmail(addr)
+      if (domain && !FREE_EMAIL_DOMAINS.has(domain)) {
+        domains.add(domain)
+      }
+    }
+
+    const payload = rec.payload as Record<string, unknown> | null
+    const website = String(payload?.website ?? payload?.url ?? '')
+    if (website) {
+      const domain = getDomainFromUrl(website)
+      if (domain && !FREE_EMAIL_DOMAINS.has(domain)) {
+        domains.add(domain)
+      }
+    }
+
+    for (const f of rec.fulfillments) {
+      if (Array.isArray(f.contactBlacklist)) {
+        for (const email of f.contactBlacklist) {
+          if (typeof email === 'string') blacklistedEmails.add(email.toLowerCase())
+        }
+      }
+    }
+
+    result.set(rec.id, { domains, knownEmails, blacklistedEmails, projectId: '' })
+  }
+
+  return result
+}
+
+export async function syncGmailForUser(userId: string, options?: { forceLookbackDays?: number }): Promise<{ synced: number }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -30,11 +112,22 @@ export async function syncGmailForUser(userId: string): Promise<{ synced: number
   const accessToken = await ensureFreshToken(user)
 
   const historyDays = await getEmailSyncHistoryDays()
-  const afterDate = computeSyncStart(user.lastGmailSync, user.createdAt, historyDays)
+  const afterDate = options?.forceLookbackDays
+    ? (() => { const d = new Date(); d.setDate(d.getDate() - options.forceLookbackDays!); return d })()
+    : computeSyncStart(user.lastGmailSync, user.createdAt, historyDays)
   const partnerEmailMap = await collectPartnerEmails(user.id, user.isSuperAdmin)
 
   if (partnerEmailMap.size === 0) {
     return { synced: 0 }
+  }
+
+  const allRecordIds = [...new Set([...partnerEmailMap.values()].flat().map(e => e.globalRecordId))]
+  const domainCtx = await buildDomainContext(allRecordIds)
+  for (const [, entries] of partnerEmailMap) {
+    for (const entry of entries) {
+      const ctx = domainCtx.get(entry.globalRecordId)
+      if (ctx) ctx.projectId = entry.projectId
+    }
   }
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
@@ -56,7 +149,7 @@ export async function syncGmailForUser(userId: string): Promise<{ synced: number
 
       for (const msg of results) {
         if (!msg) continue
-        synced += await processMessage(msg, user.id, user.email, partnerEmailMap)
+        synced += await processMessage(msg, user.id, user.email, partnerEmailMap, domainCtx)
       }
 
       if (i + BATCH_SIZE < messageIds.length) {
@@ -153,6 +246,10 @@ export async function syncGmailForPartnerEmail(
   const partnerEmailMap = new Map<string, PartnerEmailEntry[]>()
   partnerEmailMap.set(normalizedEmail, [{ globalRecordId, projectId }])
 
+  const domainCtx = await buildDomainContext([globalRecordId])
+  const ctx = domainCtx.get(globalRecordId)
+  if (ctx) ctx.projectId = projectId
+
   const lookbackDate = new Date()
   lookbackDate.setDate(lookbackDate.getDate() - lookbackDays)
   const oneYearAgo = new Date()
@@ -178,7 +275,7 @@ export async function syncGmailForPartnerEmail(
 
       for (const msg of results) {
         if (!msg) continue
-        synced += await processMessage(msg, userId, user.email, partnerEmailMap)
+        synced += await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
       }
 
       if (i + BATCH_SIZE < messageIds.length) {
@@ -247,6 +344,7 @@ async function processMessage(
   userId: string,
   userEmail: string,
   partnerEmailMap: Map<string, PartnerEmailEntry[]>,
+  domainCtx?: Map<string, PartnerDomainContext>,
 ): Promise<number> {
   const headers = getHeaders(msg.payload)
   const from = headers.from ?? ''
@@ -292,6 +390,7 @@ async function processMessage(
   }
 
   const sentAt = date ? new Date(date) : new Date(Number(msg.internalDate))
+  const normalizedUserEmail = userEmail.toLowerCase()
 
   let created = 0
   for (const entry of matchedEntries) {
@@ -312,9 +411,59 @@ async function processMessage(
         },
       })
       created++
+
+      const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
+      await prisma.pipelineRecordRef.updateMany({
+        where: {
+          globalRecordId: entry.globalRecordId,
+          pipelineRun: { projectId: entry.projectId },
+          OR: [
+            { actionStatus: null },
+            { actionStatus: { notIn: ['BEFORE_MEETING', 'NONE'] } },
+          ],
+        },
+        data: { actionStatus: newStatus },
+      })
     } catch (e: any) {
       if (e?.code === 'P2002') continue
       throw e
+    }
+
+    if (!domainCtx) continue
+    const ctx = domainCtx.get(entry.globalRecordId)
+    if (!ctx || ctx.domains.size === 0) continue
+
+    for (const addr of allAddresses) {
+      if (addr === normalizedUserEmail) continue
+      if (ctx.knownEmails.has(addr)) continue
+      if (ctx.blacklistedEmails.has(addr)) continue
+
+      const domain = getDomainFromEmail(addr)
+      if (!domain || !ctx.domains.has(domain)) continue
+
+      try {
+        await prisma.interaction.create({
+          data: {
+            globalRecordId: entry.globalRecordId,
+            projectId: ctx.projectId || entry.projectId,
+            type: 'EMAIL',
+            direction,
+            subject,
+            sentAt,
+            fromAddress: from,
+            toAddress: to,
+            gmailId: msg.id,
+            content: htmlBody,
+            createdBy: userId,
+            isUnknownContact: true,
+            unknownContactAddress: addr,
+          },
+        })
+        created++
+      } catch (e: any) {
+        if (e?.code === 'P2002') continue
+        throw e
+      }
     }
   }
 

@@ -653,7 +653,7 @@ const tabs = computed(() => {
                 <span class="text-gray-300">&middot;</span>
                 <span>{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</span>
               </div>
-              <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" />
+              <ClientOnly><div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" /></ClientOnly>
               <div class="flex items-center gap-2">
                 <button
                   class="text-xs text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg hover:bg-amber-50 transition-colors"
@@ -743,7 +743,7 @@ const tabs = computed(() => {
             </template>
           </div>
 
-          <p class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" />
+          <ClientOnly><div class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" /></ClientOnly>
           <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
             ↗ odvozeno z jiného dokumentu
           </div>

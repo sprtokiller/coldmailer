@@ -162,7 +162,7 @@ async function deleteSignature(id: string) {
               @click="startFromTemplate(t)"
             >Použít jako základ</button>
           </div>
-          <div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(t.content)" />
+          <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(t.content)" /></ClientOnly>
         </div>
       </div>
     </div>
@@ -202,7 +202,7 @@ async function deleteSignature(id: string) {
               >Smazat</button>
             </div>
           </div>
-          <div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(s.content)" />
+          <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(s.content)" /></ClientOnly>
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ const DEBOUNCE_MS = 30_000
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
+  const body = await readBody(event).catch(() => ({})) as { lookbackDays?: number } | null
 
   try {
     const user = await prisma.user.findUnique({
@@ -17,11 +18,13 @@ export default defineEventHandler(async (event) => {
       return { synced: 0, skipped: 'no-token' }
     }
 
-    if (user.lastGmailSync && Date.now() - user.lastGmailSync.getTime() < DEBOUNCE_MS) {
+    const forceLookbackDays = body?.lookbackDays && body.lookbackDays > 0 ? body.lookbackDays : undefined
+
+    if (!forceLookbackDays && user.lastGmailSync && Date.now() - user.lastGmailSync.getTime() < DEBOUNCE_MS) {
       return { synced: 0, skipped: 'debounced' }
     }
 
-    return await syncGmailForUser(session.id)
+    return await syncGmailForUser(session.id, forceLookbackDays ? { forceLookbackDays } : undefined)
   } catch (e: any) {
     if (e?.statusCode === 401 || e?.statusCode === 403 || e?.status === 401 || e?.status === 403) {
       console.warn(`[gmail-sync] Auth error for user ${session.id}:`, e.message ?? e)

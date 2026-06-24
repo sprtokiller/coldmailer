@@ -544,6 +544,10 @@ model Interaction {
   myToThem String?
   themToUs String?
 
+  // Unknown contact detection
+  isUnknownContact      Boolean   @default(false)
+  unknownContactAddress String?
+
   assignees InteractionAssignee[]
 
   @@unique([gmailId, globalRecordId])
@@ -635,14 +639,16 @@ model PartnerNote {
 }
 
 model PartnerFulfillment {
-  id             String       @id @default(cuid())
-  globalRecordId String
-  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  groupId        String?
-  group          Group?       @relation(fields: [groupId], references: [id])
-  myToThem       String?
-  themToUs       String?
-  updatedAt      DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  globalRecordId   String
+  globalRecord     GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  groupId          String?
+  group            Group?       @relation(fields: [groupId], references: [id])
+  myToThem         String?
+  themToUs         String?
+  contactBlacklist Json?
+  emailDisplayMode String       @default("text")
+  updatedAt        DateTime     @updatedAt
 
   @@unique([globalRecordId, groupId])
 }

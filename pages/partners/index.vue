@@ -12,6 +12,7 @@ interface Partner {
   lastInteractionAt: string | null
   interactionCount: number
   dealStage: string | null
+  actionStatus: string | null
 }
 
 const search = ref('')
@@ -28,8 +29,7 @@ const partners = computed(() => {
   const q = search.value.toLowerCase().trim()
   if (!q) return allPartners.value ?? []
   return (allPartners.value ?? []).filter(p =>
-    p.canonicalName.toLowerCase().includes(q) ||
-    String(p.payload.industry ?? '').toLowerCase().includes(q),
+    p.canonicalName.toLowerCase().includes(q),
   )
 })
 
@@ -59,8 +59,18 @@ const DEAL_STAGE_COLORS: Record<string, string> = {
   COMPLETED: 'bg-gray-100 text-gray-600',
 }
 
-const SIZE_LABELS: Record<string, string> = {
-  micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
+const ACTION_STATUS_LABELS: Record<string, string> = {
+  WAITING_FOR_THEM: 'Čekání na ně',
+  WAITING_FOR_US: 'Čekání na nás',
+  BEFORE_MEETING: 'Před schůzkou',
+  NONE: 'Už nic',
+}
+
+const ACTION_STATUS_COLORS: Record<string, string> = {
+  WAITING_FOR_THEM: 'bg-sky-100 text-sky-700',
+  WAITING_FOR_US: 'bg-rose-100 text-rose-700',
+  BEFORE_MEETING: 'bg-purple-100 text-purple-700',
+  NONE: 'bg-gray-100 text-gray-500',
 }
 </script>
 
@@ -83,7 +93,7 @@ const SIZE_LABELS: Record<string, string> = {
       <input
         v-model="search"
         type="text"
-        placeholder="Hledat partnera nebo odvětví..."
+        placeholder="Hledat partnera..."
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
     </div>
@@ -93,7 +103,7 @@ const SIZE_LABELS: Record<string, string> = {
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50 text-left">
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Fáze</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Primární email</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
@@ -133,21 +143,22 @@ const SIZE_LABELS: Record<string, string> = {
               </div>
             </td>
             <td class="px-4 py-3">
-              <div class="flex flex-col gap-0.5">
-                <span v-if="p.payload.industry" class="text-xs text-gray-600">{{ p.payload.industry }}</span>
-                <span v-else class="text-xs text-gray-300">—</span>
-                <span v-if="p.payload.size" class="text-[10px] text-gray-400">
-                  {{ SIZE_LABELS[String(p.payload.size)] ?? p.payload.size }}
-                </span>
-              </div>
-            </td>
-            <td class="px-4 py-3">
               <span
                 v-if="p.dealStage"
                 class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
                 :class="DEAL_STAGE_COLORS[p.dealStage] ?? 'bg-gray-100 text-gray-600'"
               >
                 {{ DEAL_STAGE_LABELS[p.dealStage] ?? p.dealStage }}
+              </span>
+              <span v-else class="text-xs text-gray-300">—</span>
+            </td>
+            <td class="px-4 py-3">
+              <span
+                v-if="p.actionStatus"
+                class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
+                :class="ACTION_STATUS_COLORS[p.actionStatus] ?? 'bg-gray-100 text-gray-500'"
+              >
+                {{ ACTION_STATUS_LABELS[p.actionStatus] ?? p.actionStatus }}
               </span>
               <span v-else class="text-xs text-gray-300">—</span>
             </td>

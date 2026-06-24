@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sanitizeEmailHtml } from '~/utils/html-normalize'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -29,6 +31,8 @@ interface Interaction {
   projectId: string
   project: { id: string; name: string }
   canEdit: boolean
+  isUnknownContact: boolean
+  unknownContactAddress: string | null
 }
 interface CrossProjectMeta {
   projectId: string
@@ -55,31 +59,39 @@ interface AppUser { id: string; name: string; image: string | null; email: strin
 
 const { data: partner, refresh: refreshPartner } = await useFetch<Partner>(`/api/partners/${id}`)
 const { data: interactionsData, refresh: refreshInteractions } = await useFetch<InteractionsResponse>(`/api/partners/${id}/interactions`)
+const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{ blacklist: string[]; emailDisplayMode: string }>(`/api/partners/${id}/blacklist`)
 const { data: allUsers } = await useFetch<AppUser[]>('/api/users')
 const { user: me } = useUserSession()
 const { data: meSettings } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me')
 const canEditPartner = computed(() => meSettings.value?.effectivePermissions.includes('partners.edit') ?? false)
 
 async function refresh() {
-  await Promise.all([refreshPartner(), refreshInteractions()])
+  await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist()])
 }
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
 
+const toast = useToast()
 const syncing = ref(false)
-const syncResult = ref<string | null>(null)
+const showSyncDropdown = ref(false)
+const syncLookbackDays = ref(90)
 
-async function syncNow() {
+async function syncNow(lookbackDays?: number) {
   syncing.value = true
-  syncResult.value = null
+  showSyncDropdown.value = false
   try {
-    const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST' })
-    syncResult.value = res.skipped ? 'Sync přeskočen' : `${res.synced} emailů`
-    await refreshInteractions()
-    setTimeout(() => { syncResult.value = null }, 3000)
+    const body = lookbackDays ? { lookbackDays } : {}
+    const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST', body })
+    if (res.skipped) {
+      toast.show('Sync přeskočen', 'info')
+    } else {
+      const n = res.synced
+      const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'
+      toast.show(`Synchronizováno ${n} ${word}`, 'success')
+    }
+    await Promise.all([refreshInteractions(), refreshPartner()])
   } catch {
-    syncResult.value = 'Sync selhal'
-    setTimeout(() => { syncResult.value = null }, 3000)
+    toast.show('Sync selhal', 'error')
   } finally {
     syncing.value = false
   }
@@ -87,7 +99,10 @@ async function syncNow() {
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 
-const showContactsPanel = ref(false)
+onMounted(() => {
+  document.addEventListener('click', () => { showSyncDropdown.value = false })
+})
+
 const showProfileModal = ref(false)
 const showEditModal = ref(false)
 const expandedEvents = ref(new Set<string>())
@@ -100,40 +115,109 @@ const crossProjectSummary = computed(() => interactionsData.value?.crossProjectS
 const access = computed(() => interactionsData.value?.access ?? { canViewAll: false, canEditAll: false })
 const primaryContact = computed(() => partner.value?.contacts.find(c => c.isPrimary) ?? partner.value?.contacts[0] ?? null)
 
+// ── Unknown contacts ─────────────────────────────────────────────────────────
+
+const unknownContacts = computed(() => {
+  const byEmail = new Map<string, Interaction[]>()
+  for (const i of interactions.value) {
+    if (i.isUnknownContact && i.unknownContactAddress) {
+      const list = byEmail.get(i.unknownContactAddress) ?? []
+      list.push(i)
+      byEmail.set(i.unknownContactAddress, list)
+    }
+  }
+  return byEmail
+})
+
+const unknownContactActionLoading = ref<string | null>(null)
+
+async function handleUnknownContactAction(action: 'dismiss' | 'blacklist' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string }) {
+  unknownContactActionLoading.value = email
+  try {
+    await $fetch(`/api/partners/${id}/unknown-contact-action`, {
+      method: 'POST',
+      body: { action, email, ...extra },
+    })
+    await refresh()
+  } finally {
+    unknownContactActionLoading.value = null
+  }
+}
+
+const addContactForm = ref<{ email: string; firstName: string; lastName: string; role: string } | null>(null)
+
+function openAddContactForm(email: string) {
+  addContactForm.value = { email, firstName: '', lastName: '', role: '' }
+}
+
+async function submitAddContact() {
+  if (!addContactForm.value) return
+  await handleUnknownContactAction('add_contact', addContactForm.value.email, {
+    firstName: addContactForm.value.firstName || undefined,
+    lastName: addContactForm.value.lastName || undefined,
+    role: addContactForm.value.role || undefined,
+  })
+  addContactForm.value = null
+}
+
+// ── Blacklist management ─────────────────────────────────────────────────────
+
+const blacklist = computed(() => blacklistData.value?.blacklist ?? [])
+const showBlacklist = ref(false)
+const newBlacklistEmail = ref('')
+
+async function addToBlacklist() {
+  const email = newBlacklistEmail.value.trim().toLowerCase()
+  if (!email) return
+  const updated = [...blacklist.value, email]
+  await $fetch(`/api/partners/${id}/fulfillment`, {
+    method: 'PUT',
+    body: { contactBlacklist: updated },
+  })
+  newBlacklistEmail.value = ''
+  await refreshBlacklist()
+}
+
+async function removeFromBlacklist(email: string) {
+  const updated = blacklist.value.filter(e => e !== email)
+  await $fetch(`/api/partners/${id}/fulfillment`, {
+    method: 'PUT',
+    body: { contactBlacklist: updated.length ? updated : null },
+  })
+  await refreshBlacklist()
+}
+
+// ── Email display mode ───────────────────────────────────────────────────────
+
+const emailDisplayMode = computed(() => blacklistData.value?.emailDisplayMode ?? 'text')
+
+async function toggleEmailDisplayMode() {
+  const newMode = emailDisplayMode.value === 'text' ? 'html' : 'text'
+  await $fetch(`/api/partners/${id}/fulfillment`, {
+    method: 'PUT',
+    body: { emailDisplayMode: newMode },
+  })
+  await refreshBlacklist()
+}
+
+function stripHtml(html: string): string {
+  if (!html) return ''
+  if (typeof DOMParser === 'undefined') return html.replace(/<[^>]*>/g, '')
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  return doc.body.textContent ?? ''
+}
+
 // ── Filter ───────────────────────────────────────────────────────────────────
 
 type TypeFilter = 'NOTE' | 'EMAIL' | 'FULFILLMENT'
 const typeFilter = ref<TypeFilter>('EMAIL')
 
 const filteredInteractions = computed(() => {
-  return interactions.value.filter(i => i.type === typeFilter.value)
+  if (typeFilter.value === 'FULFILLMENT') {
+    return interactions.value.filter(i => (i.type === 'FULFILLMENT' || i.type === 'NOTE') && !i.isUnknownContact)
+  }
+  return interactions.value.filter(i => i.type === typeFilter.value && !i.isUnknownContact)
 })
-
-// ── Contacts ──────────────────────────────────────────────────────────────────
-
-const newContactAddress = ref('')
-const newContactLabel = ref('')
-const newContactPrimary = ref(false)
-
-async function addContact() {
-  if (!newContactAddress.value.trim()) return
-  await $fetch(`/api/partners/${id}/contacts`, {
-    method: 'POST',
-    body: { address: newContactAddress.value.trim(), label: newContactLabel.value.trim() || null, isPrimary: newContactPrimary.value },
-  })
-  newContactAddress.value = ''; newContactLabel.value = ''; newContactPrimary.value = false
-  await refreshPartner()
-}
-
-async function setPrimary(cId: string) {
-  await $fetch(`/api/partners/${id}/contacts/${cId}`, { method: 'PATCH', body: { isPrimary: true } })
-  await refreshPartner()
-}
-
-async function deleteContact(cId: string) {
-  await $fetch(`/api/partners/${id}/contacts/${cId}`, { method: 'DELETE' })
-  await refreshPartner()
-}
 
 // ── Interaction CRUD ─────────────────────────────────────────────────────────
 
@@ -224,6 +308,33 @@ async function saveEdit() {
   await refreshInteractions()
 }
 
+// ── Fulfillment inline editing ───────────────────────────────────────────────
+
+const fulfillmentEditingField = ref<{ id: string; field: 'myToThem' | 'themToUs'; value: string } | null>(null)
+const fulfillmentTextarea = ref<HTMLTextAreaElement[] | null>(null)
+
+function toLines(text: string): string[] {
+  return text.split('\n').filter(l => l.trim())
+}
+
+function startFulfillmentEdit(i: Interaction, field: 'myToThem' | 'themToUs') {
+  fulfillmentEditingField.value = { id: i.id, field, value: i[field] ?? '' }
+  nextTick(() => {
+    fulfillmentTextarea.value?.[0]?.focus()
+  })
+}
+
+async function saveFulfillmentField(interactionId: string) {
+  if (!fulfillmentEditingField.value || fulfillmentEditingField.value.id !== interactionId) return
+  const { field, value } = fulfillmentEditingField.value
+  fulfillmentEditingField.value = null
+  await $fetch(`/api/partners/${id}/interactions/${interactionId}`, {
+    method: 'PATCH',
+    body: { [field]: value.trim() || null },
+  })
+  await refreshInteractions()
+}
+
 async function updateStatus(field: 'actionStatus' | 'dealStage', value: string | null) {
   await $fetch(`/api/partners/${id}/pipeline-ref`, {
     method: 'PATCH',
@@ -232,13 +343,6 @@ async function updateStatus(field: 'actionStatus' | 'dealStage', value: string |
   await refreshPartner()
 }
 
-async function updateFulfillment(iId: string, myToThem: string | null, themToUs: string | null) {
-  await $fetch(`/api/partners/${id}/interactions/${iId}`, {
-    method: 'PATCH',
-    body: { myToThem, themToUs },
-  })
-  await refreshInteractions()
-}
 
 async function deleteInteraction(iId: string) {
   if (!confirm('Opravdu chcete smazat tuto položku? Tato akce je nevratná.')) return
@@ -292,7 +396,7 @@ const ACTION_STATUS_LABELS: Record<string, string> = {
   WAITING_FOR_THEM: 'Čekání na ně',
   WAITING_FOR_US: 'Čekání na nás',
   BEFORE_MEETING: 'Před schůzkou',
-  NONE: '—',
+  NONE: 'Už nic',
 }
 const DEAL_STAGE_LABELS: Record<string, string> = {
   CONTACTED: 'Osloveno',
@@ -348,22 +452,40 @@ const TYPE_COLORS: Record<string, string> = {
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-          <button
-            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-            :disabled="syncing"
-            @click="syncNow"
-          >
-            <svg v-if="syncing" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-            <svg v-else class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-            {{ syncing ? 'Sync...' : 'Sync' }}
-          </button>
-          <span v-if="syncResult" class="text-xs text-green-600">{{ syncResult }}</span>
-          <button
-            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-            @click="showContactsPanel = !showContactsPanel"
-          >
-            Editovat
-          </button>
+          <div class="relative flex">
+            <button
+              class="text-xs px-3 py-1.5 rounded-l-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+              :disabled="syncing"
+              @click="syncNow()"
+            >
+              <svg v-if="syncing" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+              <svg v-else class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              {{ syncing ? 'Sync...' : 'Sync' }}
+            </button>
+            <button
+              class="text-xs px-1.5 py-1.5 rounded-r-lg border border-l-0 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+              :disabled="syncing"
+              @click.stop="showSyncDropdown = !showSyncDropdown"
+            >
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            <div v-if="showSyncDropdown" class="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl p-4 w-64" @click.stop>
+              <h4 class="text-xs font-medium text-gray-700 mb-2">Hloubka synchronizace</h4>
+              <p class="text-[11px] text-gray-400 mb-3">Znovu načte maily z minulosti. Duplikáty se nevytvoří.</p>
+              <div class="flex items-center gap-2 mb-3">
+                <input v-model.number="syncLookbackDays" type="number" min="1" max="365" class="w-20 text-sm px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 text-center" />
+                <span class="text-xs text-gray-500">dní zpět</span>
+              </div>
+              <div class="flex gap-1 mb-3">
+                <button v-for="d in [30, 90, 180, 365]" :key="d" class="text-[10px] px-2 py-1 rounded border transition-colors" :class="syncLookbackDays === d ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'" @click="syncLookbackDays = d">{{ d }}d</button>
+              </div>
+              <button
+                :disabled="syncing"
+                class="w-full text-xs px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                @click="syncNow(syncLookbackDays)"
+              >Synchronizovat {{ syncLookbackDays }} dní zpět</button>
+            </div>
+          </div>
           <button
             v-if="partner.payload.description"
             class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
@@ -397,7 +519,7 @@ const TYPE_COLORS: Record<string, string> = {
           <span v-else :class="['text-xs px-2 py-1 rounded font-medium', DEAL_STAGE_COLORS[partner.dealStage ?? ''] ?? 'bg-gray-100 text-gray-600']">{{ partner.dealStage ? DEAL_STAGE_LABELS[partner.dealStage] : '—' }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-500 font-medium">Akce:</span>
+          <span class="text-xs text-gray-500 font-medium">Stav:</span>
           <select
             v-if="canEditPartner"
             :value="partner.actionStatus ?? ''"
@@ -450,32 +572,6 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
     </div>
 
-    <!-- ── Contacts Panel ── -->
-    <div v-if="showContactsPanel" class="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
-      <h3 class="text-sm font-medium text-gray-700 mb-3">Emailové adresy</h3>
-      <div class="space-y-2 mb-4">
-        <div v-for="c in partner.contacts" :key="c.id" class="flex items-center gap-2 text-sm">
-          <span :class="['font-mono shrink-0', c.isPrimary ? 'text-gray-800 font-medium' : 'text-gray-500']">{{ c.address }}</span>
-          <span v-if="c.firstName || c.lastName" class="text-xs text-gray-500">{{ [c.firstName, c.lastName].filter(Boolean).join(' ') }}</span>
-          <span v-if="c.role" class="text-xs text-gray-400">{{ c.role }}</span>
-          <span class="flex-1" />
-          <span v-if="c.isPrimary" class="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">primární</span>
-          <button v-else class="text-xs text-gray-400 hover:text-indigo-500 transition-colors" @click="setPrimary(c.id)">nastavit primární</button>
-          <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click="deleteContact(c.id)">×</button>
-        </div>
-        <p v-if="!partner.contacts.length" class="text-xs text-gray-400 italic">Žádné emailové adresy</p>
-      </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <input v-model="newContactAddress" type="email" placeholder="email@partner.cz" class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-48" @keydown.enter="addContact" />
-        <input v-model="newContactLabel" type="text" placeholder="Štítek (volitelný)" class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 w-36" />
-        <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-          <input v-model="newContactPrimary" type="checkbox" class="rounded" />
-          primární
-        </label>
-        <button class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="addContact">Přidat</button>
-      </div>
-    </div>
-
     <!-- ── Toolbar ── -->
     <div class="flex items-center justify-between gap-4 mb-6">
       <div class="flex gap-1">
@@ -487,6 +583,91 @@ const TYPE_COLORS: Record<string, string> = {
         >{{ TYPE_LABELS[f] }}</button>
       </div>
 
+      <div class="flex items-center gap-2 ml-auto">
+        <button
+          v-if="typeFilter === 'NOTE'"
+          class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors"
+          @click="newMode = newMode === 'NOTE' ? null : 'NOTE'"
+        >{{ newMode === 'NOTE' ? 'Zrušit' : '+ Poznámka' }}</button>
+
+        <div v-if="typeFilter === 'EMAIL'" class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          :class="['px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1', emailDisplayMode === 'text' ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600']"
+          title="Textový režim"
+          @click="emailDisplayMode !== 'text' && toggleEmailDisplayMode()"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10" /></svg>
+          Text
+        </button>
+        <button
+          :class="['px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 border-l border-gray-200', emailDisplayMode === 'html' ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600']"
+          title="HTML náhled"
+          @click="emailDisplayMode !== 'html' && toggleEmailDisplayMode()"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+          HTML
+        </button>
+      </div>
+      </div>
+    </div>
+
+    <!-- ── Unknown Contact Warnings ── -->
+    <div v-if="unknownContacts.size > 0" class="mb-6 space-y-3">
+      <div
+        v-for="[email, emails] of unknownContacts"
+        :key="email"
+        class="bg-amber-50 border border-amber-200 rounded-xl p-4"
+      >
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-amber-800">
+              Neznámý kontakt: <span class="font-mono">{{ email }}</span>
+            </p>
+            <p class="text-xs text-amber-600 mt-0.5">
+              Nalezeno {{ emails.length }} {{ emails.length === 1 ? 'email' : emails.length < 5 ? 'emaily' : 'emailů' }} se shodnou doménou.
+              Přidat jako kontakt partnera?
+            </p>
+
+            <!-- Add contact inline form -->
+            <div v-if="addContactForm?.email === email" class="mt-3 bg-white border border-amber-100 rounded-lg p-3 space-y-2">
+              <div class="flex gap-2">
+                <input v-model="addContactForm.firstName" type="text" placeholder="Jméno" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="addContactForm.lastName" type="text" placeholder="Příjmení" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="addContactForm.role" type="text" placeholder="Pozice" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+              </div>
+              <div class="flex justify-end gap-2">
+                <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="addContactForm = null">Zrušit</button>
+                <button
+                  :disabled="unknownContactActionLoading === email"
+                  class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                  @click="submitAddContact"
+                >Uložit kontakt</button>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div v-else class="flex items-center gap-2 mt-3">
+              <button
+                :disabled="unknownContactActionLoading === email"
+                class="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                @click="handleUnknownContactAction('dismiss', email)"
+              >Ne</button>
+              <button
+                :disabled="unknownContactActionLoading === email"
+                class="text-xs px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-40 transition-colors"
+                @click="handleUnknownContactAction('blacklist', email)"
+              >Ne, již neupozorňovat</button>
+              <button
+                :disabled="unknownContactActionLoading === email"
+                class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                @click="openAddContactForm(email)"
+              >Ano, přidat kontakt</button>
+              <svg v-if="unknownContactActionLoading === email" class="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── New Interaction Forms ── -->
@@ -560,30 +741,43 @@ const TYPE_COLORS: Record<string, string> = {
         :key="i.id"
         :class="[
           'bg-white border rounded-xl p-4 transition-colors',
-          i.type === 'EMAIL' && i.direction === 'SENT' ? 'border-blue-100' :
-          i.type === 'EMAIL' && i.direction === 'RECEIVED' ? 'border-green-100' :
+          i.type === 'EMAIL' && i.direction === 'SENT' ? 'border-blue-100 cursor-pointer' :
+          i.type === 'EMAIL' && i.direction === 'RECEIVED' ? 'border-green-100 cursor-pointer' :
           i.type === 'FULFILLMENT' ? 'border-emerald-100' :
           'border-gray-200',
         ]"
+        @click="i.type === 'EMAIL' && toggleEvent(i.id)"
       >
         <!-- Header row -->
-        <div class="flex items-start justify-between gap-2 mb-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span v-if="i.type === 'EMAIL' && i.direction" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium', i.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
+        <div v-if="i.type !== 'FULFILLMENT'" class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
+            <span v-if="i.type === 'EMAIL' && i.direction" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', i.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
               {{ i.direction === 'SENT' ? '↑ Odesláno' : '↓ Obdrženo' }}
             </span>
+            <span v-if="i.type === 'NOTE' && typeFilter === 'FULFILLMENT'" class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-50 text-violet-600 shrink-0">Poznámka</span>
+            <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover shrink-0" referrerpolicy="no-referrer" />
+            <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
+            <template v-for="a in i.assignees" :key="a.userId">
+              <span class="text-gray-300">+</span>
+              <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover shrink-0" referrerpolicy="no-referrer" />
+              <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ a.user.name.charAt(0).toUpperCase() }}</div>
+            </template>
+            <span class="truncate">{{ i.creator.name }}</span>
+            <span class="text-gray-300 shrink-0">&middot;</span>
+            <span class="text-gray-300 shrink-0">{{ fmtDate(i.type === 'EMAIL' && i.sentAt ? i.sentAt : i.createdAt) }}</span>
+            <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
           </div>
           <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
-            <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click="startEdit(i)">upravit</button>
-            <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click="deleteInteraction(i.id)">smazat</button>
+            <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
+            <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">smazat</button>
           </div>
         </div>
 
         <!-- Email subject -->
-        <p v-if="i.type === 'EMAIL' && i.subject" class="text-sm font-medium text-gray-800 mb-1 cursor-pointer" @click="toggleEvent(i.id)">{{ i.subject }}</p>
+        <p v-if="i.type === 'EMAIL' && i.subject" class="text-sm font-medium text-gray-800 mb-1">{{ i.subject }}</p>
 
         <!-- Note / Email body -->
-        <div v-if="editingId === i.id">
+        <div v-if="editingId === i.id && i.type === 'NOTE'">
           <textarea v-model="editingContent" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
           <div class="flex gap-2 mt-2">
             <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="saveEdit">Uložit</button>
@@ -592,46 +786,70 @@ const TYPE_COLORS: Record<string, string> = {
         </div>
         <template v-else>
           <p v-if="i.type === 'NOTE' && i.content" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ i.content }}</p>
-          <div v-if="i.type === 'EMAIL' && expandedEvents.has(i.id) && i.content" class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed mt-2 pt-2 border-t border-gray-100">{{ i.content }}</div>
+          <div v-if="i.type === 'EMAIL' && expandedEvents.has(i.id) && i.content" class="mt-2 pt-2 border-t border-gray-100">
+            <div v-if="emailDisplayMode === 'html'" class="email-html-preview text-sm text-gray-700 leading-relaxed" v-html="sanitizeEmailHtml(i.content)" />
+            <div v-else class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{{ stripHtml(i.content) }}</div>
+          </div>
         </template>
 
-        <!-- Fulfillment content -->
-        <div v-if="i.type === 'FULFILLMENT'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
-          <div class="bg-blue-50 rounded-lg p-3">
+        <!-- Fulfillment content — always editable -->
+        <div v-if="i.type === 'FULFILLMENT'" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
             <h4 class="text-xs font-semibold text-blue-800 mb-1">My jim</h4>
-            <p v-if="i.myToThem" class="text-sm text-gray-700 whitespace-pre-wrap">{{ i.myToThem }}</p>
-            <p v-else class="text-xs text-gray-400 italic">Nevyplněno</p>
+            <div v-if="fulfillmentEditingField?.id === i.id && fulfillmentEditingField?.field === 'myToThem'">
+              <textarea
+                ref="fulfillmentTextarea"
+                :value="fulfillmentEditingField.value"
+                rows="4"
+                placeholder="Každý řádek = jedna položka..."
+                class="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none bg-white"
+                @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
+                @blur="saveFulfillmentField(i.id)"
+                @keydown.escape="fulfillmentEditingField = null"
+              />
+            </div>
+            <div v-else class="bg-blue-50 rounded-lg p-3 min-h-[3rem] cursor-text" @click="startFulfillmentEdit(i, 'myToThem')">
+              <ul v-if="i.myToThem" class="list-disc list-inside space-y-0.5">
+                <li v-for="(line, li) in toLines(i.myToThem)" :key="li" class="text-sm text-gray-700">{{ line }}</li>
+              </ul>
+              <p v-else class="text-xs text-gray-400 italic">Klikněte pro přidání...</p>
+            </div>
           </div>
-          <div class="bg-green-50 rounded-lg p-3">
+          <div>
             <h4 class="text-xs font-semibold text-green-800 mb-1">Oni nám</h4>
-            <p v-if="i.themToUs" class="text-sm text-gray-700 whitespace-pre-wrap">{{ i.themToUs }}</p>
-            <p v-else class="text-xs text-gray-400 italic">Nevyplněno</p>
+            <div v-if="fulfillmentEditingField?.id === i.id && fulfillmentEditingField?.field === 'themToUs'">
+              <textarea
+                ref="fulfillmentTextarea"
+                :value="fulfillmentEditingField.value"
+                rows="4"
+                placeholder="Každý řádek = jedna položka..."
+                class="w-full text-sm px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-400 resize-none bg-white"
+                @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
+                @blur="saveFulfillmentField(i.id)"
+                @keydown.escape="fulfillmentEditingField = null"
+              />
+            </div>
+            <div v-else class="bg-green-50 rounded-lg p-3 min-h-[3rem] cursor-text" @click="startFulfillmentEdit(i, 'themToUs')">
+              <ul v-if="i.themToUs" class="list-disc list-inside space-y-0.5">
+                <li v-for="(line, li) in toLines(i.themToUs)" :key="li" class="text-sm text-gray-700">{{ line }}</li>
+              </ul>
+              <p v-else class="text-xs text-gray-400 italic">Klikněte pro přidání...</p>
+            </div>
           </div>
         </div>
 
-        <!-- Footer: meta + assignees + status controls -->
-        <div class="flex items-center gap-3 mt-3 flex-wrap">
-          <img
-            v-if="i.creator.image"
-            :src="i.creator.image"
-            :alt="i.creator.name"
-            :title="i.creator.name"
-            class="w-5 h-5 rounded-full object-cover"
-            referrerpolicy="no-referrer"
-          />
-          <span class="text-xs text-gray-400">{{ i.creator.name }}</span>
-          <span class="text-xs text-gray-300">{{ fmtDate(i.type === 'EMAIL' && i.sentAt ? i.sentAt : i.createdAt) }}</span>
-          <span v-if="i.createdAt !== i.updatedAt" class="text-xs text-gray-300">(upraveno)</span>
-
-          <!-- Assignee chips (co-authors) -->
-          <div class="flex items-center gap-1 ml-auto">
-            <template v-for="a in i.assignees" :key="a.userId">
-              <span :title="a.user.name + ' (spoluautor)'">
-                <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" class="w-5 h-5 rounded-full ring-1 ring-white object-cover" referrerpolicy="no-referrer" />
-                <div v-else class="w-5 h-5 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[9px] font-medium">{{ a.user.name.charAt(0).toUpperCase() }}</div>
-              </span>
-            </template>
-          </div>
+        <!-- Footer (fulfillment only — emails/notes have meta in the header) -->
+        <div v-if="i.type === 'FULFILLMENT'" class="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
+          <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover" referrerpolicy="no-referrer" />
+          <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
+          <template v-for="a in i.assignees" :key="a.userId">
+            <span class="text-gray-300">+</span>
+            <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover" referrerpolicy="no-referrer" />
+            <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium">{{ a.user.name.charAt(0).toUpperCase() }}</div>
+          </template>
+          <span>{{ i.creator.name }}</span>
+          <span class="text-gray-300">&middot;</span>
+          <span class="text-gray-300">{{ fmtDate(i.createdAt) }}</span>
         </div>
       </div>
 
@@ -667,6 +885,46 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
     </div>
 
+    <!-- ── Blacklist Management ── -->
+    <div v-if="typeFilter === 'EMAIL'" class="mt-8">
+      <button
+        class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3"
+        @click="showBlacklist = !showBlacklist"
+      >
+        <span>{{ showBlacklist ? '▾' : '▸' }}</span>
+        <span>Blacklist kontaktů{{ blacklist.length ? ` (${blacklist.length})` : '' }}</span>
+      </button>
+      <div v-if="showBlacklist" class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <div class="space-y-2 mb-4">
+          <div
+            v-for="email in blacklist"
+            :key="email"
+            class="flex items-center justify-between gap-2 text-sm"
+          >
+            <span class="font-mono text-gray-600">{{ email }}</span>
+            <button
+              class="text-xs text-gray-300 hover:text-red-400 transition-colors"
+              @click="removeFromBlacklist(email)"
+            >odebrat</button>
+          </div>
+          <p v-if="!blacklist.length" class="text-xs text-gray-400 italic">Žádné blokované adresy</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="newBlacklistEmail"
+            type="email"
+            placeholder="email@example.com"
+            class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-48"
+            @keydown.enter="addToBlacklist"
+          />
+          <button
+            class="text-sm px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            @click="addToBlacklist"
+          >Přidat na blacklist</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Profile modal ── -->
     <div v-if="showProfileModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showProfileModal = false">
       <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
@@ -691,3 +949,46 @@ const TYPE_COLORS: Record<string, string> = {
     @saved="showEditModal = false; refreshPartner()"
   />
 </template>
+
+<style scoped>
+.email-html-preview {
+  overflow-x: auto;
+  word-break: break-word;
+}
+.email-html-preview :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
+.email-html-preview :deep(a) {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+.email-html-preview :deep(blockquote) {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #6b7280;
+}
+.email-html-preview :deep(p) {
+  margin: 0.25rem 0;
+}
+.email-html-preview :deep(table) {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+.email-html-preview :deep(td),
+.email-html-preview :deep(th) {
+  vertical-align: top;
+}
+.email-html-preview :deep(h1),
+.email-html-preview :deep(h2),
+.email-html-preview :deep(h3) {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+}
+.email-html-preview :deep(hr) {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 0.5rem 0;
+}
+</style>
