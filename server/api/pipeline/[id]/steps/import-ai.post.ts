@@ -155,9 +155,10 @@ PRAVIDLA:
 
   const userMessage = `Transformuj tento nestrukturovaný text do požadovaného JSON formátu:\n---\n${body.rawInputText}\n---${existingContext}`
 
+  const runtimeConfig = useRuntimeConfig(event)
   const client = new OpenAI({
     baseURL: OPENROUTER.baseURL,
-    apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
+    apiKey: runtimeConfig.openRouterApiKey as string,
     defaultHeaders: { 'HTTP-Referer': OPENROUTER.siteUrl, 'X-Title': OPENROUTER.siteTitle },
   })
 
@@ -174,7 +175,7 @@ PRAVIDLA:
   try {
     let costUsd = 0
     if (response.id) {
-      const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+      const apiKey = runtimeConfig.openRouterApiKey as string
       const costRes = await fetch(
         `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(response.id)}`,
         { headers: { Authorization: `Bearer ${apiKey}` } },

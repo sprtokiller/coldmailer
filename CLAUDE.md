@@ -80,13 +80,13 @@ After `bun install`, `postinstall` runs `nuxt prepare && prisma generate` automa
 ## Environment Variables
 
 Copy `.env.example` to `.env` and fill in:
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth 2.0 credentials (only `@scg.cz` emails are allowed to sign in)
-- `GOOGLE_REDIRECT_URI` — defaults to `http://localhost:3000/api/auth/callback/google`; must match exactly what's registered in Google Cloud Console; requires scope `gmail.compose`
+- `NUXT_GOOGLE_CLIENT_ID` / `NUXT_GOOGLE_CLIENT_SECRET` — Google OAuth 2.0 credentials (only `@scg.cz` emails are allowed to sign in)
+- `NUXT_GOOGLE_REDIRECT_URI` — defaults to `http://localhost:3000/api/auth/callback/google`; must match exactly what's registered in Google Cloud Console; requires scope `gmail.compose`
 - `DATABASE_URL` — PostgreSQL connection string, e.g. `postgresql://coldmailer:coldmailer@localhost:5432/coldmailer` (matches `docker-compose.yml` defaults)
 - `NUXT_SESSION_PASSWORD` — session encryption key, min 32 chars; generate with `openssl rand -base64 32`
-- `OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
-- `OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
-- `SERPAPI_KEYS` — comma-separated SerpAPI keys rotated in Round Robin order for the `PARTNER_IDENTIFICATION` step (e.g. `key1,key2,key3`)
+- `NUXT_OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
+- `NUXT_OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
+- `NUXT_SERP_API_KEYS` — comma-separated SerpAPI keys rotated in Round Robin order for the `PARTNER_IDENTIFICATION` step (e.g. `key1,key2,key3`)
 
 ## Architecture
 

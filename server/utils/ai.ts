@@ -3,9 +3,10 @@ import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
 import { OPENROUTER, MODELS, DEEP_RESEARCH_STEPS, STEP_MODEL } from '~/config/pipeline'
 
 function createClient(): OpenAI {
+  const config = useRuntimeConfig()
   return new OpenAI({
     baseURL: OPENROUTER.baseURL,
-    apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
+    apiKey: config.openRouterApiKey as string,
     defaultHeaders: {
       'HTTP-Referer': OPENROUTER.siteUrl,
       'X-Title':      OPENROUTER.siteTitle,
@@ -72,7 +73,7 @@ export function streamStepAI(input: StepAIInput): StreamStepAIResult {
 
   async function getCost(): Promise<number> {
     if (!capturedGenerationId) return 0
-    const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+    const apiKey = useRuntimeConfig().openRouterApiKey as string
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 2000))
       try {

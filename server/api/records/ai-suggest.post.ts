@@ -25,7 +25,8 @@ export default defineEventHandler(async (event) => {
   })
   if (!candidates.length) return []
 
-  const client = new OpenAI({ baseURL: OPENROUTER.baseURL, apiKey: process.env.OPEN_ROUTER_API_KEY })
+  const config = useRuntimeConfig(event)
+  const client = new OpenAI({ baseURL: OPENROUTER.baseURL, apiKey: config.openRouterApiKey as string })
   const list = candidates.map((c, i) => `${i}: ${c.canonicalName}`).join('\n')
   let indices: number[] = []
   try {

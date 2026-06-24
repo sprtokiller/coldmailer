@@ -8,9 +8,10 @@ import { OPENROUTER, MODELS } from '~/config/pipeline'
 const PIPELINE_MODEL = MODELS.CLAUDE_SONNET
 
 function createClient() {
+  const config = useRuntimeConfig()
   return new OpenAI({
     baseURL: OPENROUTER.baseURL,
-    apiKey: process.env.OPEN_ROUTER_API_KEY ?? '',
+    apiKey: config.openRouterApiKey as string,
     defaultHeaders: { 'HTTP-Referer': OPENROUTER.siteUrl, 'X-Title': OPENROUTER.siteTitle },
   })
 }
@@ -29,7 +30,7 @@ export function findItemArray(
 }
 
 async function fetchGenerationCost(generationId: string): Promise<number> {
-  const apiKey = process.env.OPEN_ROUTER_API_KEY ?? ''
+  const apiKey = useRuntimeConfig().openRouterApiKey as string
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, 2000))
     try {
