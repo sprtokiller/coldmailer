@@ -19,25 +19,24 @@ const emit = defineEmits<{
 
 const selectedUserId = ref<string | null>(null)
 const selectedUser = computed(() => props.adminUsers?.find(u => u.id === selectedUserId.value) ?? null)
-const adminProjects = computed(() =>
-  props.adminGroups?.flatMap(group =>
-    group.projects.map(project => ({
-      ...project,
-      group: {
-        id: group.id,
-        name: group.name,
-        slug: group.slug,
-        color: group.color,
-      },
-    })),
-  ) ?? [],
-)
+
+const allProjectRoles = computed(() => {
+  if (!props.adminGroups) return []
+  return props.adminGroups.flatMap(group =>
+    group.projects.flatMap(project =>
+      (project.projectRoles ?? []).map(role => ({
+        ...role,
+        project: { ...project, group: { id: group.id, name: group.name, slug: group.slug, color: group.color } },
+      })),
+    ),
+  )
+})
 
 function selectUser(userId: string) {
   selectedUserId.value = selectedUserId.value === userId ? null : userId
 }
 
-// ── Assign / remove role ──────────────────────────────────────────────────
+// ── Assign / remove system role ──────────────────────────────────────────
 async function assignRole(userId: string, roleId: string) {
   await $fetch(`/api/admin/users/${userId}/roles`, { method: 'POST', body: { roleId } })
   emit('refreshUsers')
@@ -47,16 +46,14 @@ async function removeRole(userId: string, roleId: string) {
   emit('refreshUsers')
 }
 
-// ── Assign / remove project ──────────────────────────────────────────────
-async function assignProject(userId: string, projectId: string) {
-  await $fetch(`/api/admin/users/${userId}/projects`, { method: 'POST', body: { projectId } })
+// ── Assign / remove project role ─────────────────────────────────────────
+async function assignProjectRole(userId: string, projectRoleId: string) {
+  await $fetch(`/api/admin/users/${userId}/project-roles`, { method: 'POST', body: { projectRoleId } })
   emit('refreshUsers')
-  emit('refreshGroups')
 }
-async function removeProject(userId: string, projectId: string) {
-  await $fetch(`/api/admin/users/${userId}/projects/${projectId}`, { method: 'DELETE' })
+async function removeProjectRole(userId: string, projectRoleId: string) {
+  await $fetch(`/api/admin/users/${userId}/project-roles/${projectRoleId}`, { method: 'DELETE' })
   emit('refreshUsers')
-  emit('refreshGroups')
 }
 
 // ── Permission overrides ──────────────────────────────────────────────────
@@ -94,6 +91,11 @@ async function toggleSuperAdmin(user: AdminUser) {
   if (!confirm(`${user.isSuperAdmin ? 'Odebrat' : 'Přidělit'} superadmin status uživateli ${user.name}?`)) return
   await $fetch(`/api/admin/users/${user.id}/superadmin`, { method: 'PATCH', body: { isSuperAdmin: !user.isSuperAdmin } })
   emit('refreshUsers')
+}
+
+function availableProjectRoles(user: AdminUser) {
+  const assigned = new Set(user.projectRoles.map(pr => pr.id))
+  return allProjectRoles.value.filter(pr => !assigned.has(pr.id))
 }
 </script>
 
@@ -139,7 +141,7 @@ async function toggleSuperAdmin(user: AdminUser) {
                   <div class="text-xs text-gray-400 mt-0.5">{{ u.email }}</div>
                 </div>
 
-                <div class="hidden sm:flex flex-wrap gap-1 max-w-[220px]">
+                <div class="hidden sm:flex flex-wrap gap-1 max-w-[280px]">
                   <span v-if="u.isSuperAdmin" class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Superadmin</span>
                   <span
                     v-for="role in u.roles"
@@ -148,12 +150,12 @@ async function toggleSuperAdmin(user: AdminUser) {
                     :style="`background-color: ${role.color}18; border-color: ${role.color}44; color: ${role.color}`"
                   >{{ role.name }}</span>
                   <span
-                    v-for="project in u.projects"
-                    :key="project.id"
+                    v-for="pr in u.projectRoles"
+                    :key="pr.id"
                     class="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
-                    :style="`background-color: ${project.group.color}18; border-color: ${project.group.color}44; color: ${project.group.color}`"
-                  >{{ project.name }}</span>
-                  <span v-if="!u.isSuperAdmin && u.roles.length === 0 && u.projects.length === 0" class="text-xs text-gray-300">—</span>
+                    :style="`background-color: ${pr.project.group.color}18; border-color: ${pr.project.group.color}44; color: ${pr.project.group.color}`"
+                  >{{ pr.name }} · {{ pr.project.name }}</span>
+                  <span v-if="!u.isSuperAdmin && u.roles.length === 0 && u.projectRoles.length === 0" class="text-xs text-gray-300">—</span>
                 </div>
 
                 <div class="hidden md:block text-right shrink-0">
@@ -175,12 +177,14 @@ async function toggleSuperAdmin(user: AdminUser) {
 
             <!-- Expanded panel -->
             <div v-if="selectedUserId === u.id" class="bg-gray-50/60 border-t border-indigo-100/50 px-5 py-5">
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                <!-- Roles -->
+                <!-- Roles (system + project) -->
                 <div class="bg-white rounded-xl border border-gray-100 p-4">
                   <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Přiřazené role</div>
-                  <div class="flex flex-wrap gap-1.5 mb-4 min-h-[28px]">
+
+                  <!-- System roles -->
+                  <div class="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
                     <span
                       v-for="role in u.roles"
                       :key="role.id"
@@ -192,10 +196,28 @@ async function toggleSuperAdmin(user: AdminUser) {
                       {{ role.name }}
                       <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                     </span>
-                    <span v-if="u.roles.length === 0" class="text-xs text-gray-400">Žádné role</span>
                   </div>
-                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přidat roli</div>
-                  <div class="flex flex-wrap gap-1">
+
+                  <!-- Project roles -->
+                  <div v-if="u.projectRoles.length > 0" class="flex flex-wrap gap-1.5 mb-3">
+                    <span
+                      v-for="pr in u.projectRoles"
+                      :key="pr.id"
+                      class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-70 transition-opacity"
+                      :style="`background-color: ${pr.project.group.color}18; border-color: ${pr.project.group.color}44; color: ${pr.project.group.color}`"
+                      :title="`${pr.name} · ${pr.project.name} — kliknutím odeberete`"
+                      @click.stop="removeProjectRole(u.id, pr.id)"
+                    >
+                      {{ pr.name }} · {{ pr.project.name }}
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </span>
+                  </div>
+
+                  <span v-if="u.roles.length === 0 && u.projectRoles.length === 0" class="text-xs text-gray-400 block mb-3">Žádné role</span>
+
+                  <!-- Add system role -->
+                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přidat systémovou roli</div>
+                  <div class="flex flex-wrap gap-1 mb-3">
                     <button
                       v-for="role in adminRoles?.filter(r => !u.roles.some(ur => ur.id === r.id))"
                       :key="role.id"
@@ -203,6 +225,23 @@ async function toggleSuperAdmin(user: AdminUser) {
                       :style="`background-color: ${role.color}10; border-color: ${role.color}33; color: ${role.color}`"
                       @click.stop="assignRole(u.id, role.id)"
                     >+ {{ role.name }}</button>
+                    <span v-if="adminRoles?.every(r => u.roles.some(ur => ur.id === r.id))" class="text-xs text-gray-300">Vše přiřazeno</span>
+                  </div>
+
+                  <!-- Add project role -->
+                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přidat projektovou roli</div>
+                  <div class="space-y-1 max-h-40 overflow-y-auto">
+                    <button
+                      v-for="pr in availableProjectRoles(u)"
+                      :key="pr.id"
+                      class="w-full text-left text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-80 transition-opacity"
+                      :style="`background-color: ${pr.project.group.color}10; border-color: ${pr.project.group.color}33; color: ${pr.project.group.color}`"
+                      @click.stop="assignProjectRole(u.id, pr.id)"
+                    >
+                      <span class="font-medium">+ {{ pr.name }}</span>
+                      <span class="ml-1 opacity-70">· {{ pr.project.name }}</span>
+                    </button>
+                    <span v-if="availableProjectRoles(u).length === 0" class="text-xs text-gray-300 block">Vše přiřazeno</span>
                   </div>
 
                   <div v-if="isSuperAdmin" class="mt-4 pt-4 border-t border-gray-100">
@@ -218,38 +257,6 @@ async function toggleSuperAdmin(user: AdminUser) {
                     <p v-if="u.isSuperAdmin && superadminCount <= 1" class="text-[10px] text-amber-600 mt-1.5 text-center">
                       Nelze odebrat — jediný superadmin v systému.
                     </p>
-                  </div>
-                </div>
-
-                <!-- Projects -->
-                <div class="bg-white rounded-xl border border-gray-100 p-4">
-                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Projekty</div>
-                  <div class="flex flex-wrap gap-1.5 mb-4 min-h-[28px]">
-                    <span
-                      v-for="project in u.projects"
-                      :key="project.id"
-                      class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-70 transition-opacity"
-                      :style="`background-color: ${project.group.color}18; border-color: ${project.group.color}44; color: ${project.group.color}`"
-                      :title="`${project.group.name} — kliknutím odeberete projekt`"
-                      @click.stop="removeProject(u.id, project.id)"
-                    >
-                      {{ project.name }}
-                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </span>
-                    <span v-if="u.projects.length === 0" class="text-xs text-gray-400">Žádné projekty</span>
-                  </div>
-                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Přiřadit projekt</div>
-                  <div class="space-y-2">
-                    <button
-                      v-for="project in adminProjects.filter(ap => !u.projects.some(up => up.id === ap.id))"
-                      :key="project.id"
-                      class="w-full text-left text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-80 transition-opacity"
-                      :style="`background-color: ${project.group.color}10; border-color: ${project.group.color}33; color: ${project.group.color}`"
-                      @click.stop="assignProject(u.id, project.id)"
-                    >
-                      <span class="font-medium">+ {{ project.name }}</span>
-                      <span class="ml-1 opacity-70">· {{ project.group.name }}</span>
-                    </button>
                   </div>
                 </div>
 

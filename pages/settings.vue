@@ -236,7 +236,7 @@ const visibleNav = computed(() =>
           :admin-groups="adminGroups"
           :is-super-admin="isSuperAdmin"
           @refresh-users="refreshUsers()"
-          @refresh-groups="refreshProjects()"
+          @refresh-groups="async () => { await refreshGroups(); refreshProjects() }"
         />
 
         <SettingsRoles

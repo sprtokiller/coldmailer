@@ -31,10 +31,7 @@ export async function getActiveScope(event: H3Event): Promise<ActiveScope> {
     })
 
     if (project) {
-      const allowed = access.isSuperAdmin
-        || access.projectIds.includes(projectId)
-        || access.directGroupIds.includes(project.groupId)
-
+      const allowed = access.isSuperAdmin || access.isAdmin || access.projectIds.includes(projectId)
       if (allowed) {
         return { project, group: project.group }
       }
@@ -42,11 +39,12 @@ export async function getActiveScope(event: H3Event): Promise<ActiveScope> {
     deleteCookie(event, 'activeProjectId', { path: '/' })
   }
 
-  // Fallback to last available project membership
+  // Fallback to last available project
   const access = await getUserScopeAccess(session.id)
 
-  if (access.isSuperAdmin) {
+  const findAndSetProject = async (where?: object) => {
     const lastProject = await prisma.project.findFirst({
+      ...(where ? { where } : {}),
       include: { group: true },
       orderBy: { name: 'desc' },
     })
@@ -55,39 +53,17 @@ export async function getActiveScope(event: H3Event): Promise<ActiveScope> {
         maxAge: 60 * 60 * 24 * 365,
         path: '/',
       })
-      return { project: lastProject, group: lastProject.group }
+      return { project: lastProject, group: lastProject.group } as ActiveScope
     }
-  } else {
-    if (access.projectIds.length > 0) {
-      const lastProject = await prisma.project.findFirst({
-        where: { id: { in: access.projectIds } },
-        include: { group: true },
-        orderBy: { name: 'desc' },
-      })
-      if (lastProject) {
-        setCookie(event, 'activeProjectId', `project:${lastProject.id}`, {
-          maxAge: 60 * 60 * 24 * 365,
-          path: '/',
-        })
-        return { project: lastProject, group: lastProject.group }
-      }
-    }
-    
-    // If they have no direct projects but have direct groups, try to get the last project under those groups
-    if (access.directGroupIds.length > 0) {
-      const lastProject = await prisma.project.findFirst({
-        where: { groupId: { in: access.directGroupIds } },
-        include: { group: true },
-        orderBy: { name: 'desc' },
-      })
-      if (lastProject) {
-        setCookie(event, 'activeProjectId', `project:${lastProject.id}`, {
-          maxAge: 60 * 60 * 24 * 365,
-          path: '/',
-        })
-        return { project: lastProject, group: lastProject.group }
-      }
-    }
+    return null
+  }
+
+  if (access.isSuperAdmin || access.isAdmin) {
+    const result = await findAndSetProject()
+    if (result) return result
+  } else if (access.projectIds.length > 0) {
+    const result = await findAndSetProject({ id: { in: access.projectIds } })
+    if (result) return result
   }
 
   return { project: null, group: null }

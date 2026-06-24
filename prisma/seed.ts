@@ -101,19 +101,6 @@ async function seedRoles() {
   })
   console.log('  ✓ Role: Administrátor')
 
-  await prisma.role.upsert({
-    where: { id: 'role-user' },
-    create: {
-      id: 'role-user',
-      name: 'Běžný uživatel',
-      description: 'Standardní přístup ke knihovně a pipeline.',
-      color: '#10b981',
-      isSystem: true,
-      permissions: DEFAULT_PERMISSIONS,
-    },
-    update: { permissions: DEFAULT_PERMISSIONS },
-  })
-  console.log('  ✓ Role: Běžný uživatel')
 }
 
 const GROUPS = [

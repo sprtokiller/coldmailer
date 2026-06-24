@@ -9,12 +9,18 @@ export type ProjectInfo = {
   groupId: string
   group: { id: string; name: string; slug: string; color: string }
 }
+export type ProjectRoleInfo = {
+  id: string
+  name: string
+  permissions: string[]
+  isSystem: boolean
+}
 export type GroupInfo = {
   id: string
   name: string
   slug: string
   color: string
-  projects: Array<Omit<ProjectInfo, 'group'>>
+  projects: Array<Omit<ProjectInfo, 'group'> & { projectRoles?: ProjectRoleInfo[] }>
 }
 
 export type MeResponse = {
@@ -26,10 +32,15 @@ export type MeResponse = {
   effectivePermissions: string[]
 }
 
+export type ProjectRoleAssignment = {
+  id: string
+  name: string
+  project: { id: string; name: string; slug: string; groupId: string; group: { id: string; name: string; slug: string; color: string } }
+}
 export type AdminUser = {
   id: string; email: string; name: string; image: string | null
   isSuperAdmin: boolean; createdAt: string
-  roles: Role[]; groups: GroupInfo[]; projects: ProjectInfo[]; permOverrides: PermOverride[]
+  roles: Role[]; projectRoles: ProjectRoleAssignment[]; permOverrides: PermOverride[]
   budget: Budget | null; effectivePermissions: string[]
 }
 

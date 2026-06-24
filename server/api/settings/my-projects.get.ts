@@ -4,17 +4,11 @@ import { getUserScopeAccess } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
-  
-  const user = await prisma.user.findUnique({
-    where: { id: session.id },
-    select: { isSuperAdmin: true },
-  })
+  const access = await getUserScopeAccess(session.id)
 
-  if (user?.isSuperAdmin) {
+  if (access.isSuperAdmin || access.isAdmin) {
     const groups = await prisma.group.findMany({
-      include: {
-        projects: { orderBy: { name: 'asc' } },
-      },
+      include: { projects: { orderBy: { name: 'asc' } } },
       orderBy: { name: 'asc' },
     })
 
@@ -33,56 +27,30 @@ export default defineEventHandler(async (event) => {
     }))
   }
 
-  // Non-superadmin user: fetch memberships
-  const [userGroups, userProjects] = await Promise.all([
-    prisma.userGroup.findMany({
-      where: { userId: session.id },
-      select: { groupId: true },
-    }),
-    prisma.userProject.findMany({
-      where: { userId: session.id },
-      select: { projectId: true, project: { select: { groupId: true } } },
-    }),
-  ])
-
-  const directGroupIds = userGroups.map(ug => ug.groupId)
-  const directProjectIds = userProjects.map(up => up.projectId)
-  const groupIdsFromProjects = userProjects.map(up => up.project.groupId)
-  const allGroupIds = [...new Set([...directGroupIds, ...groupIdsFromProjects])]
+  if (access.projectIds.length === 0) return []
 
   const groups = await prisma.group.findMany({
-    where: {
-      id: { in: allGroupIds },
-    },
+    where: { id: { in: access.groupIds } },
     include: {
       projects: {
+        where: { id: { in: access.projectIds } },
         orderBy: { name: 'asc' },
       },
     },
     orderBy: { name: 'asc' },
   })
 
-  return groups.map(g => {
-    // If the user has group-level access, they see all projects under that group.
-    // Otherwise, they only see projects they are directly assigned to.
-    const hasGroupAccess = directGroupIds.includes(g.id)
-    const allowedProjects = hasGroupAccess
-      ? g.projects
-      : g.projects.filter(p => directProjectIds.includes(p.id))
-
-    return {
-      id: g.id,
-      name: g.name,
-      slug: g.slug,
-      color: g.color,
-      projects: allowedProjects.map(p => ({
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        groupId: p.groupId,
-        createdAt: p.createdAt,
-      })),
-    }
-  })
+  return groups.map(g => ({
+    id: g.id,
+    name: g.name,
+    slug: g.slug,
+    color: g.color,
+    projects: g.projects.map(p => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      groupId: p.groupId,
+      createdAt: p.createdAt,
+    })),
+  }))
 })
-

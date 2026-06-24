@@ -159,33 +159,37 @@ export async function getUserScopeAccess(userId: string) {
     where: { id: userId },
     select: {
       isSuperAdmin: true,
-      groups: { select: { groupId: true } },
-      projects: {
+      roles: { include: { role: true } },
+      permOverrides: true,
+      projectRoles: {
         select: {
-          projectId: true,
-          project: { select: { groupId: true } },
+          projectRole: { select: { projectId: true, project: { select: { groupId: true } } } },
         },
       },
     },
   })
 
-  const projectIds = new Set(user?.projects.map(m => m.projectId) ?? [])
-  const directGroupIds = new Set(user?.groups.map(m => m.groupId) ?? [])
-  const groupIds = new Set(directGroupIds)
-  for (const membership of user?.projects ?? []) groupIds.add(membership.project.groupId)
+  if (!user) return { isSuperAdmin: false, isAdmin: false, projectIds: [] as string[], groupIds: [] as string[] }
+
+  const isAdmin = user.isSuperAdmin
+    || user.roles.some(ur => ur.role.permissions.includes('admin.roles'))
+    || user.permOverrides.some(ov => ov.key === 'admin.roles' && ov.granted)
+
+  const projectIds = [...new Set(user.projectRoles.map(upr => upr.projectRole.projectId))]
+  const groupIds = [...new Set(user.projectRoles.map(upr => upr.projectRole.project.groupId))]
 
   return {
-    isSuperAdmin: user?.isSuperAdmin ?? false,
-    projectIds: [...projectIds],
-    directGroupIds: [...directGroupIds],
-    groupIds: [...groupIds],
+    isSuperAdmin: user.isSuperAdmin,
+    isAdmin,
+    projectIds,
+    groupIds,
   }
 }
 
 export async function requireProjectAccess(
   event: H3Event,
   projectId: string,
-  options: { directAssignment?: boolean } = {},
+  _options: { directAssignment?: boolean } = {},
 ) {
   const session = await requireAuth(event)
   const project = await prisma.project.findUnique({
@@ -197,9 +201,7 @@ export async function requireProjectAccess(
   }
 
   const access = await getUserScopeAccess(session.id)
-  const allowed = access.isSuperAdmin
-    || access.projectIds.includes(projectId)
-    || (!options.directAssignment && access.directGroupIds.includes(project.groupId))
+  const allowed = access.isSuperAdmin || access.isAdmin || access.projectIds.includes(projectId)
 
   if (!allowed) {
     throw createError({ statusCode: 403, statusMessage: 'K tomuto projektu nemáte přístup.' })
@@ -239,7 +241,7 @@ export async function requireLibraryScopeAccess(event: H3Event, scope: ScopedRes
   }
 
   const access = await getUserScopeAccess(session.id)
-  if (!access.isSuperAdmin && !access.groupIds.includes(scope.groupId!)) {
+  if (!access.isSuperAdmin && !access.isAdmin && !access.groupIds.includes(scope.groupId!)) {
     throw createError({ statusCode: 403, statusMessage: 'K tomuto typu projektu nemáte přístup.' })
   }
 
@@ -255,7 +257,7 @@ export async function requireResourceScopeAccess(event: H3Event, resource: Scope
   if (!resource.projectId && !resource.groupId) {
     const session = await requireAuth(event)
     const access = await getUserScopeAccess(session.id)
-    if (!access.isSuperAdmin) {
+    if (!access.isSuperAdmin && !access.isAdmin) {
       throw createError({ statusCode: 403, statusMessage: 'K této položce nemáte přístup.' })
     }
     return
