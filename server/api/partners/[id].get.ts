@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const record = await prisma.globalRecord.findUnique({
     where: { id },
     include: {
-      contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+      contacts: { orderBy: [{ isPrimary: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }] },
       pipelineRefs: {
         where: projectId ? { pipelineRun: { projectId } } : undefined,
         orderBy: { addedAt: 'desc' },

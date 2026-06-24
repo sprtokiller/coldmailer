@@ -481,9 +481,16 @@ model PartnerContact {
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
   address        String
   label          String?
+  firstName      String?
+  lastName       String?
+  role           String?
+  contactType    String?
+  priority       Int          @default(3)
+  note           String?
   isPrimary      Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
+  @@unique([globalRecordId, address])
   @@index([globalRecordId])
 }
 

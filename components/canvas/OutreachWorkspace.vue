@@ -34,6 +34,7 @@ provide(outreachWorkspaceKey, {
   emailTo,
   selectedArgumentIds,
   selectedContactIdx,
+  dbContacts,
 })
 
 // Sync the selected partner into step5SelectedIds so executeStep works
@@ -54,9 +55,22 @@ watch(isOpen, (val) => {
   }
 })
 
-watch(selectedPartner, (name) => {
+import type { PartnerDbContact } from '~/composables/canvas/useOutreachWorkspace'
+const dbContacts = ref<PartnerDbContact[]>([])
+
+async function fetchPartnerContacts(partnerId: string) {
+  try {
+    const partner = await $fetch<{ contacts: PartnerDbContact[] }>(`/api/partners/${partnerId}`)
+    dbContacts.value = partner.contacts ?? []
+  } catch {
+    dbContacts.value = []
+  }
+}
+
+watch(selectedPartner, async (name) => {
   selectedContactIdx.value = null
   selectedArgumentIds.value = new Set()
+  dbContacts.value = []
   const emails = pipeline.outreachEmails() as Array<Record<string, unknown>>
   const emailMatch = emails.find(e => String(e.partnerName ?? e.name ?? '') === name)
   emailBody.value = emailMatch ? String(emailMatch.body ?? emailMatch.emailBody ?? '') : ''
@@ -64,28 +78,24 @@ watch(selectedPartner, (name) => {
   if (!name) return
   const alignments = pipeline.alignmentOutputAlignments('VALUE_ALIGNMENT') as Array<Record<string, unknown>>
   const match = alignments.find(a => String(a.name ?? a.partnerName ?? '') === name)
-  if (!match) return
-  const top3 = match.top3Arguments as Array<Record<string, unknown>> | undefined
-  if (Array.isArray(top3) && top3.length > 0) {
-    selectedArgumentIds.value = new Set([String(top3[0].argumentId ?? '')])
+  if (match) {
+    const top3 = match.top3Arguments as Array<Record<string, unknown>> | undefined
+    if (Array.isArray(top3) && top3.length > 0) {
+      selectedArgumentIds.value = new Set([String(top3[0].argumentId ?? '')])
+    }
   }
+
+  const partnerId = getPartnerId()
+  if (partnerId) {
+    await fetchPartnerContacts(partnerId)
+  }
+
   const savedTo = emailMatch?.savedAt ? String(emailMatch.to ?? '') : ''
-  const key = normalizeKey(name)
-  const profiles = pipeline.profilingOutputProfiles('PARTNER_PROFILING') as Array<Record<string, unknown>>
-  const profile = profiles.find(p => normalizeKey(p.name) === key)
   if (savedTo) {
     emailTo.value = savedTo
-  } else if (profile) {
-    const contacts = profile.contacts as Array<{ email?: string; priority?: number }> | undefined
-    if (Array.isArray(contacts)) {
-      const withEmail = contacts
-        .filter(c => c.email)
-        .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-      if (withEmail.length > 0) {
-        selectedContactIdx.value = 0
-        emailTo.value = withEmail[0].email!
-      }
-    }
+  } else if (dbContacts.value.length > 0) {
+    selectedContactIdx.value = 0
+    emailTo.value = dbContacts.value[0].address
   }
   if (!emailTo.value && emailMatch) {
     emailTo.value = String(emailMatch.to ?? '')
@@ -94,17 +104,8 @@ watch(selectedPartner, (name) => {
 
 watch(selectedContactIdx, (idx) => {
   if (idx == null || !selectedPartner.value) return
-  const key = normalizeKey(selectedPartner.value)
-  const profiles = pipeline.profilingOutputProfiles('PARTNER_PROFILING') as Array<Record<string, unknown>>
-  const profile = profiles.find(p => normalizeKey(p.name) === key)
-  if (!profile) return
-  const contacts = profile.contacts as Array<{ email?: string; priority?: number }> | undefined
-  if (!Array.isArray(contacts)) return
-  const withEmail = contacts
-    .filter(c => c.email)
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-  if (withEmail[idx]) {
-    emailTo.value = withEmail[idx].email!
+  if (dbContacts.value[idx]) {
+    emailTo.value = dbContacts.value[idx].address
   }
 })
 
@@ -131,7 +132,11 @@ function getPartnerId(): string | undefined {
   if (!selectedPartner.value) return undefined
   const emails = pipeline.outreachEmails() as Array<Record<string, unknown>>
   const match = emails.find(e => String(e.partnerName ?? e.name ?? '') === selectedPartner.value)
-  return match?.partnerId as string | undefined
+  if (match?.partnerId) return match.partnerId as string
+  const key = normalizeKey(selectedPartner.value)
+  const profiles = pipeline.profilingOutputProfiles('PARTNER_PROFILING') as Array<Record<string, unknown>>
+  const profile = profiles.find(p => normalizeKey(p.name) === key)
+  return profile?.partnerId as string | undefined
 }
 
 async function doSave() {

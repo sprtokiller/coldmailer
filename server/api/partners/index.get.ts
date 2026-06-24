@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       interactions: { some: interactionWhere },
     },
     include: {
-      contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+      contacts: { orderBy: [{ isPrimary: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }] },
       interactions: {
         where: interactionWhere,
         select: { updatedAt: true, sentAt: true },

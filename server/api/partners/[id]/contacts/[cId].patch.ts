@@ -17,8 +17,14 @@ export default defineEventHandler(async (event) => {
   return prisma.partnerContact.update({
     where: { id: cId },
     data: {
-      ...(body.address !== undefined && { address: body.address }),
+      ...(body.address !== undefined && { address: body.address.trim().toLowerCase() }),
       ...(body.label !== undefined && { label: body.label || null }),
+      ...(body.firstName !== undefined && { firstName: body.firstName || null }),
+      ...(body.lastName !== undefined && { lastName: body.lastName || null }),
+      ...(body.role !== undefined && { role: body.role || null }),
+      ...(body.contactType !== undefined && { contactType: body.contactType || null }),
+      ...(body.priority !== undefined && { priority: body.priority }),
+      ...(body.note !== undefined && { note: body.note || null }),
       ...(body.isPrimary !== undefined && { isPrimary: body.isPrimary }),
     },
   })

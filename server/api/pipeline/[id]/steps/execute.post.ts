@@ -332,6 +332,7 @@ export default defineEventHandler(async (event) => {
             })
 
             // Persist profile data back to GlobalRecord so the Database page can display it
+            const { syncProfileContactsToDb } = await import('~/server/utils/sync-contacts')
             for (const profile of allProfiles as Array<Record<string, unknown>>) {
               if (profile.error) continue
               const { partnerId: _, error: __, raw: ___, name: profileName, ...profileData } = profile
@@ -347,6 +348,11 @@ export default defineEventHandler(async (event) => {
                 })
               }
               if (!existingGr) continue
+
+              if (Array.isArray(profile.contacts)) {
+                await syncProfileContactsToDb(existingGr.id, profile.contacts as any[])
+              }
+
               const stripMd = (s: string) => s.replace(/\s*\(\s*\[[^\]]*\]\([^)]*\)\s*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/ {2,}/g, ' ').trim()
               const cleaned: Record<string, unknown> = { name: profileName, ...profileData }
               for (const key of Object.keys(cleaned)) {

@@ -62,10 +62,16 @@ export default defineEventHandler(async (event) => {
     stepId = created.id
   }
 
+  const { syncProfileContactsToDb } = await import('~/server/utils/sync-contacts')
   for (const profile of mergedData as Array<Record<string, unknown>>) {
     const pid = profile.partnerId as string | undefined
     if (!pid || profile.error) continue
     const { partnerId: _, error: __, raw: ___, ...profileData } = profile
+
+    if (Array.isArray(profile.contacts)) {
+      await syncProfileContactsToDb(pid, profile.contacts as any[])
+    }
+
     await prisma.globalRecord.update({
       where: { id: pid },
       data: { payload: profileData as never },

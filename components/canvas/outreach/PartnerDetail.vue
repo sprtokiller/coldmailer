@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { outreachWorkspaceKey } from '~/composables/canvas/useOutreachWorkspace'
+import { outreachWorkspaceKey, type PartnerDbContact } from '~/composables/canvas/useOutreachWorkspace'
 import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
-import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 
 const workspace = inject(outreachWorkspaceKey)!
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
@@ -13,33 +12,9 @@ const alignment = computed(() => {
   return data.find(a => String(a.name ?? a.partnerName ?? '') === name) ?? null
 })
 
-const profile = computed(() => {
-  const name = workspace.selectedPartner.value
-  if (!name) return null
-  const profiles = pipeline.profilingOutputProfiles('PARTNER_PROFILING') as Array<Record<string, unknown>>
-  const key = normalizeKey(name)
-  return profiles.find(p => normalizeKey(p.name) === key) ?? null
-})
-
 const snapshot = computed(() => String(alignment.value?.partnerSnapshot ?? ''))
 
-interface Contact {
-  firstName?: string
-  lastName?: string
-  role?: string
-  email?: string
-  type?: string
-  priority?: number
-  confidence?: string
-}
-
-const contactsWithEmail = computed<Contact[]>(() => {
-  const raw = profile.value?.contacts
-  if (!Array.isArray(raw)) return []
-  return (raw as Contact[])
-    .filter(c => c.email)
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-})
+const contactsWithEmail = computed<PartnerDbContact[]>(() => workspace.dbContacts.value)
 
 const selectedContact = computed(() => {
   const idx = workspace.selectedContactIdx.value ?? 0
@@ -76,11 +51,11 @@ function toggleArgument(id: string) {
   workspace.selectedArgumentIds.value = s
 }
 
-function contactLabel(c: Contact): string {
+function contactLabel(c: PartnerDbContact): string {
   const parts: string[] = []
   if (c.firstName || c.lastName) parts.push([c.firstName, c.lastName].filter(Boolean).join(' '))
   if (c.role) parts.push(c.role)
-  return parts.join(' — ') || c.email || ''
+  return parts.join(' — ') || c.address
 }
 
 function tooltipText(arg: Argument): string {
@@ -133,7 +108,7 @@ function tooltipText(arg: Argument): string {
                 {{ [selectedContact.firstName, selectedContact.lastName].filter(Boolean).join(' ') }}
               </p>
               <p v-if="selectedContact.role" class="text-[11px] text-gray-500">{{ selectedContact.role }}</p>
-              <p v-if="selectedContact.email" class="text-[11px] text-primary font-medium">{{ selectedContact.email }}</p>
+              <p class="text-[11px] text-primary font-medium">{{ selectedContact.address }}</p>
             </div>
           </template>
 

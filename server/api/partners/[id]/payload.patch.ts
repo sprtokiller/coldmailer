@@ -39,6 +39,11 @@ export default defineEventHandler(async (event) => {
       eventType: 'MANUAL_EDIT',
     })
 
+    if (Array.isArray(body.payload?.contacts)) {
+      const { syncProfileContactsToDb } = await import('~/server/utils/sync-contacts')
+      await syncProfileContactsToDb(id, body.payload.contacts as any[])
+    }
+
     return updated
   } catch (e: any) {
     if (e?.code === 'P2002') {

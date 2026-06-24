@@ -1,5 +1,17 @@
 import type { InjectionKey, Ref } from 'vue'
 
+export interface PartnerDbContact {
+  id: string
+  address: string
+  label: string | null
+  firstName: string | null
+  lastName: string | null
+  role: string | null
+  contactType: string | null
+  priority: number
+  isPrimary: boolean
+}
+
 export interface OutreachWorkspaceState {
   hiddenPartners: Ref<Set<string>>
   partnerSearch: Ref<string>
@@ -9,6 +21,7 @@ export interface OutreachWorkspaceState {
   emailTo: Ref<string>
   selectedArgumentIds: Ref<Set<string>>
   selectedContactIdx: Ref<number | null>
+  dbContacts: Ref<PartnerDbContact[]>
 }
 
 export const outreachWorkspaceKey = Symbol() as InjectionKey<OutreachWorkspaceState>

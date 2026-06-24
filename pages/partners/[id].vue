@@ -7,7 +7,7 @@ const id = route.params.id as string
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Contact { id: string; address: string; label: string | null; isPrimary: boolean }
+interface Contact { id: string; address: string; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null; isPrimary: boolean }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface InteractionAssignee { userId: string; user: AssigneeUser }
 interface Interaction {
@@ -173,6 +173,7 @@ async function createNote() {
 async function createEmail() {
   const f = mailForm.value
   if (!f.subject.trim() || !f.sentAt) return
+  const toAddr = f.toAddress.trim().toLowerCase()
   await $fetch(`/api/partners/${id}/interactions`, {
     method: 'POST',
     body: {
@@ -182,9 +183,15 @@ async function createEmail() {
       content: f.body.trim() || null,
       sentAt: f.sentAt,
       fromAddress: f.fromAddress.trim() || null,
-      toAddress: f.toAddress.trim() || null,
+      toAddress: toAddr || null,
     },
   })
+  if (toAddr && !partner.value?.contacts.some(c => c.address === toAddr)) {
+    await $fetch(`/api/partners/${id}/contacts`, {
+      method: 'POST',
+      body: { address: toAddr },
+    }).catch(() => {})
+  }
   resetForms()
   await refresh()
 }
@@ -304,7 +311,7 @@ const DEAL_STAGE_COLORS: Record<string, string> = {
   COMPLETED: 'bg-gray-100 text-gray-600',
 }
 const TYPE_LABELS: Record<string, string> = {
-  NOTE: 'Poznámka',
+  NOTE: 'Poznámky',
   EMAIL: 'Email',
   FULFILLMENT: 'Plnění',
 }
@@ -448,8 +455,10 @@ const TYPE_COLORS: Record<string, string> = {
       <h3 class="text-sm font-medium text-gray-700 mb-3">Emailové adresy</h3>
       <div class="space-y-2 mb-4">
         <div v-for="c in partner.contacts" :key="c.id" class="flex items-center gap-2 text-sm">
-          <span :class="['font-mono flex-1 truncate', c.isPrimary ? 'text-gray-800 font-medium' : 'text-gray-500']">{{ c.address }}</span>
-          <span v-if="c.label" class="text-xs text-gray-400">{{ c.label }}</span>
+          <span :class="['font-mono shrink-0', c.isPrimary ? 'text-gray-800 font-medium' : 'text-gray-500']">{{ c.address }}</span>
+          <span v-if="c.firstName || c.lastName" class="text-xs text-gray-500">{{ [c.firstName, c.lastName].filter(Boolean).join(' ') }}</span>
+          <span v-if="c.role" class="text-xs text-gray-400">{{ c.role }}</span>
+          <span class="flex-1" />
           <span v-if="c.isPrimary" class="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">primární</span>
           <button v-else class="text-xs text-gray-400 hover:text-indigo-500 transition-colors" @click="setPrimary(c.id)">nastavit primární</button>
           <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click="deleteContact(c.id)">×</button>
@@ -477,14 +486,7 @@ const TYPE_COLORS: Record<string, string> = {
           @click="typeFilter = f"
         >{{ TYPE_LABELS[f] }}</button>
       </div>
-      <div class="flex gap-2">
-        <button
-          v-for="mode in (['NOTE', 'EMAIL', 'FULFILLMENT'] as const)"
-          :key="mode"
-          :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', newMode === mode ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-          @click="newMode = newMode === mode ? null : mode"
-        >+ {{ TYPE_LABELS[mode] }}</button>
-      </div>
+
     </div>
 
     <!-- ── New Interaction Forms ── -->
@@ -511,7 +513,20 @@ const TYPE_COLORS: Record<string, string> = {
       <div class="flex gap-2">
         <input v-model="mailForm.sentAt" type="datetime-local" class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
         <input v-model="mailForm.fromAddress" type="email" :placeholder="mailForm.direction === 'SENT' ? 'Od (nás)' : 'Od (partnera)'" class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
-        <input v-model="mailForm.toAddress" type="email" :placeholder="mailForm.direction === 'SENT' ? 'Komu (partner)' : 'Komu (nás)'" class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
+        <div class="flex-1 relative">
+          <input
+            v-model="mailForm.toAddress"
+            type="email"
+            list="partner-contacts-list"
+            :placeholder="mailForm.direction === 'SENT' ? 'Komu (partner)' : 'Komu (nás)'"
+            class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
+          />
+          <datalist id="partner-contacts-list">
+            <option v-for="c in partner.contacts" :key="c.id" :value="c.address">
+              {{ [c.firstName, c.lastName].filter(Boolean).join(' ') }}{{ c.role ? ` — ${c.role}` : '' }}
+            </option>
+          </datalist>
+        </div>
       </div>
       <textarea v-model="mailForm.body" rows="3" placeholder="Text emailu (volitelný)" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
       <div class="flex justify-end gap-2">
