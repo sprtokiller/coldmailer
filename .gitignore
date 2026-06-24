@@ -40,3 +40,7 @@ client_secret_*.json
 
 # DB backups — keep directory, ignore dumps
 backups/*.sql
+
+# Generated diagrams
+er-diagram.mmd
+er-diagram.svg

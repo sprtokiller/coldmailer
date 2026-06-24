@@ -25,8 +25,6 @@
   "dependencies": {
     "@crawlee/memory-storage": "^3.16.0",
     "@prisma/client": "^5.22.0",
-    "@tiptap/extension-color": "^3.23.6",
-    "@tiptap/extension-font-family": "^3.23.6",
     "@tiptap/extension-highlight": "^3.23.6",
     "@tiptap/extension-placeholder": "^3.23.6",
     "@tiptap/extension-text-align": "^3.23.6",
@@ -40,8 +38,7 @@
     "nuxt-auth-utils": "^0.5.7",
     "openai": "^4.77.0",
     "playwright": "^1.59.1",
-    "vue": "^3.5.12",
-    "vue-router": "^4.4.5"
+    "vue": "^3.5.12"
   },
   "devDependencies": {
     "@nuxtjs/google-fonts": "^3.2.0",

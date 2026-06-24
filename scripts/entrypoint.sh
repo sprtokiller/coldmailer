@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
-echo "Running Prisma DB push..."
-bunx prisma@5.22.0 db push --skip-generate
+
+if [ "${RUN_DB_PUSH:-}" = "true" ]; then
+  echo "Running Prisma DB push..."
+  bun node_modules/prisma/build/index.js db push --skip-generate
+fi
+
 echo "Starting application..."
 exec bun .output/server/index.mjs

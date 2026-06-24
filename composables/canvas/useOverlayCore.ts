@@ -5,9 +5,9 @@ import type { StepRecord } from '~/composables/usePipelineCanvas'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const STEP_ORDER = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION']
+const STEP_ORDER = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION']
 
-export const SOURCE_CONFIG: Record<string, { label: string; cls: string }> = {
+const SOURCE_CONFIG: Record<string, { label: string; cls: string }> = {
   MINI_DEEP_RESEARCH: { label: 'AI Výsledek', cls: 'bg-blue-100 text-blue-700' },
   AI_IMPORT:          { label: 'AI Import',   cls: 'bg-emerald-100 text-emerald-700' },
   MANUAL_ADD:         { label: 'Ručně',        cls: 'bg-gray-100 text-gray-600' },

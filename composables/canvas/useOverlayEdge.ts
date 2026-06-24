@@ -4,7 +4,7 @@ const SOURCE_HEX: Record<string, string> = {
   MINI_DEEP_RESEARCH: '#6366f1', AI_IMPORT: '#a855f7',
   MANUAL_ADD: '#9ca3af', GLOBAL_DB_SELECT: '#4f46e5', legacy: '#f59e0b',
 }
-export const DONUT_C = 2 * Math.PI * 36
+const DONUT_C = 2 * Math.PI * 36
 
 export interface DonutSegment {
   key: string; label: string; color: string

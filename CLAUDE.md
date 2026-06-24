@@ -121,9 +121,7 @@ All model/step mappings live in [`config/pipeline.ts`](config/pipeline.ts) — `
 
 ### Key Client Files
 - [`composables/usePipelineRunPage.ts`](composables/usePipelineRunPage.ts) — single large composable that owns all pipeline page state and logic. Provided via `provide(pipelineRunKey, pipeline)` from the page and injected in child components.
-- [`components/pipeline/PipelineStepCard.vue`](components/pipeline/PipelineStepCard.vue) — accordion card per step; renders config + result sub-components.
 - [`components/pipeline/PipelineStepConfig.vue`](components/pipeline/PipelineStepConfig.vue) — step configuration UI (prompt selection, context parts, manual context, input data editor).
-- [`components/pipeline/PipelineStepResult.vue`](components/pipeline/PipelineStepResult.vue) — streaming output display, table/JSON/raw view modes, inline edit, AI import.
 
 ### Library
 The `/library` page manages reusable assets: `SystemPrompt`, `ContextPart`, `SellingPoint`, and `EmailDraft`. All support a lineage tree (`derivedFromId`). System prompts are seeded by `prisma/seed.ts` with `isSystem: true`; step execution falls back to them when no custom prompt is selected.

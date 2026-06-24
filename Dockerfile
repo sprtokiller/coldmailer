@@ -2,7 +2,7 @@ FROM oven/bun:1-debian AS base
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json bun.lockb* ./
+COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM base AS builder
@@ -17,6 +17,8 @@ ENV NODE_ENV=production
 RUN bunx playwright install --with-deps chromium
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/node_modules/openai ./.output/server/node_modules/openai
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
 COPY scripts/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
