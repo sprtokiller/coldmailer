@@ -8,6 +8,7 @@ import { Placeholder } from '@tiptap/extension-placeholder'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { Slice, Fragment } from '@tiptap/pm/model'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 const templateVarKey = new PluginKey('templateVariableHighlight')
@@ -37,7 +38,7 @@ const TemplateVariableHighlight = Extension.create({
 
 function buildDecorations(doc: import('@tiptap/pm/model').Node): DecorationSet {
   const decorations: Decoration[] = []
-  const re = /\{[\w\s.\-]+\}/g
+  const re = /\{[^{}]+\}/g
   doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return
     let match: RegExpExecArray | null
@@ -99,6 +100,31 @@ const editor = useEditor({
   editorProps: {
     transformPastedHTML(html) {
       return sanitizeHtml(html)
+    },
+    transformPasted(slice) {
+      if (!props.defaultFont || !editor.value) return slice
+      const markType = editor.value.schema.marks.textStyle
+      if (!markType) return slice
+
+      function addFontMark(fragment: Fragment): Fragment {
+        const nodes: import('@tiptap/pm/model').Node[] = []
+        fragment.forEach((node) => {
+          if (node.isText) {
+            const hasFont = node.marks.some((m) => m.type === markType && m.attrs.fontFamily)
+            if (!hasFont) {
+              const mark = markType.create({ fontFamily: props.defaultFont })
+              nodes.push(node.mark(mark.addToSet(node.marks)))
+            } else {
+              nodes.push(node)
+            }
+          } else {
+            nodes.push(node.copy(addFontMark(node.content)))
+          }
+        })
+        return Fragment.from(nodes)
+      }
+
+      return new Slice(addFontMark(slice.content), slice.openStart, slice.openEnd)
     },
     handleKeyDown(_view, event) {
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
@@ -317,7 +343,12 @@ defineExpose({
     emit('update:modelValue', normalized)
   },
   insertContent(html: string) {
-    editor.value?.chain().focus().insertContent(html).run()
+    if (!editor.value) return
+    let contentToInsert = html
+    if (props.defaultFont && !html.includes('font-family')) {
+      contentToInsert = `<span style="font-family: '${props.defaultFont}'">${html}</span>`
+    }
+    editor.value.chain().focus().insertContent(contentToInsert).run()
   },
 })
 </script>
