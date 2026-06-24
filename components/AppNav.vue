@@ -83,7 +83,8 @@ async function logout() {
                 </div>
 
                 <!-- Submenu (projects of this category) -->
-                <div class="absolute left-full top-0 ml-1.5 hidden group-hover/item:block bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-56 z-[60] border-l-2" :style="{ borderLeftColor: group.color }">
+                <div class="absolute left-full top-0 -ml-2 pl-3.5 hidden group-hover/item:block z-[60]">
+                <div class="bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-56 border-l-2" :style="{ borderLeftColor: group.color }">
                   <button
                     v-for="project in group.projects"
                     :key="project.id"
@@ -94,6 +95,7 @@ async function logout() {
                     <span class="w-1.5 h-1.5 rounded-full" :class="project.id === activeProject?.id ? 'bg-indigo-500' : 'bg-transparent'" />
                     {{ project.name }}
                   </button>
+                </div>
                 </div>
               </div>
             </div>
