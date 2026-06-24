@@ -6,6 +6,10 @@ import { GROUP_FONTS, STEP_OUTPUT_SCHEMAS } from '~/config/pipeline'
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 const workspace = inject(outreachWorkspaceKey)!
 const actions = inject(outreachActionsKey)!
+const { notifications: globalSendNotifs } = useSendNotifications()
+const hasPendingSend = computed(() =>
+  globalSendNotifs.value.some(n => n.status === 'pending' && n.partnerName === workspace.selectedPartner.value),
+)
 
 const STEP_KEY = 'OUTREACH_PREPARATION'
 
@@ -466,7 +470,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
           Uložit a zavřít
         </button>
         <button
-          :disabled="!canSend || actions.saving.value || actions.sendToastVisible.value"
+          :disabled="!canSend || actions.saving.value || hasPendingSend"
           class="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-1 whitespace-nowrap"
           @click="actions.handleSaveAndSend()"
         >

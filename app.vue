@@ -1,4 +1,5 @@
 <template>
+  <SendNotifications />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>

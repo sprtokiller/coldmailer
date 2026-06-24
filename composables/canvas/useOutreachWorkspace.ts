@@ -15,12 +15,8 @@ export const outreachWorkspaceKey = Symbol() as InjectionKey<OutreachWorkspaceSt
 
 export interface OutreachActionsState {
   saving: Ref<boolean>
-  sendToastVisible: Ref<boolean>
-  sendToastSent: Ref<boolean>
-  sendToastError: Ref<string>
   handleSaveAndClose: () => Promise<void>
   handleSaveAndSend: () => Promise<void>
-  cancelSend: () => void
 }
 
 export const outreachActionsKey = Symbol() as InjectionKey<OutreachActionsState>

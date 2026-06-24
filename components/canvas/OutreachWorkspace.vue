@@ -111,11 +111,8 @@ watch(selectedContactIdx, (idx) => {
 // ── Save & Send (server-side scheduled) ──────────────────────────────────────
 
 const saving = ref(false)
-const sendToastVisible = ref(false)
-const sendToastSent = ref(false)
-const sendToastError = ref('')
-const _scheduledId = ref<string | null>(null)
-let _pollTimer: ReturnType<typeof setTimeout> | null = null
+
+const sendNotifications = useSendNotifications()
 
 function getSelectedSignatureContent(): string | undefined {
   const cfg = pipeline.getConfig('OUTREACH_PREPARATION')
@@ -173,15 +170,15 @@ async function handleSaveAndClose() {
 async function handleSaveAndSend() {
   if (!selectedPartner.value || !emailTo.value) return
   saving.value = true
-  sendToastVisible.value = false
-  sendToastSent.value = false
 
   try {
     const cfg = pipeline.getConfig('OUTREACH_PREPARATION')
-    const res = await $fetch<{ scheduledId: string; gracePeriodMs: number }>(`/api/pipeline/${pipeline.route.params.id}/outreach/schedule-send`, {
+    const partnerName = selectedPartner.value
+    const pipelineId = String(pipeline.route.params.id)
+    const res = await $fetch<{ scheduledId: string; gracePeriodMs: number }>(`/api/pipeline/${pipelineId}/outreach/schedule-send`, {
       method: 'POST',
       body: {
-        partnerName: selectedPartner.value,
+        partnerName,
         partnerId: getPartnerId(),
         to: emailTo.value,
         subject: emailSubject.value,
@@ -196,11 +193,16 @@ async function handleSaveAndSend() {
         },
       },
     })
-    _scheduledId.value = res.scheduledId
-    sendToastVisible.value = true
-    sendToastError.value = ''
+    const notifId = res.scheduledId
+    sendNotifications.add({
+      id: notifId,
+      partnerName,
+      scheduledId: res.scheduledId,
+      pipelineId,
+      gracePeriodMs: res.gracePeriodMs ?? 20_000,
+    })
     await pipeline.refresh()
-    pollForSendResult(res.gracePeriodMs ?? 20_000)
+    pollForSendResult(res.gracePeriodMs ?? 20_000, notifId, partnerName)
   } catch (err) {
     alert(`Nepodařilo se naplánovat odeslání: ${err instanceof Error ? err.message : String(err)}`)
   } finally {
@@ -208,61 +210,34 @@ async function handleSaveAndSend() {
   }
 }
 
-function pollForSendResult(gracePeriodMs: number) {
-  if (_pollTimer) clearTimeout(_pollTimer)
-  const partnerName = selectedPartner.value
+function pollForSendResult(gracePeriodMs: number, notifId: string, partnerName: string) {
   let attempts = 0
   const maxAttempts = 6
+  let timer: ReturnType<typeof setTimeout> | null = null
   const check = async () => {
     attempts++
     await pipeline.refresh()
     const emails = pipeline.outreachEmails() as Array<Record<string, unknown>>
     const match = emails.find(e => String(e.partnerName ?? e.name ?? '') === partnerName)
     if (match?.sentAt) {
-      sendToastSent.value = true
-      _scheduledId.value = null
-      _pollTimer = null
-      setTimeout(() => { sendToastVisible.value = false }, 4000)
+      sendNotifications.markSent(notifId)
       return
     }
     if (match?.sendError) {
-      sendToastError.value = String(match.sendError)
-      sendToastVisible.value = false
-      _scheduledId.value = null
-      _pollTimer = null
+      sendNotifications.markError(notifId, String(match.sendError))
       return
     }
     if (attempts < maxAttempts) {
-      _pollTimer = setTimeout(check, 5000)
-    } else {
-      _pollTimer = null
+      timer = setTimeout(check, 5000)
     }
   }
-  _pollTimer = setTimeout(check, gracePeriodMs + 3000)
-}
-
-async function cancelSend() {
-  if (!_scheduledId.value) return
-  if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null }
-  try {
-    await $fetch(`/api/pipeline/${pipeline.route.params.id}/outreach/cancel-send`, {
-      method: 'POST',
-      body: { scheduledId: _scheduledId.value },
-    })
-  } catch { /* best effort */ }
-  _scheduledId.value = null
-  sendToastVisible.value = false
-  sendToastSent.value = false
+  timer = setTimeout(check, gracePeriodMs + 3000)
 }
 
 provide(outreachActionsKey, {
   saving,
-  sendToastVisible,
-  sendToastSent,
-  sendToastError,
   handleSaveAndClose,
   handleSaveAndSend,
-  cancelSend,
 })
 </script>
 
@@ -311,48 +286,6 @@ provide(outreachActionsKey, {
           </div>
         </div>
 
-        <!-- Toast: send pending / sent / error -->
-        <Transition name="toast">
-          <div
-            v-if="sendToastVisible"
-            class="absolute bottom-4 right-4 z-50 rounded-xl shadow-xl border px-4 py-3 flex items-center gap-3 text-sm"
-            :class="sendToastSent
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-white border-gray-200 text-gray-800'"
-          >
-            <template v-if="!sendToastSent">
-              <svg class="w-4 h-4 text-primary animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span>E-mail bude brzy odeslán</span>
-              <button
-                class="ml-2 text-xs font-medium text-red-600 hover:text-red-800 underline underline-offset-2 transition-colors"
-                @click="cancelSend"
-              >
-                Zrušit odeslání
-              </button>
-            </template>
-            <template v-else>
-              <svg class="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>Odesláno</span>
-            </template>
-          </div>
-        </Transition>
-        <Transition name="toast">
-          <div
-            v-if="sendToastError"
-            class="absolute bottom-4 right-4 z-50 rounded-xl shadow-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3 flex items-center gap-3 text-sm"
-          >
-            <svg class="w-4 h-4 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span class="truncate max-w-xs">Odeslání selhalo: {{ sendToastError }}</span>
-            <button class="text-xs font-medium underline shrink-0" @click="sendToastError = ''">Zavřít</button>
-          </div>
-        </Transition>
       </div>
     </div>
   </Transition>
@@ -361,6 +294,4 @@ provide(outreachActionsKey, {
 <style scoped>
 .workspace-enter-active, .workspace-leave-active { transition: opacity 0.15s ease; }
 .workspace-enter-from, .workspace-leave-to { opacity: 0; }
-.toast-enter-active, .toast-leave-active { transition: all 0.2s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(8px); }
 </style>
