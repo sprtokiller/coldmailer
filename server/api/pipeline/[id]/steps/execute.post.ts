@@ -61,6 +61,11 @@ export default defineEventHandler(async (event) => {
     include: { project: { include: { group: true } } },
   })
   if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+
+  if (run.mode === 'short' && (body.stepType === 'MARKET_SCANNING' || body.stepType === 'PARTNER_IDENTIFICATION')) {
+    throw createError({ statusCode: 400, statusMessage: 'Zkrácená pipeline nepodporuje tento krok.' })
+  }
+
   const scopeFilter = libraryScopeForProject(run.project)
 
   const alreadyRunning = await prisma.pipelineStep.findFirst({

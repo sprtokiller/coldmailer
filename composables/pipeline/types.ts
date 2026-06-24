@@ -15,6 +15,7 @@ export interface RunStepResult {
 
 export interface PipelineRunResponse {
   name: string
+  mode: string
   projectId: string
   project: { id: string; name: string; group: { id: string; name: string; slug: string } }
   author: { name: string }
@@ -118,7 +119,7 @@ export interface PipelineRunContext {
   route: ReturnType<typeof useRoute>
   run: PipelineRunResponse | null
   refresh: () => Promise<void>
-  steps: typeof STEPS
+  steps: StepDefinition[]
   prompts: PromptOption[]
   contextParts: Array<{ id: string; name: string; content: string; stepKeys: string[] }>
   sellingPoints: Array<{ id: string; name: string }>

@@ -195,7 +195,7 @@ model SystemPrompt {
   groupId       String?
   group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   derivedFromId String?
   derivedFrom   SystemPrompt?  @relation("PromptLineage", fields: [derivedFromId], references: [id])
@@ -213,7 +213,7 @@ model ContextPart {
   groupId       String?
   group         Group?        @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
-  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt     DateTime      @default(now())
   derivedFromId String?
   derivedFrom   ContextPart?  @relation("ContextLineage", fields: [derivedFromId], references: [id])
@@ -229,7 +229,7 @@ model SellingPoint {
   groupId       String?
   group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   derivedFromId String?
   derivedFrom   SellingPoint?  @relation("SellingLineage", fields: [derivedFromId], references: [id])
@@ -247,7 +247,7 @@ model EmailDraft {
   groupId       String?
   group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   derivedFromId String?
   derivedFrom   EmailDraft?    @relation("DraftLineage", fields: [derivedFromId], references: [id])
@@ -258,11 +258,12 @@ model EmailDraft {
 model PipelineRun {
   id           String              @id @default(cuid())
   name         String
+  mode         String              @default("full")
   visibility   String              @default("private")
   authorId     String
   author       User                @relation(fields: [authorId], references: [id])
   projectId    String
-  project      Project             @relation(fields: [projectId], references: [id])
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt    DateTime            @default(now())
   steps        PipelineStep[]
   inputSources InputSource[]

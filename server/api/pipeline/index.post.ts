@@ -4,7 +4,7 @@ import { requireProjectAccess } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
-  const body = await readBody<{ name: string; projectId?: string; visibility?: string }>(event)
+  const body = await readBody<{ name: string; projectId?: string; visibility?: string; mode?: string }>(event)
 
   if (!body.projectId) {
     throw createError({
@@ -15,9 +15,12 @@ export default defineEventHandler(async (event) => {
 
   await requireProjectAccess(event, body.projectId, { directAssignment: true })
 
+  const mode = body.mode === 'short' ? 'short' : 'full'
+
   return prisma.pipelineRun.create({
     data: {
       name: body.name,
+      mode,
       visibility: body.visibility === 'public' ? 'public' : 'private',
       authorId: user.id,
       projectId: body.projectId,

@@ -1,0 +1,30 @@
+import { prisma } from '~/server/utils/prisma'
+import { requirePermission } from '~/server/utils/permissions'
+
+export default defineEventHandler(async (event) => {
+  await requirePermission(event, 'admin.roles')
+  const projectId = getRouterParam(event, 'projectId')!
+  const body = await readBody<{ name?: string }>(event)
+
+  const project = await prisma.project.findUnique({ where: { id: projectId } })
+  if (!project) {
+    throw createError({ statusCode: 404, statusMessage: 'Projekt nebyl nalezen.' })
+  }
+
+  const data: Record<string, unknown> = {}
+  if (body.name !== undefined) {
+    const trimmed = body.name.trim()
+    if (!trimmed) throw createError({ statusCode: 400, statusMessage: 'Název nesmí být prázdný.' })
+    data.name = trimmed
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw createError({ statusCode: 400, statusMessage: 'Nic ke změně.' })
+  }
+
+  return prisma.project.update({
+    where: { id: projectId },
+    data,
+    include: { group: true },
+  })
+})

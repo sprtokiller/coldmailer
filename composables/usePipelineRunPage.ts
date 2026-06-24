@@ -85,6 +85,13 @@ export async function usePipelineRunPage() {
     }
   }, { deep: true })
 
+  const activeSteps = computed(() => {
+    if (run.value?.mode === 'short') {
+      return STEPS.filter(s => s.key !== 'MARKET_SCANNING' && s.key !== 'PARTNER_IDENTIFICATION')
+    }
+    return STEPS
+  })
+
   function getConfig(stepKey: string) {
     if (!stepConfig.value[stepKey]) {
       const lastSuccessful = run.value?.steps
@@ -93,10 +100,11 @@ export async function usePipelineRunPage() {
 
       const systemPrompt = prompts.value.find(p => p.stepType === stepKey && p.isSystem)
 
-      const idx = STEPS.findIndex(s => s.key === stepKey)
+      const steps = activeSteps.value
+      const idx = steps.findIndex(s => s.key === stepKey)
       let inputData = '{}'
       if (idx > 0) {
-        const prevKey = STEPS[idx - 1].key
+        const prevKey = steps[idx - 1].key
         const prevResult = run.value?.steps.findLast(s => s.stepType === prevKey)
         if (prevResult?.outputData) {
           inputData = JSON.stringify(prevResult.outputData, null, 2)
@@ -244,7 +252,7 @@ export async function usePipelineRunPage() {
   ))
 
   function prevStepOutput(stepKey: string): string {
-    return outputUtils.prevStepOutput(stepKey, STEPS)
+    return outputUtils.prevStepOutput(stepKey, activeSteps.value)
   }
 
   function stepResultOutput(stepKey: string): string {
@@ -304,7 +312,7 @@ export async function usePipelineRunPage() {
     route,
     run,
     refresh,
-    steps: STEPS,
+    steps: activeSteps,
     prompts,
     contextParts,
     sellingPoints,

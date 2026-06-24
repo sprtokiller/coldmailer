@@ -6,6 +6,7 @@ const { projects, activeProject, activeGroup } = useActiveProject()
 
 const creating = ref(false)
 const newName = ref('')
+const newMode = ref<'full' | 'short'>('full')
 const newVisibility = ref<'private' | 'public'>('private')
 const createErrorMessage = ref('')
 
@@ -18,11 +19,13 @@ async function createRun() {
       method: 'POST',
       body: {
         name: newName.value.trim(),
+        mode: newMode.value,
         visibility: newVisibility.value,
         projectId: activeProject.value.id,
       },
     })
     newName.value = ''
+    newMode.value = 'full'
     newVisibility.value = 'private'
     await navigateTo(`/pipeline/${run.id}`)
   } catch (error: any) {
@@ -47,6 +50,7 @@ const editingRun = ref<{ id: string; name: string; visibility: string } | null>(
 const editName = ref('')
 const editVisibility = ref<'private' | 'public'>('private')
 const editSaving = ref(false)
+const editDeleting = ref(false)
 
 function openEdit(run: { id: string; name: string; visibility: string }, e: Event) {
   e.preventDefault()
@@ -73,6 +77,21 @@ async function saveEdit() {
     alert(err?.data?.statusMessage ?? 'Nepodařilo se uložit.')
   } finally {
     editSaving.value = false
+  }
+}
+
+async function deleteRun() {
+  if (!editingRun.value) return
+  if (!confirm(`Opravdu chcete smazat pipeline „${editingRun.value.name}"? Tato akce je nevratná.`)) return
+  editDeleting.value = true
+  try {
+    await $fetch(`/api/pipeline/${editingRun.value.id}`, { method: 'DELETE' })
+    editingRun.value = null
+    await refresh()
+  } catch (err: any) {
+    alert(err?.data?.statusMessage ?? 'Nepodařilo se smazat.')
+  } finally {
+    editDeleting.value = false
   }
 }
 </script>
@@ -116,6 +135,14 @@ async function saveEdit() {
           :disabled="!activeProject"
         />
         <select
+          v-model="newMode"
+          class="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          :disabled="!activeProject"
+        >
+          <option value="full">Úplná</option>
+          <option value="short">Zkrácená</option>
+        </select>
+        <select
           v-model="newVisibility"
           class="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           :disabled="!activeProject"
@@ -153,6 +180,11 @@ async function saveEdit() {
               {{ run.name }}
             </h3>
             <span
+              class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              :class="run.mode === 'short' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'"
+              :title="run.mode === 'short' ? 'Zkrácená pipeline' : 'Úplná pipeline'"
+            >{{ run.mode === 'short' ? 'Zkrácená' : 'Úplná' }}</span>
+            <span
               v-if="run.visibility === 'public'"
               class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-600"
               title="Veřejná pipeline"
@@ -188,7 +220,7 @@ async function saveEdit() {
         <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-1">
           <template v-for="def in STAT_DEFS" :key="def.key">
             <span
-              v-if="run.stats[def.key] !== null"
+              v-if="run.stats[def.key] !== null && !(run.mode === 'short' && (def.key === 'competitions' || def.key === 'partners'))"
               class="text-xs text-gray-500 tabular-nums"
               :title="def.tooltip"
             >
@@ -197,7 +229,7 @@ async function saveEdit() {
             </span>
           </template>
           <span
-            v-if="STAT_DEFS.every(d => run.stats[d.key] === null)"
+            v-if="STAT_DEFS.every(d => run.stats[d.key] === null || (run.mode === 'short' && (d.key === 'competitions' || d.key === 'partners')))"
             class="text-xs text-gray-400"
           >Zatím nebyly spuštěny žádné kroky</span>
         </div>
@@ -256,21 +288,31 @@ async function saveEdit() {
               </div>
             </div>
 
-            <div class="flex justify-end gap-2 pt-1">
+            <div class="flex items-center justify-between pt-1">
               <button
                 type="button"
-                class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-                @click="editingRun = null"
+                :disabled="editDeleting"
+                class="px-3 py-1.5 rounded-lg border border-red-200 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                @click="deleteRun"
               >
-                Zrušit
+                {{ editDeleting ? 'Mazání…' : 'Smazat' }}
               </button>
-              <button
-                type="submit"
-                :disabled="editSaving || !editName.trim()"
-                class="px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {{ editSaving ? 'Ukládání…' : 'Uložit' }}
-              </button>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  @click="editingRun = null"
+                >
+                  Zrušit
+                </button>
+                <button
+                  type="submit"
+                  :disabled="editSaving || !editName.trim()"
+                  class="px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {{ editSaving ? 'Ukládání…' : 'Uložit' }}
+                </button>
+              </div>
             </div>
           </form>
         </div>

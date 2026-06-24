@@ -142,10 +142,19 @@ export default defineEventHandler(async (event) => {
     },
   ]
 
+  const isShort = run.mode === 'short'
+
+  // Short mode skips MS and PI main nodes — only PI extras + PP/VA/OP
+  const activeStepOrder = isShort
+    ? STEP_ORDER.filter(s => s !== 'MARKET_SCANNING' && s !== 'PARTNER_IDENTIFICATION')
+    : STEP_ORDER
+
   // MS and PI head their own input-source columns at y=0; the rest of the flow sits one row below
   const flowY = Y_SPACING
+  // Short mode: PI extras at x=0, main flow starts at x=340
+  const flowXOffset = isShort ? 340 : 0
 
-  const nodes = STEP_ORDER.map((stepType, i) => {
+  const nodes = activeStepOrder.map((stepType, i) => {
     const step = latestByType.get(stepType)
     // Exclude IMPORTED/GLOBAL_DB from the main MS/PI node — those get their own nodes
     const allRefs = step?.recordRefs ?? []
@@ -197,8 +206,9 @@ export default defineEventHandler(async (event) => {
     return {
       id: `step-${stepType}`,
       type: isCanvas ? (stepType === 'MARKET_SCANNING' ? 'marketScanning' : 'partnerIdentification') : 'placeholder',
-      // MS and PI at y=0 (top row); following steps offset below by one source-row gap
-      position: { x: i * 340, y: isCanvas ? 0 : flowY },
+      position: isShort
+        ? { x: flowXOffset + i * 340, y: 0 }
+        : { x: i * 340, y: isCanvas ? 0 : flowY },
       data: {
         stepId: step?.id ?? null,
         stepType,
@@ -219,8 +229,8 @@ export default defineEventHandler(async (event) => {
     OUTREACH_PREPARATION:   'e-mailů',
   }
 
-  const edges = STEP_ORDER.slice(0, -1).map((stepType, i) => {
-    const nextType = STEP_ORDER[i + 1]
+  const edges = activeStepOrder.slice(0, -1).map((stepType, i) => {
+    const nextType = activeStepOrder[i + 1]
     const step = latestByType.get(stepType)
     const nextStep = latestByType.get(nextType)
     // Same IMPORTED/GLOBAL_DB exclusion for the MS→PI and PI→PP edge labels
@@ -287,38 +297,42 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Extra input-source nodes for MS IMPORTED / GLOBAL_DB records — always emitted (even with 0 records)
-  msExtras.forEach((extra, j) => {
-    nodes.push({
-      id: extra.nodeId,
-      type: 'msInputSource',
-      position: { x: 0, y: (j + 1) * Y_SPACING },
-      data: {
-        stepId: msStep?.id ?? null,
-        stepType: 'MARKET_SCANNING',
-        label: extra.label,
-        status: 'COMPLETED',
-        recordCounts: { total: extra.total },
-        sources: extra.sources,
-        addMethod: extra.method,
-        total: extra.total,
-        selected: extra.selected,
-      },
+  // Extra input-source nodes for MS IMPORTED / GLOBAL_DB records (full mode only)
+  if (!isShort) {
+    msExtras.forEach((extra, j) => {
+      nodes.push({
+        id: extra.nodeId,
+        type: 'msInputSource',
+        position: { x: 0, y: (j + 1) * Y_SPACING },
+        data: {
+          stepId: msStep?.id ?? null,
+          stepType: 'MARKET_SCANNING',
+          label: extra.label,
+          status: 'COMPLETED',
+          recordCounts: { total: extra.total },
+          sources: extra.sources,
+          addMethod: extra.method,
+          total: extra.total,
+          selected: extra.selected,
+        },
+      })
+      edges.push({
+        id: `e-${extra.nodeId}-pi`,
+        source: extra.nodeId,
+        target: 'step-PARTNER_IDENTIFICATION',
+        label: extra.total > 0 ? `${extra.selected} / ${extra.total} soutěží` : '',
+      })
     })
-    edges.push({
-      id: `e-${extra.nodeId}-pi`,
-      source: extra.nodeId,
-      target: 'step-PARTNER_IDENTIFICATION',
-      label: extra.total > 0 ? `${extra.selected} / ${extra.total} soutěží` : '',
-    })
-  })
+  }
 
   // Extra input-source nodes for PI IMPORTED / GLOBAL_DB records — feed directly into PARTNER_PROFILING
   piExtras.forEach((extra, j) => {
     nodes.push({
       id: extra.nodeId,
       type: 'piInputSource',
-      position: { x: 340, y: (j + 1) * Y_SPACING },
+      position: isShort
+        ? { x: 0, y: j * Y_SPACING }
+        : { x: 340, y: (j + 1) * Y_SPACING },
       data: {
         stepId: piStep?.id ?? null,
         stepType: 'PARTNER_IDENTIFICATION',

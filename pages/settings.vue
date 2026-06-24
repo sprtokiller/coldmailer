@@ -42,16 +42,16 @@ const { data: adminRoles, refresh: refreshRoles } = canManageRoles.value
   ? await useFetch<Role[]>('/api/admin/roles')
   : { data: ref<Role[] | null>(null), refresh: async () => {} }
 
-const { data: adminGroups } = canManageRoles.value
+const { data: adminGroups, refresh: refreshGroups } = canManageRoles.value
   ? await useFetch<GroupInfo[]>('/api/admin/groups')
-  : { data: ref<GroupInfo[] | null>(null) }
+  : { data: ref<GroupInfo[] | null>(null), refresh: async () => {} }
 
 const { data: budgetData, refresh: refreshBudget } = canManageRoles.value
   ? await useFetch<BudgetResponse>('/api/admin/budget')
   : { data: ref<BudgetResponse | null>(null), refresh: async () => {} }
 
 // ── Sidebar navigation ────────────────────────────────────────────────────────
-type NavSection = 'permissions' | 'signatures' | 'users' | 'roles' | 'budget' | 'system'
+type NavSection = 'permissions' | 'signatures' | 'users' | 'roles' | 'projects' | 'budget' | 'system'
 
 interface NavItem {
   id: NavSection
@@ -65,11 +65,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'signatures',  label: 'Můj podpis',     icon: 'pen' },
   { id: 'users',       label: 'Správa uživatelů', icon: 'users',  adminOnly: true },
   { id: 'roles',       label: 'Správa rolí',      icon: 'tag',    adminOnly: true },
+  { id: 'projects',    label: 'Správa projektů',  icon: 'folder', adminOnly: true },
   { id: 'budget',      label: 'Správa limitů',    icon: 'chart',  adminOnly: true },
   { id: 'system',      label: 'Systémová nastavení', icon: 'cog' },
 ]
 
-const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'roles', 'budget', 'system']
+const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'roles', 'projects', 'budget', 'system']
 const initialSection = VALID_SECTIONS.includes(route.query.tab as NavSection) ? (route.query.tab as NavSection) : 'permissions'
 const activeSection = ref<NavSection>(initialSection)
 
@@ -195,6 +196,10 @@ const visibleNav = computed(() =>
                 <svg v-if="item.icon === 'pen'" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
+                <!-- folder icon -->
+                <svg v-if="item.icon === 'folder'" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
                 <!-- chart icon -->
                 <svg v-if="item.icon === 'chart'" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -238,6 +243,12 @@ const visibleNav = computed(() =>
           v-else-if="activeSection === 'roles'"
           :admin-roles="adminRoles"
           @refresh="refreshRoles()"
+        />
+
+        <SettingsProjects
+          v-else-if="activeSection === 'projects'"
+          :admin-groups="adminGroups"
+          @refresh="async () => { await refreshGroups(); refreshProjects() }"
         />
 
         <SettingsSystem
