@@ -2,23 +2,11 @@
 import { overlayKey } from '~/composables/canvas/useOverlay'
 const o = inject(overlayKey)!
 const { stepType, stepId, stepRecordType, allRecords, isOutputStep, recordsLoading,
-  activeAddPanel, activeTab, searchFilter,
+  activeAddPanel, searchFilter,
   manualName, manualUrl, manualLoading, manualError, doManual } = o
 </script>
 
 <template>
-  <!-- Toolbar -->
-  <div v-if="stepType !== 'MARKET_SCANNING'" class="px-5 py-3 border-b border-gray-100 flex gap-2 flex-wrap flex-shrink-0">
-    <template v-if="!isOutputStep">
-      <button :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === null ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']" @click="activeAddPanel = null">Přehled</button>
-      <button class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors" @click="activeTab = 'config'">▶ Spustit</button>
-      <button :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'import' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']" @click="activeAddPanel = 'import'">↑ Importovat</button>
-      <button :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'db' ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']" @click="activeAddPanel = 'db'">🔍 Z databáze</button>
-      <button v-if="!['MARKET_SCANNING', 'PARTNER_IDENTIFICATION'].includes(stepType ?? '')" :class="['text-xs px-3 py-1.5 rounded-lg border transition-colors', activeAddPanel === 'manual' ? 'border-gray-400 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50']" @click="activeAddPanel = 'manual'">+ Ručně</button>
-    </template>
-    <button v-else class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors" @click="activeTab = 'input'">▶ Spustit</button>
-  </div>
-
   <!-- Import panel -->
   <CanvasImportPanel v-if="activeAddPanel === 'import'" class="border-b border-gray-100" :step-id="stepId" :step-type="stepType" @close="activeAddPanel = null" />
 

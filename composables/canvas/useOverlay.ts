@@ -44,6 +44,70 @@ export function useOverlay() {
     if (stepType.value === 'OUTREACH_PREPARATION') return opEmails.value.length > 0 ? `Výsledek (${opEmails.value.length})` : 'Výsledek'
     return totalRecords.value > 0 ? `Výsledek (${totalRecords.value})` : 'Výsledek'
   })
+  const showStickyTabs = computed(() =>
+    stickyTabItems.value.length > 0
+  )
+
+  type StickyCategory = 'run' | 'import' | 'db'
+
+  const STICKY_TABS_BY_STEP: Record<string, Array<{ key: StickyCategory; label: string; icon: string; style: string; nodeId: string }>> = {
+    MARKET_SCANNING: [
+      { key: 'run', label: 'Market Scanning', icon: '▶', style: 'run', nodeId: 'step-MARKET_SCANNING' },
+      { key: 'import', label: 'Importované', icon: '↑', style: 'import', nodeId: 'ms-imported' },
+      { key: 'db', label: 'Z databáze', icon: '🔍', style: 'db', nodeId: 'ms-globaldb' },
+    ],
+    PARTNER_IDENTIFICATION: [
+      { key: 'run', label: 'Identifikace partnerů', icon: '▶', style: 'run', nodeId: 'step-PARTNER_IDENTIFICATION' },
+      { key: 'import', label: 'Importované', icon: '↑', style: 'import', nodeId: 'pi-imported' },
+      { key: 'db', label: 'Z databáze', icon: '🔍', style: 'db', nodeId: 'pi-globaldb' },
+    ],
+  }
+
+  const stickyTabItems = computed(() => {
+    const defs = STICKY_TABS_BY_STEP[stepType.value ?? ''] ?? []
+    return defs
+      .filter(d => canvas.nodes.value.some(n => n.id === d.nodeId))
+      .map(d => {
+        const node = canvas.nodes.value.find(n => n.id === d.nodeId)
+        const total = (node?.data as { recordCounts?: { total: number }; total?: number })?.recordCounts?.total
+          ?? (node?.data as { total?: number })?.total
+        const label = total != null && total > 0 && d.key !== 'run' ? `${d.label} (${total})` : d.label
+        return { ...d, label }
+      })
+  })
+
+  const activeStickyCategory = computed((): StickyCategory | null => {
+    const st = stepType.value
+    if (!st || !STICKY_TABS_BY_STEP[st]) return null
+    const nodeId = canvas.selectedNodeId.value
+    if (nodeId?.endsWith('-imported')) return 'import'
+    if (nodeId?.endsWith('-globaldb')) return 'db'
+    if (records.configSubSection.value === 'import' || records.activeAddPanel.value === 'import') return 'import'
+    if (records.configSubSection.value === 'db' || records.activeAddPanel.value === 'db') return 'db'
+    return 'run'
+  })
+
+  function selectStickyCategory(key: StickyCategory) {
+    if (activeStickyCategory.value === key) return
+    const st = stepType.value
+    if (!st || !STICKY_TABS_BY_STEP[st]) return
+    const def = STICKY_TABS_BY_STEP[st].find(d => d.key === key)
+    if (!def) return
+
+    records.activeAddPanel.value = null
+    records.configSubSection.value = key === 'run' ? 'run' : key
+
+    const node = canvas.nodes.value.find(n => n.id === def.nodeId)
+    const sid = (node?.data.stepId as string | null) ?? stepId.value
+    canvas.openOverlay(def.nodeId, sid, st)
+  }
+
+  function switchMainTab(key: 'input' | 'config' | 'result') {
+    activeTab.value = key
+    records.activeAddPanel.value = null
+    if (key === 'config') records.configSubSection.value = 'run'
+  }
+
   const tabItems = computed(() => {
     const items: Array<{ key: 'input' | 'config' | 'result'; label: string }> = [
       { key: 'config', label: 'Konfigurace' },
@@ -58,7 +122,19 @@ export function useOverlay() {
 
   // Resolves which node ID gets the active border (config tab only, MS/PI follow sub-section)
   function syncBorder() {
-    if (activeTab.value !== 'config' || !stepType.value) { canvas.selectedNodeBorderId.value = null; return }
+    if (!stepType.value) { canvas.selectedNodeBorderId.value = null; return }
+    if (activeTab.value === 'result') {
+      const panel = records.activeAddPanel.value
+      if (panel === 'import') {
+        canvas.selectedNodeBorderId.value = stepType.value === 'MARKET_SCANNING' ? 'ms-imported' : 'pi-imported'
+      } else if (panel === 'db') {
+        canvas.selectedNodeBorderId.value = stepType.value === 'MARKET_SCANNING' ? 'ms-globaldb' : 'pi-globaldb'
+      } else {
+        canvas.selectedNodeBorderId.value = null
+      }
+      return
+    }
+    if (activeTab.value !== 'config') { canvas.selectedNodeBorderId.value = null; return }
     if (stepType.value === 'MARKET_SCANNING') {
       const sub = records.configSubSection.value
       canvas.selectedNodeBorderId.value = sub === 'import' ? 'ms-imported' : sub === 'db' ? 'ms-globaldb' : 'step-MARKET_SCANNING'
@@ -69,7 +145,7 @@ export function useOverlay() {
       canvas.selectedNodeBorderId.value = canvas.selectedNodeId.value
     }
   }
-  watch([activeTab, () => records.configSubSection.value], syncBorder)
+  watch([activeTab, () => records.configSubSection.value, () => records.activeAddPanel.value], syncBorder)
 
   // Main watcher: reset state when active node changes
   watch(activeNode, (node) => {
@@ -116,6 +192,8 @@ export function useOverlay() {
   return {
     ...core, ...msInput, ...stepsInput, ...records, ...edge,
     piResultRecords, inputTabLabel, resultTabLabel, tabItems,
+    showStickyTabs, stickyTabItems, activeStickyCategory, selectStickyCategory,
+    switchMainTab,
   }
 }
 

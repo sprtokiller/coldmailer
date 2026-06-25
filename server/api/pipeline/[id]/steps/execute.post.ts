@@ -208,7 +208,7 @@ export default defineEventHandler(async (event) => {
             })
             let finalOutput: unknown = {}
             let partnerIdCostUsd = 0
-            const piProgressItems: Array<{ index: number; total: number; itemName: string; status: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; partnersFound?: number; error?: string }> = []
+            const piProgressItems: Array<{ index: number; total: number; itemName: string; status: string; searchTerm?: string; serpResults?: number; pagesLoaded?: number; pages?: Array<{ url: string; title: string; status: string }>; partnersFound?: number; error?: string }> = []
             for await (const ev of gen) {
               if (ev.type === 'progress') write({ chunk: ev.text })
               else if (ev.type === 'item') {

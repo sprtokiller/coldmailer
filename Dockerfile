@@ -14,11 +14,18 @@ RUN bun run build
 
 FROM base AS runner
 ENV NODE_ENV=production
-RUN bunx playwright install --with-deps chromium
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/node_modules/openai ./.output/server/node_modules/openai
+COPY --from=builder /app/node_modules/playwright ./.output/server/node_modules/playwright
+COPY --from=builder /app/node_modules/playwright-core ./.output/server/node_modules/playwright-core
+RUN bun .output/server/node_modules/playwright/cli.js install --with-deps chromium \
+    && apt-get install -y --no-install-recommends procps \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/config ./config
 COPY --from=builder /app/prisma ./prisma
 COPY scripts/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh

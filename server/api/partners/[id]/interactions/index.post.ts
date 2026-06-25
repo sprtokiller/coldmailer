@@ -16,8 +16,6 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     type: 'NOTE' | 'EMAIL' | 'FULFILLMENT'
     content?: string
-    actionStatus?: string
-    dealStage?: string
     direction?: 'SENT' | 'RECEIVED'
     subject?: string
     sentAt?: string
@@ -51,8 +49,6 @@ export default defineEventHandler(async (event) => {
       globalRecordId,
       projectId,
       type: body.type,
-      actionStatus: body.actionStatus as any ?? null,
-      dealStage: body.dealStage as any ?? null,
       content: body.content?.trim() ?? null,
       createdBy: session.id,
       direction: body.type === 'EMAIL' ? body.direction as any : null,

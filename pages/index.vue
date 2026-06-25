@@ -4,11 +4,25 @@ definePageMeta({ middleware: 'auth' })
 const { data: runs, refresh } = await useFetch('/api/pipeline', { default: () => [] })
 const { projects, activeProject, activeGroup } = useActiveProject()
 
+const showCreateModal = ref(false)
 const creating = ref(false)
 const newName = ref('')
 const newMode = ref<'full' | 'short'>('full')
 const newVisibility = ref<'private' | 'public'>('private')
 const createErrorMessage = ref('')
+
+function openCreateModal() {
+  newName.value = ''
+  newMode.value = 'full'
+  newVisibility.value = 'private'
+  createErrorMessage.value = ''
+  showCreateModal.value = true
+}
+
+function closeCreateModal() {
+  showCreateModal.value = false
+  createErrorMessage.value = ''
+}
 
 async function createRun() {
   if (!newName.value.trim() || !activeProject.value) return
@@ -24,9 +38,7 @@ async function createRun() {
         projectId: activeProject.value.id,
       },
     })
-    newName.value = ''
-    newMode.value = 'full'
-    newVisibility.value = 'private'
+    closeCreateModal()
     await navigateTo(`/pipeline/${run.id}`)
   } catch (error: any) {
     createErrorMessage.value = error?.data?.statusMessage ?? 'Pipeline se nepodařilo vytvořit.'
@@ -125,43 +137,15 @@ async function deleteRun() {
         <h1 class="text-2xl font-semibold text-gray-800">Oslovování partnerů</h1>
         <p class="text-sm text-gray-400 mt-1">Vytvořte si vlastní AI pipeline či využijte některou z nabídky. </p>
       </div>
-      <form class="flex items-center gap-2" @submit.prevent="createRun">
-        <input
-          v-model="newName"
-          type="text"
-          placeholder="Název nové pipeline…"
-          class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-52"
-          required
-          :disabled="!activeProject"
-        />
-        <select
-          v-model="newMode"
-          class="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          :disabled="!activeProject"
-        >
-          <option value="full">Úplná</option>
-          <option value="short">Zkrácená</option>
-        </select>
-        <select
-          v-model="newVisibility"
-          class="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          :disabled="!activeProject"
-        >
-          <option value="private">Soukromá</option>
-          <option value="public">Veřejná</option>
-        </select>
-        <button
-          type="submit"
-          :disabled="creating || !activeProject"
-          class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          {{ creating ? 'Vytváření…' : 'Nová Pipeline' }}
-        </button>
-      </form>
+      <button
+        type="button"
+        :disabled="!activeProject"
+        class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+        @click="openCreateModal"
+      >
+        Nová Pipeline
+      </button>
     </div>
-
-
-    <p v-if="createErrorMessage" class="-mt-5 mb-6 text-sm text-red-600">{{ createErrorMessage }}</p>
 
     <div v-if="runs.length === 0" class="text-center py-20 text-gray-400 text-sm">
       Zatím žádné pipeline. Vytvořte jednu pro začátek.
@@ -235,6 +219,120 @@ async function deleteRun() {
         </div>
       </NuxtLink>
     </div>
+
+    <!-- Create modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showCreateModal"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
+          @click.self="closeCreateModal"
+        >
+          <form
+            class="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md p-5 space-y-4"
+            @submit.prevent="createRun"
+          >
+            <h3 class="font-semibold text-gray-800">Nová pipeline</h3>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Název</label>
+              <input
+                v-model="newName"
+                type="text"
+                placeholder="Název nové pipeline…"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                required
+                autofocus
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Typ pipeline</label>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex-1 py-2.5 px-3 rounded-lg border text-left text-sm transition-colors"
+                  :class="newMode === 'full'
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'"
+                  @click="newMode = 'full'"
+                >
+                  <span class="block font-medium">Úplná</span>
+                  <span class="block text-[11px] font-normal mt-1 leading-snug opacity-80">
+                    Všechny kroky od skenování trhu a identifikace partnerů až po oslovení.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 py-2.5 px-3 rounded-lg border text-left text-sm transition-colors"
+                  :class="newMode === 'short'
+                    ? 'border-amber-400 bg-amber-50 text-amber-800'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'"
+                  @click="newMode = 'short'"
+                >
+                  <span class="block font-medium">Zkrácená</span>
+                  <span class="block text-[11px] font-normal mt-1 leading-snug opacity-80">
+                    Přeskočí skenování a identifikaci — začínáte s partnery, které už máte.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Viditelnost</label>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex-1 py-2.5 px-3 rounded-lg border text-left text-sm transition-colors"
+                  :class="newVisibility === 'private'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'"
+                  @click="newVisibility = 'private'"
+                >
+                  <span class="block font-medium">Soukromá</span>
+                  <span class="block text-[11px] font-normal mt-1 leading-snug opacity-80">
+                    Vidíte ji pouze vy — ostatní v projektu ji neuvidí.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 py-2.5 px-3 rounded-lg border text-left text-sm transition-colors"
+                  :class="newVisibility === 'public'
+                    ? 'border-blue-400 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'"
+                  @click="newVisibility = 'public'"
+                >
+                  <span class="block font-medium">Veřejná</span>
+                  <span class="block text-[11px] font-normal mt-1 leading-snug opacity-80">
+                    Sdílená v rámci projektu — vidí ji všichni s přístupem.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <p v-if="createErrorMessage" class="text-sm text-red-600">{{ createErrorMessage }}</p>
+
+            <div class="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                :disabled="creating"
+                @click="closeCreateModal"
+              >
+                Zrušit
+              </button>
+              <button
+                type="submit"
+                :disabled="creating || !newName.trim()"
+                class="px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {{ creating ? 'Vytváření…' : 'Vytvořit' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Edit modal -->
     <Teleport to="body">

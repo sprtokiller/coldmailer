@@ -32,11 +32,20 @@ export interface StepConfigState {
   emailDraftId: string
 }
 
+export type SerpPageStatus = 'loaded' | 'snippet' | 'unavailable' | 'skipped'
+
+export interface SerpPageInfo {
+  url: string
+  title: string
+  status: SerpPageStatus
+}
+
 export interface PartnerResultItem {
   itemName: string
   searchTerm?: string
   serpResults?: number
   pagesLoaded?: number
+  pages?: SerpPageInfo[]
   partners?: Array<{ partnerId: string; name: string; isNew: boolean }>
   error?: string
 }
@@ -92,6 +101,7 @@ export interface PartnerProgressItem {
   searchTerm?: string
   serpResults?: number
   pagesLoaded?: number
+  pages?: SerpPageInfo[]
   partnersFound?: number
   status: 'processing' | 'done' | 'error'
   error?: string

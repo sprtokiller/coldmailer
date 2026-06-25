@@ -1,9 +1,16 @@
+const proxyOrigin = process.env.NUXT_GOOGLE_REDIRECT_URI?.replace(
+  /\/api\/auth\/callback\/google$/,
+  '',
+)
+
 export default defineNuxtConfig({
   modules: [
     'nuxt-auth-utils',
     '@nuxtjs/tailwindcss',
     '@nuxtjs/google-fonts',
   ],
+
+  
 
   app: {
     head: {
@@ -86,6 +93,26 @@ export default defineNuxtConfig({
 
   typescript: {
     strict: true,
+  },
+
+  devServer: {
+    host: '0.0.0.0',
+  },
+
+  vite: {
+    server: {
+      allowedHosts: ['coldmailer.scg.cz', 'localhost'],
+      ...(proxyOrigin
+        ? {
+            origin: proxyOrigin,
+            hmr: {
+              protocol: proxyOrigin.startsWith('https') ? 'wss' : 'ws',
+              host: new URL(proxyOrigin).host,
+              ...(proxyOrigin.startsWith('https') ? { clientPort: 443 } : {}),
+            },
+          }
+        : {}),
+    },
   },
 
   compatibilityDate: '2024-11-01',

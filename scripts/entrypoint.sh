@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-if [ "${RUN_DB_PUSH:-}" = "true" ]; then
-  echo "Running Prisma DB push..."
+if [ "${SKIP_DB_SETUP:-}" != "true" ]; then
+  echo "Syncing database schema..."
   bun node_modules/prisma/build/index.js db push --skip-generate
+
+  echo "Running database seed..."
+  bun node_modules/prisma/build/index.js db seed
 fi
 
 echo "Starting application..."

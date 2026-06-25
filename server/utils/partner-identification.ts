@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
-import { serpSearch } from './serpapi'
-import { fetchPages } from './page-fetcher'
+import { serpSearch, type SerpResult } from './serpapi'
+import { fetchPages, isSkippableUrl } from './page-fetcher'
 import { prisma } from './prisma'
 import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { OPENROUTER, MODELS } from '~/config/pipeline'
@@ -54,6 +54,71 @@ function parseJson(text: string): unknown {
   return JSON.parse(jsonMatch ? jsonMatch[0] : raw)
 }
 
+function prioritizeSerpResults(results: SerpResult[]): SerpResult[] {
+  const score = (r: SerpResult) => {
+    let s = 0
+    if (/partner|sponzor/i.test(r.url)) s += 10
+    if (/partner|sponzor/i.test(r.title)) s += 5
+    if (/partner|sponzor/i.test(r.snippet)) s += 2
+    if (/instagram\.com|facebook\.com|twitter\.com|x\.com|linkedin\.com|youtube\.com/i.test(r.url)) s -= 8
+    return s
+  }
+  return [...results].sort((a, b) => score(b) - score(a))
+}
+
+function buildExtractionContext(serp: SerpResult, page?: { url: string; title: string; text: string; links: { href: string; text: string }[]; alts: string[]; ok: boolean }): string | null {
+  const parts: string[] = [`Competition context from search:`, `URL: ${serp.url}`, `Title: ${serp.title}`]
+  if (serp.snippet) parts.push(`Google snippet:\n${serp.snippet}`)
+
+  if (page?.ok && page.text.trim()) {
+    parts.push(
+      `Page title: ${page.title}`,
+      `Page text:\n${page.text.slice(0, 8_000)}`,
+      page.links.length ? `Links:\n${page.links.slice(0, 50).map(l => `${l.text} → ${l.href}`).join('\n')}` : '',
+      page.alts.length ? `Image alts: ${page.alts.join(', ')}` : '',
+    )
+  } else if (!serp.snippet?.trim()) {
+    return null
+  } else {
+    parts.push('(Stránku se nepodařilo načíst – použij Google snippet a název výsledku.)')
+  }
+
+  return parts.filter(Boolean).join('\n\n')
+}
+
+type SerpPageStatus = 'loaded' | 'snippet' | 'unavailable' | 'skipped'
+
+interface SerpPageInfo {
+  url: string
+  title: string
+  status: SerpPageStatus
+}
+
+function classifySerpPage(serp: SerpResult, page?: { ok: boolean; text: string }): SerpPageInfo {
+  if (isSkippableUrl(serp.url)) {
+    return { url: serp.url, title: serp.title, status: 'skipped' }
+  }
+  if (page?.ok && page.text.trim()) {
+    return { url: serp.url, title: serp.title, status: 'loaded' }
+  }
+  if (serp.snippet?.trim()) {
+    return { url: serp.url, title: serp.title, status: 'snippet' }
+  }
+  return { url: serp.url, title: serp.title, status: 'unavailable' }
+}
+
+const PAGE_STATUS_LABELS: Record<SerpPageStatus, string> = {
+  loaded: '✓ načteno',
+  snippet: '⚠ nedostupná → snippet z Google',
+  unavailable: '✗ nedostupná',
+  skipped: '⊘ přeskočeno (sociální síť)',
+}
+
+function formatSerpPagesProgress(pages: SerpPageInfo[]): string {
+  if (pages.length === 0) return ''
+  return `  📋 Nalezené stránky:\n${pages.map(p => `    ${PAGE_STATUS_LABELS[p.status]}  ${p.url}`).join('\n')}\n`
+}
+
 export interface ItemProgress {
   index: number
   total: number
@@ -61,6 +126,7 @@ export interface ItemProgress {
   searchTerm?: string
   serpResults?: number
   pagesLoaded?: number
+  pages?: SerpPageInfo[]
   partnersFound?: number
   status: 'processing' | 'done' | 'error'
   error?: string
@@ -118,12 +184,16 @@ export async function* runPartnerIdentification(
 
       // b) SerpAPI
       yield { type: 'progress', text: `  ⧳ Hledám v Google…\n` }
-      const serpResults = await serpSearch(searchTerm, {
+      const serpResults = prioritizeSerpResults(await serpSearch(searchTerm, {
         userId,
         pipelineStepId: stepId,
         stepType: 'PARTNER_IDENTIFICATION',
-      })
+      }))
       yield { type: 'progress', text: `  ✓ ${serpResults.length} výsledků\n` }
+      yield {
+        type: 'progress',
+        text: serpResults.map((r, n) => `    ${n + 1}. ${r.title}\n       ${r.url}`).join('\n') + '\n',
+      }
 
       if (serpResults.length === 0) {
         allResults.push({ itemName, searchTerm, partners: [] })
@@ -131,19 +201,48 @@ export async function* runPartnerIdentification(
         continue
       }
 
-      // c-d) Fetch pages via Playwright
+      // c-d) Fetch pages via Playwright (fallback to SerpAPI snippet when unreachable)
       yield { type: 'progress', text: `  ⟳ Načítám ${serpResults.length} stránek…\n` }
-      const pages = await fetchPages(serpResults.map(r => r.url))
-      const loadedPages = pages.filter(p => p.ok && p.text)
-      yield { type: 'progress', text: `  ✓ Načteno ${loadedPages.length}/${pages.length}\n` }
+      let pages: Awaited<ReturnType<typeof fetchPages>> = []
+      try {
+        pages = await fetchPages(serpResults.map(r => r.url))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        yield { type: 'progress', text: `  ⚠ Načítání stránek selhalo (${msg}) – pokračuji se snippety z Google\n` }
+        pages = serpResults.map(r => ({ url: r.url, title: '', text: '', links: [], alts: [], ok: false }))
+      }
+      const pageByUrl = new Map(pages.map(p => [p.url, p]))
+      const pageStatuses = serpResults.map(serp => classifySerpPage(serp, pageByUrl.get(serp.url)))
+      const pagesLoaded = pageStatuses.filter(p => p.status === 'loaded').length
+      const snippetFallbacks = pageStatuses.filter(p => p.status === 'snippet').length
+      const unavailable = pageStatuses.filter(p => p.status === 'unavailable').length
 
-      // e) Extract partners from each page
+      yield { type: 'progress', text: formatSerpPagesProgress(pageStatuses) }
+      yield {
+        type: 'progress',
+        text: `  ✓ Načteno ${pagesLoaded}/${serpResults.length}${snippetFallbacks ? `, ${snippetFallbacks}× snippet` : ''}${unavailable ? `, ${unavailable}× nedostupné` : ''}\n`,
+      }
+      yield {
+        type: 'item',
+        item: {
+          index: i + 1,
+          total: items.length,
+          itemName,
+          searchTerm,
+          serpResults: serpResults.length,
+          pagesLoaded,
+          pages: pageStatuses,
+          status: 'processing',
+        },
+      }
+
+      // e) Extract partners from each result (page content or SerpAPI snippet)
       const foundPartners: Array<{ name: string; website?: string; description?: string; type?: string }> = []
-      for (const pg of loadedPages) {
-        const ctx = [`URL: ${pg.url}`, `Title: ${pg.title}`, `Text:\n${pg.text.slice(0, 8_000)}`,
-          pg.links.length ? `Links:\n${pg.links.slice(0, 50).map(l => `${l.text} → ${l.href}`).join('\n')}` : '',
-          pg.alts.length ? `Alts: ${pg.alts.join(', ')}` : '',
-        ].filter(Boolean).join('\n\n')
+      for (const serp of serpResults) {
+        const pg = pageByUrl.get(serp.url)
+        const ctx = buildExtractionContext(serp, pg)
+        if (!ctx) continue
+
         try {
           const res = await client.chat.completions.create({
             model: PIPELINE_MODEL,
@@ -157,7 +256,10 @@ export async function* runPartnerIdentification(
           const parsed = parseJson(res.choices[0]?.message?.content ?? '[]')
           const list = Array.isArray(parsed) ? parsed : ((parsed as { partners?: unknown[] })?.partners ?? [])
           foundPartners.push(...(list as typeof foundPartners).filter(p => p?.name))
-        } catch {}
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          yield { type: 'progress', text: `  ⚠ Extrakce z ${serp.url} selhala: ${msg}\n` }
+        }
       }
       yield { type: 'progress', text: `  ✓ ${foundPartners.length} potenciálních partnerů\n` }
 
@@ -186,8 +288,21 @@ export async function* runPartnerIdentification(
       }
 
       yield { type: 'progress', text: `  ✓ Uloženo: ${newCount} nových, ${existingCount} existujících\n` }
-      allResults.push({ itemName, searchTerm, serpResults: serpResults.length, pagesLoaded: loadedPages.length, partners: savedPartners })
-      yield { type: 'item', item: { index: i + 1, total: items.length, itemName, searchTerm, serpResults: serpResults.length, pagesLoaded: loadedPages.length, partnersFound: savedPartners.length, status: 'done' } }
+      allResults.push({ itemName, searchTerm, serpResults: serpResults.length, pagesLoaded, pages: pageStatuses, partners: savedPartners })
+      yield {
+        type: 'item',
+        item: {
+          index: i + 1,
+          total: items.length,
+          itemName,
+          searchTerm,
+          serpResults: serpResults.length,
+          pagesLoaded,
+          pages: pageStatuses,
+          partnersFound: savedPartners.length,
+          status: 'done',
+        },
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       yield { type: 'progress', text: `  ❌ ${msg}\n` }

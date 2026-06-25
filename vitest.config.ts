@@ -1,7 +1,13 @@
-import { defineConfig } from 'vitest/config'
+// vitest.config.ts
+import { defineVitestConfig } from '@nuxt/test-utils/config'
 
-export default defineConfig({
+export default defineVitestConfig({
   test: {
-    environment: 'jsdom',
+    environment: 'nuxt',
+  },
+  vite: {
+    server: {
+      allowedHosts: ['coldmailer.scg.cz'],
+    },
   },
 })
