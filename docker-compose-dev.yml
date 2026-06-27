@@ -1,0 +1,104 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: coldmailer
+      POSTGRES_PASSWORD: coldmailer
+      POSTGRES_DB: coldmailer
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coldmailer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-backup:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: coldmailer
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://coldmailer:coldmailer@db:5432/coldmailer
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    develop:
+      watch:
+        # Nuxt source dirs – sync only; HMR picks up changes instantly
+        - path: ./pages
+          target: /app/pages
+          action: sync
+        - path: ./components
+          target: /app/components
+          action: sync
+        - path: ./composables
+          target: /app/composables
+          action: sync
+        - path: ./server
+          target: /app/server
+          action: sync
+        - path: ./layouts
+          target: /app/layouts
+          action: sync
+        - path: ./middleware
+          target: /app/middleware
+          action: sync
+        - path: ./assets
+          target: /app/assets
+          action: sync
+        - path: ./public
+          target: /app/public
+          action: sync
+        - path: ./utils
+          target: /app/utils
+          action: sync
+        - path: ./types
+          target: /app/types
+          action: sync
+        - path: ./config
+          target: /app/config
+          action: sync
+        # Root vue files – sync + restart (Nuxt needs a full reload for these)
+        - path: ./app.vue
+          target: /app/app.vue
+          action: sync+restart
+        - path: ./error.vue
+          target: /app/error.vue
+          action: sync+restart
+        # Config files – restart required for changes to take effect
+        - path: ./nuxt.config.ts
+          target: /app/nuxt.config.ts
+          action: sync+restart
+        - path: ./tailwind.config.ts
+          target: /app/tailwind.config.ts
+          action: sync+restart
+        # Dependency / ORM changes – full rebuild required
+        - path: ./package.json
+          target: /app/package.json
+          action: rebuild
+        - path: ./prisma
+          target: /app/prisma
+          action: rebuild
+
+volumes:
+  pgdata:
