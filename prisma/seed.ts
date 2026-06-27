@@ -300,6 +300,22 @@ async function seedTdaContent() {
     })
     console.log(`  ✓ ContextPart: ${cp.name}`)
   }
+
+  // ── Signature: Tour de App (systémová – vidí všichni) ────────────────────
+  const sigContent = readTdaFile('Tour de App - Podpis Template.txt')
+  await prisma.signature.upsert({
+    where: { id: 'tda-signature-template' },
+    create: {
+      id: 'tda-signature-template',
+      name: 'Tour de App',
+      content: sigContent,
+      isSystem: true,
+      isDefault: false,
+      authorId: kriz.id,
+    },
+    update: { content: sigContent },
+  })
+  console.log('  ✓ Signature: Tour de App (systémová)')
 }
 
 const SUPER_ADMINS = ['kriz@scg.cz']

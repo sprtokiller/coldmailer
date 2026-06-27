@@ -183,6 +183,9 @@ export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
       templateRespected: true,
       underWordLimit: true,
       noForbiddenPhrases: true,
+      htmlFormattingValid: true,
+      noSignatureAdded: true,
+      variablesHandledNaturally: true,
     },
   },
 }
