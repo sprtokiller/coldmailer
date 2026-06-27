@@ -32,7 +32,7 @@ export interface StreamStepAIResult {
   getCost: () => Promise<number>
 }
 
-export function streamStepAI(input: StepAIInput): StreamStepAIResult {
+export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000): StreamStepAIResult {
   const client = createClient()
   const model = modelForStep(input.stepType)
 
@@ -56,18 +56,28 @@ export function streamStepAI(input: StepAIInput): StreamStepAIResult {
 
   let capturedGenerationId: string | null = null
 
-  async function* generator(): AsyncGenerator<string> {
-    const stream = await client.chat.completions.create(
-      params as Parameters<typeof client.chat.completions.create>[0],
-    ) as AsyncIterable<ChatCompletionChunk>
+  const abortController = new AbortController()
+  const timeoutHandle = setTimeout(
+    () => abortController.abort(new Error(`AI stream timed out after ${timeoutMs / 1000}s`)),
+    timeoutMs,
+  )
 
-    for await (const chunk of stream) {
-      // Capture generation ID from first chunk (top-level id field)
-      if (!capturedGenerationId && chunk.id) {
-        capturedGenerationId = chunk.id
+  async function* generator(): AsyncGenerator<string> {
+    try {
+      const stream = await client.chat.completions.create(
+        { ...params, signal: abortController.signal } as Parameters<typeof client.chat.completions.create>[0],
+      ) as AsyncIterable<ChatCompletionChunk>
+
+      for await (const chunk of stream) {
+        // Capture generation ID from first chunk (top-level id field)
+        if (!capturedGenerationId && chunk.id) {
+          capturedGenerationId = chunk.id
+        }
+        const delta = chunk.choices[0]?.delta?.content
+        if (delta) yield delta
       }
-      const delta = chunk.choices[0]?.delta?.content
-      if (delta) yield delta
+    } finally {
+      clearTimeout(timeoutHandle)
     }
   }
 

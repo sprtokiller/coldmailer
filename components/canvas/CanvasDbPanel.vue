@@ -121,7 +121,13 @@ function isChecked(r: { id: string }): boolean {
 }
 
 async function addPending() {
-  if (!props.stepId) return
+  if (!props.stepId) {
+    // Short pipeline: PI step doesn't exist yet — create it on-demand for each record
+    for (const id of pendingIds.value) await canvas.ensurePartnerImported(id)
+    pendingIds.value = new Set()
+    emit('close')
+    return
+  }
   for (const id of pendingIds.value) await canvas.addFromGlobalDB(props.stepId, id)
   pendingIds.value = new Set()
   emit('close')
