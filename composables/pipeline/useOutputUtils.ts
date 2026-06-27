@@ -40,9 +40,27 @@ export function useOutputUtils(
   }
 
   function profilingOutputProfiles(stepKey: string): Array<Record<string, unknown>> {
-    const data = getStepResult(stepKey)?.outputData
-    if (!Array.isArray(data)) return []
-    return data as Array<Record<string, unknown>>
+    if (stepKey !== 'PARTNER_PROFILING') {
+      const data = getStepResult(stepKey)?.outputData
+      if (!Array.isArray(data)) return []
+      return data as Array<Record<string, unknown>>
+    }
+    // Merge profiles from ALL completed PARTNER_PROFILING steps (supports parallel runs)
+    const steps = run.value?.steps.filter(s => s.stepType === 'PARTNER_PROFILING' && s.status === 'COMPLETED') ?? []
+    const merged: Record<string, unknown>[] = []
+    const seen = new Set<string>()
+    for (const step of steps) {
+      const data = step.outputData
+      if (!Array.isArray(data)) continue
+      for (const profile of data as Record<string, unknown>[]) {
+        const key = String(profile.partnerId ?? profile.name ?? '').toLowerCase().trim()
+        if (key && !seen.has(key)) {
+          seen.add(key)
+          merged.push(profile)
+        }
+      }
+    }
+    return merged
   }
 
   function alignmentOutputAlignments(stepKey: string): Array<Record<string, unknown>> {

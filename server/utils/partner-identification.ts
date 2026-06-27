@@ -143,12 +143,13 @@ export interface PartnerIdOptions {
   stepId: string
   pipelineRunId: string
   userId: string
+  signal?: AbortSignal
 }
 
 export async function* runPartnerIdentification(
   opts: PartnerIdOptions,
 ): AsyncGenerator<PartnerIdEvent> {
-  const { inputData, extractPrompt, stepId, pipelineRunId, userId } = opts
+  const { inputData, extractPrompt, stepId, pipelineRunId, userId, signal } = opts
   const client = createClient()
 
   const found = findItemArray(inputData)
@@ -171,6 +172,10 @@ export async function* runPartnerIdentification(
   let totalCostUsd = 0
 
   for (let i = 0; i < items.length; i++) {
+    if (signal?.aborted) {
+      yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }
+      return
+    }
     const item = items[i]
     const itemName = String(item.name ?? item.title ?? item.url ?? `Položka ${i + 1}`)
 

@@ -9,6 +9,7 @@ import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
+import { registerJob, cleanupJob } from '~/server/utils/job-registry'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS, GROUP_FONTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
 
@@ -68,15 +69,37 @@ export default defineEventHandler(async (event) => {
 
   const scopeFilter = libraryScopeForProject(run.project)
 
-  const alreadyRunning = await prisma.pipelineStep.findFirst({
+  const runningSteps = await prisma.pipelineStep.findMany({
     where: { pipelineRunId: runId, status: 'RUNNING' },
     include: { runner: { select: { name: true } } },
   })
-  if (alreadyRunning) {
-    throw createError({
-      statusCode: 409,
-      statusMessage: `Krok ${alreadyRunning.stepType} právě běží (spustil/a ${alreadyRunning.runner?.name ?? 'neznámý'}).`,
-    })
+  if (runningSteps.length > 0) {
+    const nonProfiling = runningSteps.filter(s => s.stepType !== 'PARTNER_PROFILING')
+    if (body.stepType !== 'PARTNER_PROFILING' || nonProfiling.length > 0) {
+      const blocker = nonProfiling[0] ?? runningSteps[0]
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Krok ${blocker.stepType} právě běží (spustil/a ${blocker.runner?.name ?? 'neznámý'}).`,
+      })
+    }
+    // Parallel PARTNER_PROFILING allowed — check for partner name overlap
+    const requestedNames = new Set(
+      (body.inputData?.partners as Array<{ name: string }> | undefined)
+        ?.map(p => p.name?.toLowerCase().trim())
+        .filter(Boolean) ?? [],
+    )
+    for (const rs of runningSteps) {
+      const prog = rs.progress as { items?: Array<{ name: string }> } | null
+      for (const item of prog?.items ?? []) {
+        const name = item.name?.toLowerCase?.().trim()
+        if (name && requestedNames.has(name)) {
+          throw createError({
+            statusCode: 409,
+            statusMessage: `Partner "${item.name}" se právě profiluje.`,
+          })
+        }
+      }
+    }
   }
 
   const [contextParts, customPrompt, dbSystemPrompt, sellingPoint, emailDraft] = await Promise.all([
@@ -164,6 +187,8 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  const jobController = registerJob(step.id)
+
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -205,6 +230,7 @@ export default defineEventHandler(async (event) => {
               stepId: step.id,
               pipelineRunId: runId,
               userId: user.id,
+              signal: jobController.signal,
             })
             let finalOutput: unknown = {}
             let partnerIdCostUsd = 0
@@ -296,7 +322,7 @@ export default defineEventHandler(async (event) => {
                   systemPrompt: systemPromptText,
                   contextParts: allContextParts,
                   userMessage: userMsg,
-                })
+                }, undefined, jobController.signal)
                 for await (const chunk of aiStream) {
                   partnerOutput += chunk
                   write({ chunk })
@@ -414,7 +440,7 @@ export default defineEventHandler(async (event) => {
                   systemPrompt: systemPromptText,
                   contextParts: allContextParts,
                   userMessage: userMsg,
-                })
+                }, undefined, jobController.signal)
                 for await (const chunk of aiStream) {
                   alignmentOutput += chunk
                   write({ chunk })
@@ -512,7 +538,7 @@ export default defineEventHandler(async (event) => {
                   systemPrompt: outreachSystemPrompt,
                   contextParts: [],
                   userMessage: userMsg,
-                })
+                }, undefined, jobController.signal)
                 for await (const chunk of aiStream) {
                   emailOutput += chunk
                   write({ chunk })
@@ -552,7 +578,7 @@ export default defineEventHandler(async (event) => {
               systemPrompt: systemPromptText,
               contextParts: allContextParts,
               userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
-            })
+            }, undefined, jobController.signal)
             for await (const chunk of aiStream) {
               fullOutput += chunk
               write({ chunk })
@@ -601,7 +627,7 @@ export default defineEventHandler(async (event) => {
               systemPrompt: systemPromptText,
               contextParts: allContextParts,
               userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
-            })
+            }, undefined, jobController.signal)
             for await (const chunk of aiStream) {
               fullOutput += chunk
               write({ chunk })
@@ -617,14 +643,16 @@ export default defineEventHandler(async (event) => {
           write({ done: true, stepId: step.id })
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error'
+          // Only update if still RUNNING — cancel endpoint may have already set it to FAILED
           await prisma.pipelineStep
-            .update({
-              where: { id: step.id },
+            .updateMany({
+              where: { id: step.id, status: 'RUNNING' },
               data: { status: 'FAILED', errorMessage: message, completedAt: new Date(), progress: Prisma.DbNull },
             })
             .catch((e) => console.error('[execute] Failed to mark step FAILED:', e))
           write({ error: message, done: true })
         } finally {
+          cleanupJob(step.id)
           controller.close()
         }
       }

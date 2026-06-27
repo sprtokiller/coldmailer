@@ -7,6 +7,8 @@ import { useAiImport } from './pipeline/useAiImport'
 import { usePromptBuilding } from './pipeline/usePromptBuilding'
 import { useStepExecution } from './pipeline/useStepExecution'
 import { useExecutionPolling } from './pipeline/useExecutionPolling'
+import type { RunningJobInfo } from './pipeline/useExecutionPolling'
+import type { PendingRerunConfirm } from './pipeline/useStepExecution'
 import type { PipelineRunContext, PipelineRunResponse, RunStepResult, StepConfigState, PiExtraRef } from './pipeline/types'
 
 export { type PipelineRunContext } from './pipeline/types'
@@ -197,7 +199,7 @@ export async function usePipelineRunPage() {
     STEP_SYSTEM_PROMPTS,
   )
 
-  const { executeStep } = nuxtApp.runWithContext(() => useStepExecution(
+  const { executeStep, pendingRerunConfirm } = nuxtApp.runWithContext(() => useStepExecution(
     route,
     refresh,
     getConfig,
@@ -239,7 +241,7 @@ export async function usePipelineRunPage() {
   }
 
   // ── Lifecycle hooks & watchers ───────────────
-    useExecutionPolling(
+    const { runningJobs } = useExecutionPolling(
       route.params.id as string,
       executingStep,
       executingRunner,
@@ -251,6 +253,20 @@ export async function usePipelineRunPage() {
       progress.updateAlignmentItem,
       refresh,
     )
+
+    function isStepBlocked(stepKey: string): boolean {
+      // During own execution before first poll lands
+      if (runningJobs.value.length === 0 && executingStep.value !== null) {
+        if (stepKey === 'PARTNER_PROFILING' && executingStep.value === 'PARTNER_PROFILING') return false
+        return true
+      }
+      if (runningJobs.value.length === 0) return false
+      // PARTNER_PROFILING can run alongside other PARTNER_PROFILING jobs
+      if (stepKey === 'PARTNER_PROFILING') {
+        return runningJobs.value.some(j => j.stepType !== 'PARTNER_PROFILING')
+      }
+      return runningJobs.value.length > 0
+    }
 
     watch(activeStep, (val) => {
       if (val === 'PARTNER_IDENTIFICATION') selection.initStep2Selection()
@@ -373,6 +389,10 @@ export async function usePipelineRunPage() {
     selectedPrompt,
     modelBadge,
     executeStep,
+    // job management
+    runningJobs,
+    isStepBlocked,
+    pendingRerunConfirm,
   }) as unknown as PipelineRunContext
 
   await runResult

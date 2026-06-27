@@ -32,7 +32,7 @@ export interface StreamStepAIResult {
   getCost: () => Promise<number>
 }
 
-export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000): StreamStepAIResult {
+export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, externalSignal?: AbortSignal): StreamStepAIResult {
   const client = createClient()
   const model = modelForStep(input.stepType)
 
@@ -61,6 +61,14 @@ export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000): Str
     () => abortController.abort(new Error(`AI stream timed out after ${timeoutMs / 1000}s`)),
     timeoutMs,
   )
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      abortController.abort(externalSignal.reason)
+    } else {
+      externalSignal.addEventListener('abort', () => abortController.abort(externalSignal.reason), { once: true })
+    }
+  }
 
   async function* generator(): AsyncGenerator<string> {
     try {
