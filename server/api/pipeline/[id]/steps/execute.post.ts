@@ -480,7 +480,7 @@ export default defineEventHandler(async (event) => {
               const ip = inputPartners[i]
               const opItem = { index: i + 1, total: inputPartners.length, name: String(ip.name ?? ''), status: 'processing' }
               opProgressItems.push(opItem)
-              write({ profilingItem: opItem })
+              write({ outreachItem: opItem })
               prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
@@ -520,14 +520,14 @@ export default defineEventHandler(async (event) => {
                 }
                 allEmails.push(emailData)
                 opProgressItems[i] = { ...opProgressItems[i], status: 'done' }
-                write({ profilingItem: { ...opProgressItems[i] } })
+                write({ outreachItem: { ...opProgressItems[i] } })
                 prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
                 write({ chunk: `  ❌ ${msg}\n` })
                 allEmails.push({ partnerName: String(ip.name ?? ''), error: msg })
                 opProgressItems[i] = { ...opProgressItems[i], status: 'error', error: msg }
-                write({ profilingItem: { ...opProgressItems[i] } })
+                write({ outreachItem: { ...opProgressItems[i] } })
                 prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               }
             }
@@ -615,7 +615,7 @@ export default defineEventHandler(async (event) => {
               data: { status: 'FAILED', errorMessage: message, completedAt: new Date(), progress: Prisma.DbNull },
             })
             .catch((e) => console.error('[execute] Failed to mark step FAILED:', e))
-          write({ error: message })
+          write({ error: message, done: true })
         } finally {
           controller.close()
         }
