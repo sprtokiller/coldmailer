@@ -36,6 +36,8 @@ export const pipelineRunKey = Symbol('pipelineRun')
 export async function usePipelineRunPage() {
   const nuxtApp = useNuxtApp()
   const route = useRoute()
+  // Capture request-aware fetch before any await so session cookies are forwarded in SSR
+  const reqFetch = useRequestFetch()
 
   const activeStep = ref<string | null>(null)
   const executingStep = ref<string | null>(null)
@@ -52,38 +54,11 @@ export async function usePipelineRunPage() {
   const runResult = useFetch<PipelineRunResponse>(`/api/pipeline/${route.params.id}`)
   const { data: run, refresh } = runResult
 
-  const libraryResult = useAsyncData(`pipeline-library-${route.params.id}`, async () => {
-    await runResult
-    const projectId = run.value?.projectId
-
-    const [prompts, contextParts, sellingPoints, emailDrafts, signatures] = await Promise.all([
-      $fetch<PromptOption[]>('/api/library/prompts', { query: { projectId } }),
-      $fetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { query: { projectId } }),
-      $fetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { query: { projectId } }),
-      $fetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { query: { projectId } }),
-      $fetch<Array<{ id: string; name: string; content: string; isDefault: boolean }>>('/api/library/signatures')
-    ])
-    return { prompts, contextParts, sellingPoints, emailDrafts, signatures }
-  }, {
-    default: () => ({ prompts: [], contextParts: [], sellingPoints: [], emailDrafts: [], signatures: [] })
-  })
-
-  const prompts = ref(libraryResult.data.value?.prompts ?? [])
-  const contextParts = ref(libraryResult.data.value?.contextParts ?? [])
-  const sellingPoints = ref(libraryResult.data.value?.sellingPoints ?? [])
-  const emailDrafts = ref(libraryResult.data.value?.emailDrafts ?? [])
-  const signatures = ref(libraryResult.data.value?.signatures ?? [])
-
-  // Update refs if data changes (e.g. on client hydration or navigation)
-  watch(() => libraryResult.data.value, (newVal) => {
-    if (newVal) {
-      prompts.value = newVal.prompts
-      contextParts.value = newVal.contextParts
-      sellingPoints.value = newVal.sellingPoints
-      emailDrafts.value = newVal.emailDrafts
-      signatures.value = newVal.signatures
-    }
-  }, { deep: true })
+  const prompts = ref<PromptOption[]>([])
+  const contextParts = ref<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>([])
+  const sellingPoints = ref<Array<{ id: string; name: string }>>([])
+  const emailDrafts = ref<Array<{ id: string; name: string; subject: string; body: string }>>([])
+  const signatures = ref<Array<{ id: string; name: string; content: string; isDefault: boolean }>>([])
 
   const activeSteps = computed(() => {
     if (run.value?.mode === 'short') {
@@ -400,16 +375,22 @@ export async function usePipelineRunPage() {
     executeStep,
   }) as unknown as PipelineRunContext
 
-  await Promise.all([runResult, libraryResult])
+  await runResult
+  const projectId = run.value?.projectId
 
-  const d = libraryResult.data.value
-  if (d) {
-    prompts.value = d.prompts
-    contextParts.value = d.contextParts
-    sellingPoints.value = d.sellingPoints
-    emailDrafts.value = d.emailDrafts
-    signatures.value = d.signatures
-  }
+  const [promptsData, contextPartsData, sellingPointsData, emailDraftsData, signaturesData] = await Promise.all([
+    reqFetch<PromptOption[]>('/api/library/prompts', { query: { projectId } }),
+    reqFetch<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>('/api/library/context-parts', { query: { projectId } }),
+    reqFetch<Array<{ id: string; name: string }>>('/api/library/selling-points', { query: { projectId } }),
+    reqFetch<Array<{ id: string; name: string; subject: string; body: string }>>('/api/library/email-drafts', { query: { projectId } }),
+    reqFetch<Array<{ id: string; name: string; content: string; isDefault: boolean }>>('/api/library/signatures'),
+  ])
+
+  prompts.value = promptsData
+  contextParts.value = contextPartsData
+  sellingPoints.value = sellingPointsData
+  emailDrafts.value = emailDraftsData
+  signatures.value = signaturesData
 
   return pipeline
 }

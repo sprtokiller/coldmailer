@@ -484,7 +484,9 @@ export default defineEventHandler(async (event) => {
               prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: opProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
               write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
 
-              const partnerDataBlock = '```json\n' + JSON.stringify(ip, null, 2) + '\n```'
+              // Strip internal workspace fields before sending to AI
+              const { _selectedContact: selectedContact, ...partnerDataClean } = ip
+              const partnerDataBlock = '```json\n' + JSON.stringify(partnerDataClean, null, 2) + '\n```'
 
               const outreachSystemPrompt = systemPromptText
                 .replace('<[[DATA]]>', partnerDataBlock)
@@ -492,10 +494,16 @@ export default defineEventHandler(async (event) => {
                 .replace('<[[TEMPLATE]]>', templateSection)
                 .replace('<[[USER]]>', user.name ?? '')
 
+              const contactInfo = selectedContact as { firstName?: string | null; lastName?: string | null; role?: string | null; address?: string | null } | undefined
+              const contactLine = contactInfo?.address
+                ? `Adresát: ${[contactInfo.firstName, contactInfo.lastName].filter(Boolean).join(' ')}${contactInfo.role ? ' (' + contactInfo.role + ')' : ''}, e-mail: ${contactInfo.address}`
+                : null
+
               const userMsg = [
                 'Vytvoř personalizovaný cold e-mail pro tohoto partnera dle systémového promptu.',
+                contactLine,
                 fontFamily ? `Font pro HTML formátování: ${fontFamily}` : null,
-              ].filter(s => s !== null).join('\n')
+              ].filter(Boolean).join('\n')
 
               try {
                 let emailOutput = ''

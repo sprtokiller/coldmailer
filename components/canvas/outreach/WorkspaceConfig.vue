@@ -128,7 +128,7 @@ const schemaPreviewExpanded = ref(false)
 const hasBody = computed(() => !!workspace.emailBody.value.trim())
 const hasTo = computed(() => !!workspace.emailTo.value.trim())
 const canSave = computed(() => hasBody.value && !!workspace.selectedPartner.value)
-const canSend = computed(() => canSave.value && hasTo.value && !!workspace.emailSubject.value.trim())
+const canSend = computed(() => canSave.value && hasTo.value && !!workspace.emailSubject.value.trim() && !!selectedSignatureId.value)
 </script>
 
 <template>
@@ -395,7 +395,7 @@ const canSend = computed(() => canSave.value && hasTo.value && !!workspace.email
             />
           </div>
           <button
-            :disabled="pipeline.executingStep !== null"
+            :disabled="pipeline.executingStep !== null || !workspace.selectedPartner.value"
             class="w-full bg-primary text-white px-4 py-1.5 rounded text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-1.5"
             @click="handleGenerate"
           >

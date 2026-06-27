@@ -101,7 +101,25 @@ export function useStepExecution(
       }
       const done = processedKeySet(outreachEmails(), ['partnerName', 'name'])
       rerunsExisting = selectedAlignments.some(a => done.has(String(a.name ?? '').toLowerCase().trim()))
-      inputData = { partners: selectedAlignments }
+
+      const selectedArgIds = Array.isArray((stepCfg as any)._selectedArgumentIds)
+        ? ((stepCfg as any)._selectedArgumentIds as string[])
+        : []
+      const selectedContactInfo = (stepCfg as any)._selectedContactInfo as Record<string, unknown> | undefined | null
+
+      const enrichedAlignments = selectedAlignments.map(a => {
+        const result = { ...a } as Record<string, unknown>
+        if (selectedArgIds.length > 0 && Array.isArray(result.top3Arguments)) {
+          result.top3Arguments = (result.top3Arguments as Array<{ argumentId?: string }>)
+            .filter(arg => selectedArgIds.includes(String(arg.argumentId ?? '')))
+        }
+        if (selectedContactInfo) {
+          result._selectedContact = selectedContactInfo
+        }
+        return result
+      })
+
+      inputData = { partners: enrichedAlignments }
     } else {
       try {
         inputData = JSON.parse(cfg.inputData || '{}')

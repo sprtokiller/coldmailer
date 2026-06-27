@@ -127,6 +127,28 @@ watch(selectedContactIdx, (idx) => {
   }
 })
 
+watch(
+  [() => selectedContactIdx.value, () => dbContacts.value],
+  () => {
+    const cfg = pipeline.getConfig('OUTREACH_PREPARATION') as any
+    const idx = selectedContactIdx.value
+    const contact = (idx != null && dbContacts.value.length > 0) ? dbContacts.value[idx] : null
+    cfg._selectedContactInfo = contact
+      ? { firstName: contact.firstName, lastName: contact.lastName, role: contact.role, address: contact.address }
+      : null
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  () => selectedArgumentIds.value,
+  (ids) => {
+    const cfg = pipeline.getConfig('OUTREACH_PREPARATION') as any
+    cfg._selectedArgumentIds = Array.from(ids)
+  },
+  { deep: true, immediate: true },
+)
+
 // ── Save & Send (server-side scheduled) ──────────────────────────────────────
 
 const saving = ref(false)
