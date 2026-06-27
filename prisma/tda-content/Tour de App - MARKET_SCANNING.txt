@@ -35,20 +35,6 @@ Pravidla kvality:
 - maximalizuj pokrytí, nejen známé soutěže
 
 Výstup:
-Vrať výhradně validní JSON bez jakéhokoliv doprovodného textu v tomto formátu:
+Vrať výhradně validní JSON pole bez jakéhokoliv doprovodného textu ve formátu níže:
 
-{
-  "competitions": [
-    {
-      "name": "název soutěže",
-      "type": "např. programming | hackathon | robotics | product | mixed",
-      "level": "school | regional | national | international",
-      "target_group": "SŠ | VŠ | mix",
-      "organizer": "organizátor",
-      "description": "stručný popis (1–2 věty)",
-      "frequency": "ročně | nepravidelně | unknown",
-      "url": "oficiální odkaz",
-      "status": "active | inactive | uncertain"
-    }
-  ]
-}
+<[[SCHEMA]]>

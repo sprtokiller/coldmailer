@@ -7,29 +7,34 @@ const prisma = new PrismaClient()
 
 const ALL_PERMISSIONS = [
   'prompts.system.read', 'prompts.system.edit',
-  'prompts.own.read', 'prompts.own.edit',
-  'prompts.others.read', 'prompts.others.edit',
-  'context.own.read', 'context.own.edit',
-  'context.others.read', 'context.others.edit',
-  'selling.own.read', 'selling.own.edit',
-  'selling.others.read', 'selling.others.edit',
-  'drafts.own.read', 'drafts.own.edit',
-  'drafts.others.read', 'drafts.others.edit',
+  'prompts.own.read', 'prompts.own.edit', 'prompts.own.delete',
+  'prompts.others.read', 'prompts.others.edit', 'prompts.others.delete',
+  'context.own.read', 'context.own.edit', 'context.own.delete',
+  'context.others.read', 'context.others.edit', 'context.others.delete',
+  'selling.own.read', 'selling.own.edit', 'selling.own.delete',
+  'selling.others.read', 'selling.others.edit', 'selling.others.delete',
+  'drafts.own.read', 'drafts.own.edit', 'drafts.own.delete',
+  'drafts.others.read', 'drafts.others.edit', 'drafts.others.delete',
+  'signatures.own.edit', 'signatures.system.edit',
   'pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail',
+  'partners.create', 'partners.edit',
   'admin.roles',
+  'admin.system',
 ]
 
 const DEFAULT_PERMISSIONS = [
   'prompts.system.read',
-  'prompts.own.read', 'prompts.own.edit',
+  'prompts.own.read', 'prompts.own.edit', 'prompts.own.delete',
   'prompts.others.read',
-  'context.own.read', 'context.own.edit',
+  'context.own.read', 'context.own.edit', 'context.own.delete',
   'context.others.read',
-  'selling.own.read', 'selling.own.edit',
+  'selling.own.read', 'selling.own.edit', 'selling.own.delete',
   'selling.others.read',
-  'drafts.own.read', 'drafts.own.edit',
+  'drafts.own.read', 'drafts.own.edit', 'drafts.own.delete',
   'drafts.others.read',
+  'signatures.own.edit',
   'pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail',
+  'partners.create', 'partners.edit',
 ]
 
 const PROMPTS_DIR = join(import.meta.dir, 'system-prompts')
@@ -215,10 +220,107 @@ async function seedTags() {
   console.log(`  ✓ ${merged.length} tags (${merged.length - currentTags.length} new)`)
 }
 
+const TDA_CONTENT_DIR = join(import.meta.dir, 'tda-content')
+
+function readTdaFile(filename: string) {
+  return readFileSync(join(TDA_CONTENT_DIR, filename), 'utf-8').trim()
+}
+
+async function seedTdaContent() {
+  const kriz = await prisma.user.findUnique({ where: { email: 'kriz@scg.cz' } })
+  if (!kriz) { console.log('  ⚠ kriz@scg.cz not found, skipping TdA content'); return }
+
+  const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
+  if (!tdaGroup) { console.log('  ⚠ TdA group not found, skipping TdA content'); return }
+
+  // ── SystemPrompt: MARKET_SCANNING ───────────────────────────────────────
+  const msContent = readTdaFile('Tour de App - MARKET_SCANNING.txt')
+  await prisma.systemPrompt.upsert({
+    where: { id: 'tda-market-scanning-prompt' },
+    create: {
+      id: 'tda-market-scanning-prompt',
+      name: 'Tour de App',
+      content: msContent,
+      stepType: 'MARKET_SCANNING',
+      isSystem: false,
+      authorId: kriz.id,
+      groupId: tdaGroup.id,
+      outputSchema: STEP_OUTPUT_SCHEMAS.MARKET_SCANNING as any,
+    },
+    update: { content: msContent, outputSchema: STEP_OUTPUT_SCHEMAS.MARKET_SCANNING as any },
+  })
+  console.log('  ✓ SystemPrompt: MARKET_SCANNING (TdA)')
+
+  // ── EmailDraft ────────────────────────────────────────────────────────────
+  const emailRaw = readTdaFile('Tour de App - EMAIL_TEMPLATE.txt')
+  const [subjectLine, , ...bodyLines] = emailRaw.split('\n')
+  const emailSubject = subjectLine.replace(/^Subject:\s*/i, '').trim()
+  const emailBody = bodyLines.join('\n').trim()
+  await prisma.emailDraft.upsert({
+    where: { id: 'tda-email-template' },
+    create: {
+      id: 'tda-email-template',
+      name: 'Tour de App – základní šablona',
+      subject: emailSubject,
+      body: emailBody,
+      authorId: kriz.id,
+      groupId: tdaGroup.id,
+    },
+    update: { subject: emailSubject, body: emailBody },
+  })
+  console.log('  ✓ EmailDraft: Tour de App – základní šablona')
+
+  // ── SellingPoint ──────────────────────────────────────────────────────────
+  const spContent = readTdaFile('Tour de App - Arguments.txt')
+  await prisma.sellingPoint.upsert({
+    where: { id: 'tda-selling-points' },
+    create: {
+      id: 'tda-selling-points',
+      name: 'Tour de App – prodejní argumenty',
+      content: spContent,
+      authorId: kriz.id,
+      groupId: tdaGroup.id,
+    },
+    update: { content: spContent },
+  })
+  console.log('  ✓ SellingPoint: Tour de App – prodejní argumenty')
+
+  // ── ContextParts ──────────────────────────────────────────────────────────
+  const contextFiles = [
+    { id: 'tda-context-mise',        file: 'Tour de App - Mise, cílová skupina a filosofie soutěže.txt',    name: 'TdA – Mise, cílová skupina a filosofie' },
+    { id: 'tda-context-struktura',   file: 'Tour de App - Struktura soutěže.txt',                           name: 'TdA – Struktura soutěže' },
+    { id: 'tda-context-technologie', file: 'Tour de App - Technologie, dovednosti a charakter zadání.txt',  name: 'TdA – Technologie, dovednosti a charakter zadání' },
+  ]
+  for (const cp of contextFiles) {
+    const content = readTdaFile(cp.file)
+    await prisma.contextPart.upsert({
+      where: { id: cp.id },
+      create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id },
+      update: { content },
+    })
+    console.log(`  ✓ ContextPart: ${cp.name}`)
+  }
+}
+
+const SUPER_ADMINS = ['kriz@scg.cz']
+
+async function seedSuperAdmins() {
+  for (const email of SUPER_ADMINS) {
+    const result = await prisma.user.updateMany({
+      where: { email, isSuperAdmin: false },
+      data: { isSuperAdmin: true },
+    })
+    if (result.count > 0) console.log(`  ✓ SuperAdmin: ${email}`)
+    else console.log(`  – SuperAdmin already set: ${email}`)
+  }
+}
+
 main()
   .then(() => seedRoles())
   .then(() => seedGroups())
   .then(() => seedProjectRoles())
   .then(() => seedTags())
+  .then(() => seedTdaContent())
+  .then(() => seedSuperAdmins())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

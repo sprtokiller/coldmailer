@@ -48,6 +48,7 @@ export const ALL_PERMISSIONS = [
   'partners.edit',
   // Administration
   'admin.roles',
+  'admin.system',
 ] as const
 
 export type PermissionKey = typeof ALL_PERMISSIONS[number]
@@ -103,6 +104,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   'partners.create': 'Vytvářet partnery ručně',
   'partners.edit': 'Upravovat profily partnerů',
   'admin.roles': 'Správa rolí a oprávnění uživatelů',
+  'admin.system': 'Správa systémových nastavení (tagy, e-mail sync)',
 }
 
 export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
@@ -115,7 +117,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Podpisy', keys: ['signatures.own.edit', 'signatures.system.edit'] },
   { label: 'Pipeline', keys: ['pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail'] },
   { label: 'Partneři', keys: ['partners.create', 'partners.edit'] },
-  { label: 'Správa', keys: ['admin.roles'] },
+  { label: 'Správa', keys: ['admin.roles', 'admin.system'] },
 ]
 
 export async function getEffectivePermissions(userId: string): Promise<string[]> {

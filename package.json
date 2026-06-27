@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "node --max-old-space-size=4096 --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs dev",
-    "build": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs build",
+    "build": "prisma db seed && node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs build",
     "preview": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs preview",
     "postinstall": "node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs prepare && prisma generate",
     "db:push": "prisma db push",

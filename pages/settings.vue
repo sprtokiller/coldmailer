@@ -32,6 +32,7 @@ const { data: me } = await useFetch<MeResponse>('/api/settings/me')
 
 const isSuperAdmin = computed(() => me.value?.user.isSuperAdmin ?? false)
 const canManageRoles = computed(() => me.value?.effectivePermissions.includes('admin.roles') || isSuperAdmin.value)
+const canManageSystem = computed(() => me.value?.effectivePermissions.includes('admin.system') || isSuperAdmin.value)
 
 // ── Admin data ───────────────────────────────────────────────────────────────
 const { data: adminUsers, refresh: refreshUsers } = canManageRoles.value
@@ -58,6 +59,7 @@ interface NavItem {
   label: string
   icon: string
   adminOnly?: boolean
+  permission?: string
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -67,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'roles',       label: 'Správa rolí',      icon: 'tag',    adminOnly: true },
   { id: 'projects',    label: 'Správa projektů',  icon: 'folder', adminOnly: true },
   { id: 'budget',      label: 'Správa limitů',    icon: 'chart',  adminOnly: true },
-  { id: 'system',      label: 'Systémová nastavení', icon: 'cog' },
+  { id: 'system',      label: 'Systémová nastavení', icon: 'cog', permission: 'admin.system' },
 ]
 
 const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'roles', 'projects', 'budget', 'system']
@@ -79,7 +81,11 @@ watch(activeSection, (newSection) => {
 })
 
 const visibleNav = computed(() =>
-  NAV_ITEMS.filter(item => !item.adminOnly || canManageRoles.value),
+  NAV_ITEMS.filter(item => {
+    if (item.adminOnly && !canManageRoles.value) return false
+    if (item.permission && !me.value?.effectivePermissions.includes(item.permission) && !isSuperAdmin.value) return false
+    return true
+  }),
 )
 </script>
 
@@ -252,7 +258,7 @@ const visibleNav = computed(() =>
         />
 
         <SettingsSystem
-          v-else-if="activeSection === 'system'"
+          v-else-if="activeSection === 'system' && canManageSystem"
         />
       </main>
     </div>
