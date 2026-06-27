@@ -490,6 +490,7 @@ export default defineEventHandler(async (event) => {
                 .replace('<[[DATA]]>', partnerDataBlock)
                 .replace('<[[CONTEXT]]>', contextBlock)
                 .replace('<[[TEMPLATE]]>', templateSection)
+                .replace('<[[USER]]>', user.name ?? '')
 
               const userMsg = [
                 'Vytvoř personalizovaný cold e-mail pro tohoto partnera dle systémového promptu.',

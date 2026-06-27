@@ -15,6 +15,12 @@ Primárně pracuj s dodanou šablonou. Neměň její záměr, pořadí hlavních
 
 ---
 
+Odesílatel (jméno osoby, která e-mail odesílá):
+
+<[[USER]]>
+
+---
+
 Dodatečný kontext od uživatele:
 
 <[[CONTEXT]]>
