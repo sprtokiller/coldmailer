@@ -69,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'roles',       label: 'Správa rolí',      icon: 'tag',    adminOnly: true },
   { id: 'projects',    label: 'Správa projektů',  icon: 'folder', adminOnly: true },
   { id: 'budget',      label: 'Správa limitů',    icon: 'chart',  adminOnly: true },
-  { id: 'system',      label: 'Systémová nastavení', icon: 'cog', permission: 'admin.system' },
+  { id: 'system',      label: 'Systémová nastavení', icon: 'cog', adminOnly: true },
 ]
 
 const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'roles', 'projects', 'budget', 'system']

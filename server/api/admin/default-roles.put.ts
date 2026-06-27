@@ -4,7 +4,7 @@ import { requirePermission } from '~/server/utils/permissions'
 const CONFIG_KEY = 'newUser.defaults'
 
 export default defineEventHandler(async (event) => {
-  const session = await requirePermission(event, 'admin.system')
+  const session = await requirePermission(event, 'admin.roles')
   const body = await readBody<{ roleIds: string[]; projectRoleIds: string[] }>(event)
 
   if (!Array.isArray(body.roleIds) || !Array.isArray(body.projectRoleIds)) {

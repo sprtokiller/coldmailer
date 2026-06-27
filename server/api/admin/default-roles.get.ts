@@ -4,7 +4,7 @@ import { requirePermission } from '~/server/utils/permissions'
 const CONFIG_KEY = 'newUser.defaults'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, 'admin.system')
+  await requirePermission(event, 'admin.roles')
 
   const [configRow, roles, groups] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { key: CONFIG_KEY } }),

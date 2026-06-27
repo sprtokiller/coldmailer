@@ -6,7 +6,7 @@ const TAG_KEY = 'tags.partnerIndustry'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
-  await requirePermission(event, 'admin.system')
+  await requirePermission(event, 'admin.roles')
 
   const body = await readBody<{ tags: string[] }>(event)
   if (!Array.isArray(body.tags)) {
