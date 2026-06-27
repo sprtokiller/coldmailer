@@ -170,6 +170,7 @@ export interface PipelineRunContext {
   toggleAiImport: (stepKey: string) => void
   runAiImport: (stepKey: string) => Promise<void>
   importProfiles: (profiles: Array<Record<string, unknown>>) => Promise<void>
+  importProfileForPartner: (partnerId: string, partnerName: string, rawText: string) => Promise<void>
   deleteTableRow: (stepKey: string, rowIndex: number) => Promise<void>
   deleteTableRows: (stepKey: string, rowIndices: number[]) => Promise<void>
   deleteProfilingProfile: (stepKey: string, profileIndex: number) => Promise<void>

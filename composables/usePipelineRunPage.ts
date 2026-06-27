@@ -188,6 +188,43 @@ export async function usePipelineRunPage() {
     await refresh()
   }
 
+  function tryParseProfileJson(raw: string): unknown | null {
+    const text = raw.trim().replace(/^```(?:json)?\s*\n?/, '').replace(/\n```\s*$/, '').trim()
+    try {
+      return JSON.parse(text)
+    } catch {
+      return null
+    }
+  }
+
+  async function importProfileForPartner(partnerId: string, partnerName: string, rawText: string) {
+    const trimmed = rawText.trim()
+    if (!trimmed) return
+
+    let profiles: Array<Record<string, unknown>>
+    const jsonData = tryParseProfileJson(trimmed)
+
+    if (jsonData !== null) {
+      profiles = (Array.isArray(jsonData) ? jsonData : [jsonData]) as Array<Record<string, unknown>>
+    } else {
+      const res = await $fetch<{ mergedData: unknown }>(`/api/pipeline/${route.params.id}/steps/import-ai`, {
+        method: 'POST',
+        body: {
+          stepType: 'PARTNER_PROFILING',
+          systemPromptId: getConfig('PARTNER_PROFILING').systemPromptId || undefined,
+          rawInputText: `Partner: ${partnerName}\n\n${trimmed}`,
+        },
+      })
+      const merged = Array.isArray(res.mergedData) ? res.mergedData as Array<Record<string, unknown>> : []
+      const normName = partnerName.toLowerCase().trim()
+      const match = merged.find(p => String(p.name ?? '').toLowerCase().trim() === normName) ?? merged.at(-1)
+      if (!match) throw new Error('AI import nevrátil žádný profil.')
+      profiles = [match]
+    }
+
+    await importProfiles(profiles.map(p => ({ ...p, partnerId, name: partnerName })))
+  }
+
   const promptBuilding = usePromptBuilding(
     contextParts,
     getConfig,
@@ -360,6 +397,7 @@ export async function usePipelineRunPage() {
     // ai import
     ...aiImport,
     importProfiles,
+    importProfileForPartner,
     // prompt building
     ...promptBuilding,
     // orchestrator-level functions

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { pipelineRunKey, type usePipelineRunPage } from '~/composables/usePipelineRunPage'
-import type { RecordProfilesResponse } from '~/composables/pipeline/types'
 
 const props = defineProps<{
   globalRecordId: string
@@ -12,104 +11,32 @@ const emit = defineEmits<{
   imported: []
 }>()
 
-type ProfileOption = {
-  key: string
-  title: string
-  meta: string
-  date: string
-  data: Record<string, unknown>
-}
-
 const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipelineRunPage>>
 
-const loading = ref(true)
+const importText = ref('')
 const importing = ref(false)
 const error = ref<string | null>(null)
-const response = ref<RecordProfilesResponse | null>(null)
-const selectedKeys = ref<Record<string, boolean>>({})
 
-const dateFmt = new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'medium', timeStyle: 'short' })
+const placeholder = `Vložte JSON profilu (např. { "name": "...", "summary": "...", "contacts": [...] })
 
-function formatDate(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : dateFmt.format(date)
-}
+Nebo textový popis, např.:
+Firma XY, s.r.o. — technologická firma z Prahy, ~50 zaměstnanců. Zaměřuje se na IoT řešení pro průmysl. Kontakt: Jan Novák, PR manažer, jan@firmaxy.cz.`
 
-function contactsCount(data: Record<string, unknown>): number {
-  return Array.isArray(data.contacts) ? data.contacts.length : 0
-}
-
-function stringField(data: Record<string, unknown>, keys: string[]): string {
-  for (const key of keys) {
-    const value = data[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  return ''
-}
-
-const options = computed<ProfileOption[]>(() => {
-  const res = response.value
-  if (!res) return []
-
-  const current: ProfileOption[] = res.current
-    ? [{
-        key: 'current',
-        title: 'Aktuální (global)',
-        meta: 'Poslední sloučená profilace',
-        date: formatDate(res.current.updatedAt),
-        data: res.current.data,
-      }]
-    : []
-
-  const historical = res.historical.map((profile, index) => ({
-    key: `historical:${profile.stepId}:${index}`,
-    title: profile.pipelineRunName,
-    meta: profile.runnerName ? `Runner: ${profile.runnerName}` : 'Historická profilace',
-    date: formatDate(profile.completedAt),
-    data: profile.data,
-  }))
-
-  return [...current, ...historical]
-})
-
-// oldest-first so mergeOutputData overwrites older fields with newer ones
-const selectedProfiles = computed(() =>
-  [...options.value]
-    .reverse()
-    .filter(option => selectedKeys.value[option.key])
-    .map(option => option.data),
-)
-
-async function loadProfiles() {
-  loading.value = true
-  error.value = null
-  try {
-    response.value = await $fetch<RecordProfilesResponse>(`/api/records/${props.globalRecordId}/profiles`)
-    const firstKey = options.value[0]?.key
-    selectedKeys.value = firstKey ? { [firstKey]: true } : {}
-  } catch (err: any) {
-    error.value = err?.data?.statusMessage ?? err?.statusMessage ?? (err instanceof Error ? err.message : 'Profilace se nepodařilo načíst.')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function importSelected() {
-  if (selectedProfiles.value.length === 0 || importing.value) return
+async function importProfile() {
+  if (!importText.value.trim() || importing.value) return
   importing.value = true
   error.value = null
   try {
-    await pipeline.importProfiles(selectedProfiles.value)
+    await pipeline.importProfileForPartner(props.globalRecordId, props.partnerName, importText.value)
     emit('imported')
     emit('close')
-  } catch (err: any) {
-    error.value = err?.data?.statusMessage ?? err?.statusMessage ?? (err instanceof Error ? err.message : 'Profilace se nepodařilo importovat.')
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }; statusMessage?: string; message?: string }
+    error.value = e?.data?.statusMessage ?? e?.statusMessage ?? (err instanceof Error ? err.message : 'Profil se nepodařilo importovat.')
   } finally {
     importing.value = false
   }
 }
-
-onMounted(loadProfiles)
 </script>
 
 <template>
@@ -122,7 +49,7 @@ onMounted(loadProfiles)
         <div class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
           <div class="min-w-0">
             <h3 class="truncate text-sm font-semibold text-gray-800">{{ partnerName }}</h3>
-            <p class="mt-0.5 text-xs text-gray-400">Dostupné uložené profilace</p>
+            <p class="mt-0.5 text-xs text-gray-400">Nahrát profil (JSON nebo text)</p>
           </div>
           <button
             type="button"
@@ -136,54 +63,17 @@ onMounted(loadProfiles)
           </button>
         </div>
 
-        <div class="max-h-[65vh] overflow-y-auto px-5 py-4">
-          <div v-if="loading" class="py-8 text-center text-xs text-gray-400">
-            Načítám profilace...
-          </div>
-
-          <div v-else-if="error" class="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+        <div class="px-5 py-4">
+          <textarea
+            v-model="importText"
+            rows="10"
+            :placeholder="placeholder"
+            class="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs focus:border-primary focus:outline-none"
+          />
+          <p class="mt-1.5 text-[10px] text-gray-400">Textový vstup je také v pořádku, AI ho automaticky parsuje.</p>
+          <p v-if="error" class="mt-2 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
             {{ error }}
-          </div>
-
-          <div v-else-if="options.length === 0" class="py-8 text-center text-xs text-gray-400">
-            Pro tohoto partnera nejsou uložené žádné profilace.
-          </div>
-
-          <div v-else class="space-y-2">
-            <label
-              v-for="option in options"
-              :key="option.key"
-              class="grid cursor-pointer grid-cols-[1.25rem_1fr] gap-3 rounded-lg border border-gray-100 px-3 py-3 hover:bg-gray-50/70"
-              :class="selectedKeys[option.key] ? 'border-primary/30 bg-primary/5' : ''"
-            >
-              <input
-                v-model="selectedKeys[option.key]"
-                type="checkbox"
-                class="mt-0.5 accent-primary"
-              />
-              <span class="min-w-0">
-                <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span class="text-xs font-semibold text-gray-800">{{ option.title }}</span>
-                  <span class="text-[11px] text-gray-400">{{ option.date }}</span>
-                </span>
-                <span class="mt-0.5 block text-[11px] text-gray-400">{{ option.meta }}</span>
-                <span class="mt-2 grid gap-1 text-[11px] text-gray-500 sm:grid-cols-3">
-                  <span class="truncate">
-                    <span class="text-gray-400">Industry:</span>
-                    {{ stringField(option.data, ['industry']) || 'neuvedeno' }}
-                  </span>
-                  <span>
-                    <span class="text-gray-400">Kontakty:</span>
-                    {{ contactsCount(option.data) }}
-                  </span>
-                  <span class="truncate">
-                    <span class="text-gray-400">Web:</span>
-                    {{ stringField(option.data, ['website', 'url', 'web']) || 'neuvedeno' }}
-                  </span>
-                </span>
-              </span>
-            </label>
-          </div>
+          </p>
         </div>
 
         <div class="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
@@ -197,8 +87,8 @@ onMounted(loadProfiles)
           <button
             type="button"
             class="rounded bg-primary px-4 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="selectedProfiles.length === 0 || importing || loading"
-            @click="importSelected"
+            :disabled="!importText.trim() || importing"
+            @click="importProfile"
           >
             {{ importing ? 'Importuji...' : 'Importovat' }}
           </button>

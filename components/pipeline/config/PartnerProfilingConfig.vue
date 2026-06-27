@@ -9,18 +9,6 @@ const pipeline = inject(pipelineRunKey) as Awaited<ReturnType<typeof usePipeline
 const provenanceCandidate = ref<Step3Candidate | null>(null)
 const profileImportCandidate = ref<Step3Candidate | null>(null)
 const provenanceSources = computed(() => [...new Set(provenanceCandidate.value?.itemNames ?? [])])
-
-function profileExtraRef(candidate: Step3Candidate) {
-  return pipeline.piExtraRefs.find(ref => ref.globalRecordId === candidate.partnerId)
-}
-
-function canOpenProfileImport(candidate: Step3Candidate): boolean {
-  return candidate.source !== 'direct'
-}
-
-function hasProfileImportHint(candidate: Step3Candidate): boolean {
-  return Boolean(profileExtraRef(candidate)?.hasProfileData)
-}
 </script>
 
 <template>
@@ -74,11 +62,9 @@ function hasProfileImportHint(candidate: Step3Candidate): boolean {
             :class="c.source === 'direct' ? 'text-amber-400' : c.frequency > 1 ? 'text-primary' : 'text-gray-400'"
           >{{ c.source === 'direct' ? '–' : c.frequency + '×' }}</span>
           <button
-            v-if="canOpenProfileImport(c)"
             type="button"
-            class="flex items-center justify-center transition-colors"
-            :class="hasProfileImportHint(c) ? 'text-primary hover:text-primary/80' : 'text-gray-300 hover:text-primary'"
-            :title="'Načíst uložený profil pro ' + c.name"
+            class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
+            :title="'Nahrát profil pro ' + c.name"
             @click.stop.prevent="profileImportCandidate = c"
           >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -86,7 +72,6 @@ function hasProfileImportHint(candidate: Step3Candidate): boolean {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1" />
             </svg>
           </button>
-          <span v-else></span>
           <button
             type="button"
             class="flex items-center justify-center text-gray-300 hover:text-primary transition-colors"
