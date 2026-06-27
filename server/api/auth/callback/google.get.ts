@@ -40,6 +40,31 @@ export default defineEventHandler(async (event) => {
 
   await applyDefaultBudgetToUser(user.id)
 
+  // Apply default roles to newly created users
+  const isNewUser = Date.now() - user.createdAt.getTime() < 30_000
+  if (isNewUser) {
+    const configRow = await prisma.systemConfig.findUnique({ where: { key: 'newUser.defaults' } })
+    if (configRow?.value) {
+      const defaults = configRow.value as { roleIds?: string[]; projectRoleIds?: string[] }
+      await Promise.all([
+        ...(defaults.roleIds ?? []).map(roleId =>
+          prisma.userRole.upsert({
+            where: { userId_roleId: { userId: user.id, roleId } },
+            create: { userId: user.id, roleId },
+            update: {},
+          }).catch(() => {}),
+        ),
+        ...(defaults.projectRoleIds ?? []).map(projectRoleId =>
+          prisma.userProjectRole.upsert({
+            where: { userId_projectRoleId: { userId: user.id, projectRoleId } },
+            create: { userId: user.id, projectRoleId },
+            update: {},
+          }).catch(() => {}),
+        ),
+      ])
+    }
+  }
+
   // If no superadmin exists in the system yet, promote the logging-in user
   const superadminCount = await prisma.user.count({ where: { isSuperAdmin: true } })
   if (superadminCount === 0) {
