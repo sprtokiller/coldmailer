@@ -100,6 +100,26 @@ watch(selectedPartner, async (name) => {
   }
 })
 
+watch(() => pipeline?.outreachEmails(), (newEmails, oldEmails) => {
+  if (!newEmails || !selectedPartner.value) return
+  const match = (newEmails as Array<Record<string, unknown>>).find(e => String(e.partnerName ?? e.name ?? '') === selectedPartner.value)
+  if (!match) return
+  
+  const oldMatch = (oldEmails as Array<Record<string, unknown>>)?.find(e => String(e.partnerName ?? e.name ?? '') === selectedPartner.value)
+  
+  const newBody = String(match.body ?? match.emailBody ?? '')
+  const oldBody = oldMatch ? String(oldMatch.body ?? oldMatch.emailBody ?? '') : ''
+  if (newBody && newBody !== oldBody) {
+    emailBody.value = newBody
+  }
+  
+  const newSubject = String(match.subject ?? '')
+  const oldSubject = oldMatch ? String(oldMatch.subject ?? '') : ''
+  if (newSubject && newSubject !== oldSubject) {
+    emailSubject.value = newSubject
+  }
+}, { deep: true })
+
 watch(selectedContactIdx, (idx) => {
   if (idx == null || !selectedPartner.value) return
   if (dbContacts.value[idx]) {
