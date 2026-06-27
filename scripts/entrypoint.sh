@@ -3,10 +3,10 @@ set -e
 
 if [ "${SKIP_DB_SETUP:-}" != "true" ]; then
   echo "Syncing database schema..."
-  bun node_modules/prisma/build/index.js db push --skip-generate
+  node node_modules/prisma/build/index.js db push --skip-generate
 
   echo "Running database seed..."
-  bun node_modules/prisma/build/index.js db seed
+  node node_modules/prisma/build/index.js db seed
 fi
 
 echo "Starting application..."

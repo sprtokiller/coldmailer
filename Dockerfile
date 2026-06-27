@@ -10,7 +10,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN bunx nuxt prepare
 RUN bunx prisma generate
-RUN bun run build
+RUN node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs build
 
 FROM base AS runner
 ENV NODE_ENV=production
