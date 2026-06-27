@@ -326,6 +326,12 @@ Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
 
 <[[DATA]]>
 
+Odesílatel (jméno osoby, která e-mail odesílá):
+
+<[[USER]]>
+
+<[[CONTEXT]]>
+
 <[[TEMPLATE]]>
 
 ## VÝSTUP

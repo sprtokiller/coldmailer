@@ -74,8 +74,12 @@ const STEP_TYPES = [
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
 // ── Placeholder validation ────────────────────────────────────────────────────
-const VALID_PLACEHOLDERS = ['<[[SCHEMA]]>', '<[[CONTEXT]]>', '<[[DATA]]>', '<[[TEMPLATE]]>']
+const VALID_PLACEHOLDERS = ['<[[SCHEMA]]>', '<[[CONTEXT]]>', '<[[DATA]]>', '<[[TEMPLATE]]>', '<[[USER]]>']
 const PLACEHOLDER_RE = /<\[\[[A-Z_]+\]\]>/g
+
+const REQUIRED_PLACEHOLDERS: Partial<Record<string, string[]>> = {
+  OUTREACH_PREPARATION: ['<[[DATA]]>', '<[[CONTEXT]]>', '<[[TEMPLATE]]>', '<[[USER]]>'],
+}
 
 const contentPlaceholders = computed(() => {
   if (tab.value !== 'prompts' && tab.value !== 'context') return []
@@ -94,9 +98,8 @@ const duplicatePlaceholders = computed(() => {
 
 const missingPlaceholders = computed(() => {
   if (tab.value !== 'prompts') return []
-  const required = ['<[[DATA]]>']
+  const required: string[] = [...(REQUIRED_PLACEHOLDERS[form.value.stepType] ?? [])]
   if (currentStepSchema.value) required.push('<[[SCHEMA]]>')
-  if (form.value.stepType === 'OUTREACH_PREPARATION') required.push('<[[TEMPLATE]]>')
   return required.filter(p => !contentPlaceholders.value.includes(p))
 })
 
@@ -211,13 +214,9 @@ function startEdit(item: LibraryItem) {
   showForm.value = true
 }
 
-watch(() => form.value.stepType, (newType, oldType) => {
+watch(() => form.value.stepType, (newType) => {
   if (editingId.value) return
-  const prevTemplate = (STEP_CONTENT_TEMPLATES[oldType] ?? '').trim()
-  const current = form.value.content.trim()
-  if (!current || current === prevTemplate) {
-    form.value.content = STEP_CONTENT_TEMPLATES[newType] ?? ''
-  }
+  form.value.content = STEP_CONTENT_TEMPLATES[newType] ?? ''
 })
 
 watch(showForm, (visible) => {
