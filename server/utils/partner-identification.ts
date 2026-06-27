@@ -143,12 +143,13 @@ export interface PartnerIdOptions {
   stepId: string
   pipelineRunId: string
   userId: string
+  signal?: AbortSignal
 }
 
 export async function* runPartnerIdentification(
   opts: PartnerIdOptions,
 ): AsyncGenerator<PartnerIdEvent> {
-  const { inputData, extractPrompt, stepId, pipelineRunId, userId } = opts
+  const { inputData, extractPrompt, stepId, pipelineRunId, userId, signal } = opts
   const client = createClient()
 
   const found = findItemArray(inputData)
@@ -171,6 +172,10 @@ export async function* runPartnerIdentification(
   let totalCostUsd = 0
 
   for (let i = 0; i < items.length; i++) {
+    if (signal?.aborted) {
+      yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }
+      return
+    }
     const item = items[i]
     const itemName = String(item.name ?? item.title ?? item.url ?? `Položka ${i + 1}`)
 
@@ -189,6 +194,7 @@ export async function* runPartnerIdentification(
         pipelineStepId: stepId,
         stepType: 'PARTNER_IDENTIFICATION',
       }))
+      if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
       yield { type: 'progress', text: `  ✓ ${serpResults.length} výsledků\n` }
       yield {
         type: 'progress',
@@ -211,6 +217,7 @@ export async function* runPartnerIdentification(
         yield { type: 'progress', text: `  ⚠ Načítání stránek selhalo (${msg}) – pokračuji se snippety z Google\n` }
         pages = serpResults.map(r => ({ url: r.url, title: '', text: '', links: [], alts: [], ok: false }))
       }
+      if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
       const pageByUrl = new Map(pages.map(p => [p.url, p]))
       const pageStatuses = serpResults.map(serp => classifySerpPage(serp, pageByUrl.get(serp.url)))
       const pagesLoaded = pageStatuses.filter(p => p.status === 'loaded').length
@@ -239,6 +246,7 @@ export async function* runPartnerIdentification(
       // e) Extract partners from each result (page content or SerpAPI snippet)
       const foundPartners: Array<{ name: string; website?: string; description?: string; type?: string }> = []
       for (const serp of serpResults) {
+        if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
         const pg = pageByUrl.get(serp.url)
         const ctx = buildExtractionContext(serp, pg)
         if (!ctx) continue

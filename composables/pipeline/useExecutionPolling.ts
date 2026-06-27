@@ -3,15 +3,17 @@ import type { PartnerProgressItem, ProfilingProgressItem, AlignmentProgressItem 
 
 const POLL_INTERVAL_MS = 3000
 
+export interface RunningJobInfo {
+  id: string
+  stepType: string
+  runnerName: string
+  runnerImage: string | null
+  createdAt: string
+  progress: { items: Array<Record<string, unknown>> } | null
+}
+
 interface RunningStepResponse {
-  runningStep: {
-    id: string
-    stepType: string
-    runnerName: string
-    runnerImage: string | null
-    createdAt: string
-    progress: { items: Array<Record<string, unknown>> } | null
-  } | null
+  runningSteps: RunningJobInfo[]
 }
 
 const PROFILING_STEP_TYPES = new Set(['PARTNER_PROFILING', 'OUTREACH_PREPARATION'])
@@ -30,24 +32,33 @@ export function useExecutionPolling(
   refresh: () => Promise<void>,
 ) {
   let intervalId: ReturnType<typeof setInterval> | null = null
-  let previousStepType: string | null = null
+  let previousCount = 0
   let refreshing = false
+
+  const runningJobs = ref<RunningJobInfo[]>([])
 
   async function poll() {
     try {
       const data = await $fetch<RunningStepResponse>(`/api/pipeline/${runId}/execution-status`)
+      const steps = data.runningSteps
 
-      if (data.runningStep) {
-        const { stepType, runnerName, runnerImage, progress } = data.runningStep
-        previousStepType = stepType
-        executingStep.value = stepType
-        executingRunner.value = { name: runnerName, image: runnerImage }
+      if (steps.length > 0) {
+        runningJobs.value = steps
+        previousCount = steps.length
 
-        if (progress?.items) {
-          applyProgress(stepType, progress.items)
+        // Use first step as primary for legacy executingStep/executingRunner display
+        const primary = steps[0]
+        executingStep.value = primary.stepType
+        executingRunner.value = { name: primary.runnerName, image: primary.runnerImage }
+
+        for (const rs of steps) {
+          if (rs.progress?.items) {
+            applyProgress(rs.stepType, rs.progress.items)
+          }
         }
-      } else if (previousStepType !== null && !refreshing) {
-        previousStepType = null
+      } else if (previousCount > 0 && !refreshing) {
+        previousCount = 0
+        runningJobs.value = []
         executingStep.value = null
         executingRunner.value = null
         refreshing = true
@@ -89,4 +100,6 @@ export function useExecutionPolling(
       intervalId = null
     }
   })
+
+  return { runningJobs }
 }

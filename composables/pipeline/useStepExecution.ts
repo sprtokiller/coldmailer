@@ -2,7 +2,10 @@ import type { Ref } from 'vue'
 import { useUserSession } from '#imports'
 import type { StepConfigState, Step3Candidate, PartnerProgressItem, ProfilingProgressItem, AlignmentProgressItem, RunStepResult } from './types'
 
-const RERUN_WARNING = 'Tato operace je nákladná a položka již má výsledky. Jste si opravdu jistí, že ji chcete spustit znovu?'
+export interface PendingRerunConfirm {
+  stepKey: string
+  resolve: (ok: boolean) => void
+}
 
 export function useStepExecution(
   route: ReturnType<typeof useRoute>,
@@ -33,6 +36,7 @@ export function useStepExecution(
   alignmentOutputAlignments: (stepKey: string) => Array<Record<string, unknown>>,
 ) {
   const { user: sessionUser } = useUserSession()
+  const pendingRerunConfirm = ref<PendingRerunConfirm | null>(null)
 
   function processedKeySet(items: Array<Record<string, unknown>>, keys: string[]): Set<string> {
     const s = new Set<string>()
@@ -129,7 +133,13 @@ export function useStepExecution(
       rerunsExisting = hasExistingOutput(stepKey)
     }
 
-    if (rerunsExisting && !confirm(RERUN_WARNING)) return
+    if (rerunsExisting) {
+      const ok = await new Promise<boolean>(resolve => {
+        pendingRerunConfirm.value = { stepKey, resolve }
+      })
+      pendingRerunConfirm.value = null
+      if (!ok) return
+    }
 
     executingStep.value = stepKey
     const u = sessionUser.value as { name?: string; image?: string | null } | null
@@ -217,5 +227,5 @@ export function useStepExecution(
     }
   }
 
-  return { executeStep }
+  return { executeStep, pendingRerunConfirm }
 }

@@ -1,4 +1,6 @@
 import type { STEPS } from '~/composables/usePipelineRunPage'
+import type { RunningJobInfo } from '~/composables/pipeline/useExecutionPolling'
+import type { PendingRerunConfirm } from '~/composables/pipeline/useStepExecution'
 
 export type StepDefinition = typeof STEPS[number]
 
@@ -221,6 +223,10 @@ export interface PipelineRunContext {
   stepResultPromptName: (stepKey: string) => string | undefined
   stepResultOutput: (stepKey: string) => string
   executeStep: (stepKey: string) => Promise<void>
+  // job management
+  runningJobs: RunningJobInfo[]
+  isStepBlocked: (stepKey: string) => boolean
+  pendingRerunConfirm: PendingRerunConfirm | null
   prevStepOutput: (stepKey: string) => string
   getOutputMode: (stepKey: string, defaultMode?: string) => string
   setOutputMode: (stepKey: string, mode: string) => void

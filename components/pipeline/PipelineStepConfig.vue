@@ -410,7 +410,7 @@ async function confirmEditContextPart() {
     <!-- ── Execute button ──────────────────────────────────────────────────── -->
     <div class="flex items-center gap-2 flex-wrap mt-4">
       <button
-        :disabled="pipeline.executingStep !== null"
+        :disabled="pipeline.isStepBlocked(step.key)"
         class="bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
         @click="handleExecute"
       >
@@ -444,4 +444,6 @@ async function confirmEditContextPart() {
     <!-- ── Progress display ────────────────────────────────────────────────── -->
     <PipelineConfigStepProgressDisplay :step="step" />
   </div>
+
+  <PipelineConfirmRerunModal />
 </template>
