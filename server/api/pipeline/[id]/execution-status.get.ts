@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { cancelJob } from '~/server/utils/job-registry'
 
 const STALE_THRESHOLD_MS = 30 * 60 * 1000
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
   const liveSteps = []
   for (const step of runningSteps) {
     if (Date.now() - new Date(step.createdAt).getTime() > STALE_THRESHOLD_MS) {
+      cancelJob(step.id)
       await prisma.pipelineStep.update({
         where: { id: step.id },
         data: {

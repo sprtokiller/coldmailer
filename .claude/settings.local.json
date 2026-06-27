@@ -23,7 +23,8 @@
       "Bash(docker compose *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\sprto\\\\Documents\\\\Temp\\\\coldmailer\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(bun add *)"
+      "Bash(bun add *)",
+      "Bash(gh pr *)"
     ]
   }
 }

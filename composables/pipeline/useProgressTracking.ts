@@ -14,7 +14,7 @@ export function useProgressTracking() {
 
   function updateProfilingItem(stepKey: string, item: ProfilingProgressItem) {
     if (!profilingProgress.value[stepKey]) profilingProgress.value[stepKey] = []
-    const idx = profilingProgress.value[stepKey].findIndex(i => i.index === item.index)
+    const idx = profilingProgress.value[stepKey].findIndex(i => i.name === item.name)
     if (idx >= 0) profilingProgress.value[stepKey][idx] = item
     else profilingProgress.value[stepKey].push(item)
   }

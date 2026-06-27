@@ -652,6 +652,14 @@ export default defineEventHandler(async (event) => {
             .catch((e) => console.error('[execute] Failed to mark step FAILED:', e))
           write({ error: message, done: true })
         } finally {
+          if (jobController.signal.aborted) {
+            await prisma.pipelineStep
+              .updateMany({
+                where: { id: step.id, status: 'COMPLETED' },
+                data: { status: 'FAILED', errorMessage: 'Zrušeno uživatelem', completedAt: new Date() },
+              })
+              .catch((e) => console.error('[execute] Failed to revert aborted step to FAILED:', e))
+          }
           cleanupJob(step.id)
           controller.close()
         }
