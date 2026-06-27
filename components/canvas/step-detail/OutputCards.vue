@@ -75,17 +75,22 @@ const { stepType, ppProfiles, vaAlignments, opEmails, expandedCardIdx, toggleCar
         </div>
         <button class="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0 px-1" @click="toggleCard(i)">{{ expandedCardIdx === i ? '▲' : '▼' }}</button>
       </div>
-      <div v-if="getArr(alignment, 'top3Arguments').length > 0 && expandedCardIdx !== i" class="flex flex-wrap gap-1">
-        <span v-for="(arg, ai) in getArr(alignment, 'top3Arguments')" :key="ai" class="text-xs px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500">{{ getStr(arg, 'argumentLabel') || getStr(arg, 'argumentId') }}</span>
+      <div v-if="(getArr(alignment, 'top3Arguments').length > 0 || getArr(alignment, 'argumentAlignment').length > 0) && expandedCardIdx !== i" class="flex flex-wrap gap-1">
+        <span v-for="(arg, ai) in (getArr(alignment, 'top3Arguments').length > 0 ? getArr(alignment, 'top3Arguments') : getArr(alignment, 'argumentAlignment'))" :key="ai" class="text-xs px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500">{{ getStr(arg, 'argumentLabel') || getStr(arg, 'argumentId') }}</span>
       </div>
       <template v-if="expandedCardIdx === i">
         <p v-if="getStr(alignment, 'hookHypothesis')" class="text-xs text-indigo-700 bg-indigo-50 rounded px-3 py-2 italic leading-relaxed mb-3">{{ getStr(alignment, 'hookHypothesis') }}</p>
-        <div v-if="getArr(alignment, 'top3Arguments').length > 0" class="mt-3">
+        <div v-if="getArr(alignment, 'top3Arguments').length > 0 || getArr(alignment, 'argumentAlignment').length > 0" class="mt-3">
           <div class="text-xs font-medium text-gray-400 mb-1.5">Top argumenty</div>
           <div class="space-y-2">
-            <div v-for="(arg, ai) in getArr(alignment, 'top3Arguments')" :key="ai" class="flex gap-2 text-xs">
-              <span class="font-bold text-indigo-500 flex-shrink-0 w-4">{{ getStr(arg, 'rank') }}.</span>
-              <div><span class="font-medium text-gray-700">{{ getStr(arg, 'argumentLabel') || getStr(arg, 'argumentId') }}</span><p class="text-gray-500 mt-0.5 leading-relaxed">{{ getStr(arg, 'whyItFits') }}</p><p v-if="getStr(arg, 'howToFrame')" class="text-gray-400 mt-0.5 leading-relaxed">{{ getStr(arg, 'howToFrame') }}</p></div>
+            <div v-for="(arg, ai) in (getArr(alignment, 'top3Arguments').length > 0 ? getArr(alignment, 'top3Arguments') : getArr(alignment, 'argumentAlignment'))" :key="ai" class="flex gap-2 text-xs">
+              <span class="font-bold text-indigo-500 flex-shrink-0 w-4">{{ getStr(arg, 'rank') || (ai + 1) }}.</span>
+              <div>
+                <span class="font-medium text-gray-700">{{ getStr(arg, 'argumentLabel') || getStr(arg, 'argumentId') }}</span>
+                <p class="text-gray-500 mt-0.5 leading-relaxed">{{ getStr(arg, 'whyItFits') || getStr(arg, 'reasoning') }}</p>
+                <p v-if="getStr(arg, 'howToFrame')" class="text-gray-400 mt-0.5 leading-relaxed">{{ getStr(arg, 'howToFrame') }}</p>
+                <p v-if="getStr(arg, 'redFlags')" class="text-red-400 mt-0.5 leading-relaxed">Pozor: {{ getStr(arg, 'redFlags') }}</p>
+              </div>
             </div>
           </div>
         </div>

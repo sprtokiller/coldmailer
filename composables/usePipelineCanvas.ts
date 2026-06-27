@@ -240,6 +240,15 @@ export function usePipelineCanvas(runId: string) {
     if (stepId) await fetchStepRecords(stepId)
   }
 
+  async function ensurePartnerImported(globalRecordId: string) {
+    const { stepId } = await $fetch<{ stepId: string }>(`/api/pipeline/${runId}/steps/ensure-partner`, {
+      method: 'POST',
+      body: { globalRecordId },
+    })
+    await fetchCanvasData()
+    await fetchStepRecords(stepId)
+  }
+
   async function addManualRecord(stepId: string, name: string, url: string | undefined, type: string) {
     await $fetch(`/api/pipeline/${runId}/steps/${stepId}/records/manual`, {
       method: 'POST',
@@ -269,7 +278,7 @@ export function usePipelineCanvas(runId: string) {
     expandedSourceIds, toggleSelection,
     searchGlobalDB, addFromGlobalDB,
     openGlobalBrowser, closeGlobalBrowser,
-    importAI, addManualRecord, aiSuggestRecords,
+    importAI, ensurePartnerImported, addManualRecord, aiSuggestRecords,
     removeRecord, updateRecord,
   }
 }

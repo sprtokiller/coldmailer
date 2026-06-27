@@ -402,5 +402,14 @@ export async function usePipelineRunPage() {
 
   await Promise.all([runResult, libraryResult])
 
+  const d = libraryResult.data.value
+  if (d) {
+    prompts.value = d.prompts
+    contextParts.value = d.contextParts
+    sellingPoints.value = d.sellingPoints
+    emailDrafts.value = d.emailDrafts
+    signatures.value = d.signatures
+  }
+
   return pipeline
 }

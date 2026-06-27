@@ -17,9 +17,7 @@ const importError   = ref('')
 const showPartnerModal = ref(false)
 
 async function onPartnerSaved(result: { id: string }) {
-  if (props.stepId) {
-    await canvas.addFromGlobalDB(props.stepId, result.id)
-  }
+  await canvas.ensurePartnerImported(result.id)
   showPartnerModal.value = false
 }
 
@@ -91,6 +89,7 @@ async function doImport() {
     <PartnersPartnerFormModal
       v-if="showPartnerModal"
       mode="create"
+      duplicate-behavior="use-existing"
       @close="showPartnerModal = false"
       @saved="onPartnerSaved"
     />

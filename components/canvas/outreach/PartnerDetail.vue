@@ -37,8 +37,19 @@ interface Argument {
 
 const arguments_ = computed<Argument[]>(() => {
   const top3 = alignment.value?.top3Arguments
-  if (!Array.isArray(top3)) return []
-  return top3 as Argument[]
+  if (Array.isArray(top3) && top3.length > 0) return top3 as Argument[]
+  
+  const legacy = alignment.value?.argumentAlignment
+  if (Array.isArray(legacy)) {
+    return legacy.map((l: any, i: number) => ({
+      argumentId: l.argumentId,
+      argumentLabel: l.argumentLabel,
+      whyItFits: l.reasoning,
+      whatToAvoid: l.redFlags,
+      rank: i + 1,
+    }))
+  }
+  return []
 })
 
 function toggleArgument(id: string) {

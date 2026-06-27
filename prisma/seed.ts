@@ -291,12 +291,13 @@ async function seedTdaContent() {
     { id: 'tda-context-struktura',   file: 'Tour de App - Struktura soutěže.txt',                           name: 'TdA – Struktura soutěže' },
     { id: 'tda-context-technologie', file: 'Tour de App - Technologie, dovednosti a charakter zadání.txt',  name: 'TdA – Technologie, dovednosti a charakter zadání' },
   ]
+  const ALL_STEP_KEYS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION']
   for (const cp of contextFiles) {
     const content = readTdaFile(cp.file)
     await prisma.contextPart.upsert({
       where: { id: cp.id },
-      create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id },
-      update: { content },
+      create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id, stepKeys: ALL_STEP_KEYS },
+      update: { content, stepKeys: ALL_STEP_KEYS },
     })
     console.log(`  ✓ ContextPart: ${cp.name}`)
   }

@@ -2,7 +2,7 @@
 import { canvasKey } from '~/composables/usePipelineCanvas'
 import { pipelineRunKey, type PipelineRunContext } from '~/composables/usePipelineRunPage'
 import { STEP_MODEL, MODEL_BADGE } from '~/config/pipeline'
-import { outreachWorkspaceKey, outreachActionsKey } from '~/composables/canvas/useOutreachWorkspace'
+import { outreachWorkspaceKey, outreachActionsKey, type PartnerDbContact } from '~/composables/canvas/useOutreachWorkspace'
 import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 
 const canvas = inject(canvasKey)!
@@ -24,6 +24,7 @@ const emailSubject = ref('')
 const emailTo = ref('')
 const selectedArgumentIds = ref<Set<string>>(new Set())
 const selectedContactIdx = ref<number | null>(null)
+const dbContacts = ref<PartnerDbContact[]>([])
 
 provide(outreachWorkspaceKey, {
   hiddenPartners,
@@ -54,9 +55,6 @@ watch(isOpen, (val) => {
     pipeline.initStep5Selection()
   }
 })
-
-import type { PartnerDbContact } from '~/composables/canvas/useOutreachWorkspace'
-const dbContacts = ref<PartnerDbContact[]>([])
 
 async function fetchPartnerContacts(partnerId: string) {
   try {

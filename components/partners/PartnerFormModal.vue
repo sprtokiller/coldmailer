@@ -2,6 +2,7 @@
 const props = defineProps<{
   mode: 'create' | 'edit'
   partner?: { id: string; canonicalName: string; payload: Record<string, unknown> }
+  duplicateBehavior?: 'show-error' | 'use-existing'
 }>()
 const emit = defineEmits<{ close: []; saved: [{ id: string }] }>()
 
@@ -117,9 +118,15 @@ async function save() {
     emit('close')
   } catch (e: any) {
     if (e?.statusCode === 409) {
+      const existingId = e.data?.data?.existingId as string | undefined
+      if (existingId && props.duplicateBehavior === 'use-existing') {
+        emit('saved', { id: existingId })
+        emit('close')
+        return
+      }
       error.value = e.data?.message ?? e.statusMessage ?? 'Partner s tímto názvem již existuje.'
-      if (e.data?.data?.existingId) {
-        duplicateLink.value = `/partners/${e.data.data.existingId}`
+      if (existingId) {
+        duplicateLink.value = `/partners/${existingId}`
       }
     } else {
       error.value = e.statusMessage ?? e.message ?? 'Nepodařilo se uložit.'

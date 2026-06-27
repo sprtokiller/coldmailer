@@ -5,3 +5,4 @@
 - [Program na Grandfinále | Vysoký] Možnost vlastního programu na Grandfinále – partner může realizovat workshop, odbornou přednášku nebo jiný doprovodný program pro soutěžící.
 - [Hostování akcí | Doplňkový] Možnost hostování offline akcí – například vyhlášení výsledků Nominačního kola, komunitní meetup nebo setkání absolventů a bývalých soutěžících (často již vysokoškoláků). Přirozený způsob, jak budovat vztah s talentovanými lidmi.
 - [Tvorba obsahu | Doplňkový] Participace na tvorbě soutěžního obsahu – možnost podílet se na zadání soutěžní části nebo doprovodného Capture the Flag.
+- [Mentoring a vzdělávání | Vysoký] Přímý kontakt se studenty skrze mentoring, webináře a vzdělávací aktivity – partner může předávat know-how, pomáhat soutěžícím v průběhu soutěže a přirozeně se prezentovat jako atraktivní technologický zaměstnavatel.
