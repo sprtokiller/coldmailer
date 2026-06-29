@@ -1,11 +1,11 @@
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 import { prisma } from '~/server/utils/prisma'
 import { getDefaultBudgetConfig } from '~/server/utils/usage-tracker'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
-  await requirePermission(event, 'admin.roles')
+  await requireAdmin(event)
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'asc' },
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
       name: true,
       email: true,
       image: true,
-      isSuperAdmin: true,
+      isAdmin: true,
       createdAt: true,
       budget: true,
     },
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       name: u.name,
       email: u.email,
       image: u.image,
-      isSuperAdmin: u.isSuperAdmin,
+      isAdmin: u.isAdmin,
       createdAt: u.createdAt,
       budget: u.budget,
       stats30d: { aiCost, aiCount, serpCount },

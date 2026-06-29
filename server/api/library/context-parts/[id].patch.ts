@@ -1,9 +1,10 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission, requireResourceScopeAccess } from '~/server/utils/permissions'
+import { requireAdmin, requireResourceScopeAccess } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
 export default defineEventHandler(async (event) => {
-  const user = await requirePermission(event, 'context.own.edit')
+  const user = await requireAuth(event)
   const id = getRouterParam(event, 'id')!
   const body = await readBody<{
     name?: string
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
   if (!part) throw createError({ statusCode: 404, statusMessage: 'Context part not found' })
 
   if (part.authorId !== user.id) {
-    await requirePermission(event, 'context.others.edit')
+    await requireAdmin(event)
   }
   await requireResourceScopeAccess(event, part)
   const scope = ('projectId' in body || 'groupId' in body)

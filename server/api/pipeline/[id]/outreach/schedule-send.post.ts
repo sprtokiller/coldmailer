@@ -71,6 +71,22 @@ export default defineEventHandler(async (event) => {
 
     const run = await prisma.pipelineRun.findUnique({ where: { id: runId }, select: { projectId: true } })
     if (run && body.partnerId) {
+      // Ensure the 'to' address is a known contact for this partner
+      const normalizedTo = body.to.toLowerCase()
+      const existingContact = await prisma.partnerContact.findFirst({
+        where: { globalRecordId: body.partnerId, address: normalizedTo }
+      })
+      
+      if (!existingContact) {
+        await prisma.partnerContact.create({
+          data: {
+            globalRecordId: body.partnerId,
+            address: normalizedTo,
+            label: 'Added from manual send'
+          }
+        }).catch(err => console.error(`[outreach] failed to add contact ${normalizedTo}:`, err))
+      }
+
       await prisma.interaction.create({
         data: {
           globalRecordId: body.partnerId,

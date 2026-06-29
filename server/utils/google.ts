@@ -123,6 +123,10 @@ export async function getGmailMessage(
   })
 }
 
+function encodeRfc2047(text: string): string {
+  return `=?UTF-8?B?${Buffer.from(text).toString('base64')}?=`
+}
+
 export async function createGmailDraft(
   accessToken: string,
   to: string,
@@ -132,7 +136,7 @@ export async function createGmailDraft(
   const raw = Buffer.from(
     [
       `To: ${to}`,
-      `Subject: ${subject}`,
+      `Subject: ${encodeRfc2047(subject)}`,
       'Content-Type: text/html; charset=UTF-8',
       '',
       body,
@@ -159,7 +163,7 @@ export async function sendGmailMessage(
   const raw = Buffer.from(
     [
       `To: ${to}`,
-      `Subject: ${subject}`,
+      `Subject: ${encodeRfc2047(subject)}`,
       'Content-Type: text/html; charset=UTF-8',
       '',
       body,

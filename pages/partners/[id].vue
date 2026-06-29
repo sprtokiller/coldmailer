@@ -59,11 +59,10 @@ interface AppUser { id: string; name: string; image: string | null; email: strin
 
 const { data: partner, refresh: refreshPartner } = await useFetch<Partner>(`/api/partners/${id}`)
 const { data: interactionsData, refresh: refreshInteractions } = await useFetch<InteractionsResponse>(`/api/partners/${id}/interactions`)
-const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{ blacklist: string[]; emailDisplayMode: string }>(`/api/partners/${id}/blacklist`)
+const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{ blacklist: string[]; emailDisplayMode: string; domains: string[] }>(`/api/partners/${id}/blacklist`)
 const { data: allUsers } = await useFetch<AppUser[]>('/api/users')
 const { user: me } = useUserSession()
-const { data: meSettings } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me')
-const canEditPartner = computed(() => meSettings.value?.effectivePermissions.includes('partners.edit') ?? false)
+const canEditPartner = ref(true)
 
 async function refresh() {
   await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist()])
@@ -170,8 +169,8 @@ async function addToBlacklist() {
   const email = newBlacklistEmail.value.trim().toLowerCase()
   if (!email) return
   const updated = [...blacklist.value, email]
-  await $fetch(`/api/partners/${id}/fulfillment`, {
-    method: 'PUT',
+  await $fetch(`/api/partners/${id}/settings`, {
+    method: 'PATCH',
     body: { contactBlacklist: updated },
   })
   newBlacklistEmail.value = ''
@@ -180,8 +179,8 @@ async function addToBlacklist() {
 
 async function removeFromBlacklist(email: string) {
   const updated = blacklist.value.filter(e => e !== email)
-  await $fetch(`/api/partners/${id}/fulfillment`, {
-    method: 'PUT',
+  await $fetch(`/api/partners/${id}/settings`, {
+    method: 'PATCH',
     body: { contactBlacklist: updated.length ? updated : null },
   })
   await refreshBlacklist()
@@ -193,8 +192,8 @@ const emailDisplayMode = computed(() => blacklistData.value?.emailDisplayMode ??
 
 async function toggleEmailDisplayMode() {
   const newMode = emailDisplayMode.value === 'text' ? 'html' : 'text'
-  await $fetch(`/api/partners/${id}/fulfillment`, {
-    method: 'PUT',
+  await $fetch(`/api/partners/${id}/settings`, {
+    method: 'PATCH',
     body: { emailDisplayMode: newMode },
   })
   await refreshBlacklist()
@@ -417,7 +416,7 @@ const DEAL_STAGE_COLORS: Record<string, string> = {
 const TYPE_LABELS: Record<string, string> = {
   NOTE: 'Poznámky',
   EMAIL: 'Email',
-  FULFILLMENT: 'Plnění',
+  FULFILLMENT: 'Obsah plnění',
 }
 const TYPE_COLORS: Record<string, string> = {
   NOTE: 'bg-violet-100 text-violet-700',
@@ -730,7 +729,7 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
       <div class="flex justify-end gap-2">
         <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="resetForms">Zrušit</button>
-        <button class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="createFulfillment">Přidat plnění</button>
+        <button class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="createFulfillment">Přidat obsah plnění</button>
       </div>
     </div>
 
@@ -838,19 +837,6 @@ const TYPE_COLORS: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Footer (fulfillment only — emails/notes have meta in the header) -->
-        <div v-if="i.type === 'FULFILLMENT'" class="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
-          <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover" referrerpolicy="no-referrer" />
-          <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
-          <template v-for="a in i.assignees" :key="a.userId">
-            <span class="text-gray-300">+</span>
-            <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover" referrerpolicy="no-referrer" />
-            <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium">{{ a.user.name.charAt(0).toUpperCase() }}</div>
-          </template>
-          <span>{{ i.creator.name }}</span>
-          <span class="text-gray-300">&middot;</span>
-          <span class="text-gray-300">{{ fmtDate(i.createdAt) }}</span>
-        </div>
       </div>
 
       <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm">
@@ -887,13 +873,25 @@ const TYPE_COLORS: Record<string, string> = {
 
     <!-- ── Blacklist Management ── -->
     <div v-if="typeFilter === 'EMAIL'" class="mt-8">
-      <button
-        class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-3"
-        @click="showBlacklist = !showBlacklist"
-      >
-        <span>{{ showBlacklist ? '▾' : '▸' }}</span>
-        <span>Blacklist kontaktů{{ blacklist.length ? ` (${blacklist.length})` : '' }}</span>
-      </button>
+      <div class="flex items-center gap-2 mb-3">
+        <button
+          class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          @click="showBlacklist = !showBlacklist"
+        >
+          <span>{{ showBlacklist ? '▾' : '▸' }}</span>
+          <span>Blacklist kontaktů{{ blacklist.length ? ` (${blacklist.length})` : '' }}</span>
+        </button>
+        <div v-if="blacklistData?.domains?.length" class="relative group cursor-help ml-2 flex items-center">
+          <div class="w-4 h-4 rounded-full bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center text-[10px] font-bold">i</div>
+          <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 text-white text-[11px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+            <strong>Automaticky sledované domény:</strong>
+            <ul class="list-disc list-inside mt-1">
+              <li v-for="d in blacklistData.domains" :key="d" class="font-mono text-[10px]">{{ d }}</li>
+            </ul>
+            <p class="mt-1 text-gray-300">Nové kontakty z těchto domén (mimo blacklist) se automaticky přidávají k partnerovi.</p>
+          </div>
+        </div>
+      </div>
       <div v-if="showBlacklist" class="bg-gray-50 border border-gray-200 rounded-xl p-4">
         <div class="space-y-2 mb-4">
           <div

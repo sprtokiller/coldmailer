@@ -1,9 +1,9 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
 export default defineEventHandler(async (event) => {
-  const user = await requirePermission(event, 'prompts.own.edit')
+  const user = await requireAuth(event)
   const body = await readBody<{
     name: string
     content: string

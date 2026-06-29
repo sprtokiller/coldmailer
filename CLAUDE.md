@@ -103,25 +103,39 @@ The app's core concept is a multi-step outreach pipeline stored as `PipelineRun`
 
 | Step | Model | Mechanism |
 |---|---|---|
-| `MARKET_SCANNING` | `openai/o4-mini-deep-research` | Streaming AI |
-| `PARTNER_IDENTIFICATION` | SerpAPI + Playwright + Claude Sonnet | `runPartnerIdentification()` generator |
-| `PARTNER_PROFILING` | `openai/o4-mini-deep-research` | Streaming AI, one partner at a time; includes contact discovery |
-| `VALUE_ALIGNMENT` | `anthropic/claude-sonnet-4-5` | Streaming AI |
-| `OUTREACH_PREPARATION` | `anthropic/claude-sonnet-4-5` | Streaming AI |
-| `OUTREACH_EXECUTION` | Gmail API | Creates a Gmail draft directly |
+| `MARKET_SCANNING` | `copy-prompt` | Manual — UI shows the system prompt; user runs it externally and pastes JSON back |
+| `PARTNER_IDENTIFICATION` | `pipeline` | SerpAPI + Playwright + Claude Sonnet; `runPartnerIdentification()` generator |
+| `PARTNER_PROFILING` | `copy-prompt` | Manual — same copy-paste flow as `MARKET_SCANNING` |
+| `VALUE_ALIGNMENT` | `anthropic/claude-sonnet-4.6` | Streaming AI |
+| `OUTREACH_PREPARATION` | `anthropic/claude-sonnet-4.6` | Streaming AI |
+
+`COPY_PROMPT` steps have no auto-execution button. The UI shows the prompt for the user to run in an external tool (e.g. ChatGPT, Claude.ai) and paste the JSON result back via the import panel.
 
 All model/step mappings live in [`config/pipeline.ts`](config/pipeline.ts) — `STEP_MODEL`, `MODELS`, `MODEL_BADGE`, `STEP_SYSTEM_PROMPTS`.
 
 ### Key Server Files
-- [`server/api/pipeline/[id]/steps/execute.post.ts`](server/api/pipeline/%5Bid%5D/steps/execute.post.ts) — main step execution endpoint; streams SSE (`data: <json>\n\n`). Handles special cases for `PARTNER_IDENTIFICATION`, `PARTNER_PROFILING`, and `OUTREACH_EXECUTION`.
+- [`server/api/pipeline/[id]/steps/execute.post.ts`](server/api/pipeline/%5Bid%5D/steps/execute.post.ts) — main step execution endpoint; streams SSE (`data: <json>\n\n`). Handles special cases for `PARTNER_IDENTIFICATION` and `OUTREACH_EXECUTION`.
 - [`server/utils/partner-identification.ts`](server/utils/partner-identification.ts) — async generator that runs the SerpAPI → Playwright → AI extraction → DB dedup pipeline for step 2.
 - [`server/utils/ai.ts`](server/utils/ai.ts) — `streamStepAI()` generator; adds adaptive reasoning (`reasoning: { enabled: true, effort: 'high' }`) for Anthropic models via OpenRouter.
 - [`server/utils/google.ts`](server/utils/google.ts) — Google OAuth token exchange, token refresh, and Gmail draft creation.
 - [`server/api/pipeline/[id]/steps/import-ai.post.ts`](server/api/pipeline/%5Bid%5D/steps/import-ai.post.ts) — parses free-text/deep-research output into structured JSON and merges it into an existing step's `outputData`. Contains JSON repair logic and smart merging (dedup by name/URL/email).
+- [`server/utils/gmail-sync.ts`](server/utils/gmail-sync.ts) — syncs Gmail thread state into the DB for the outreach workspace.
+- [`server/utils/job-registry.ts`](server/utils/job-registry.ts) — manages background job lifecycle (multiple concurrent jobs, cancellation).
+- [`server/utils/permissions.ts`](server/utils/permissions.ts) / [`projectPermissions.ts`](server/utils/projectPermissions.ts) — user and project-level permission checks.
+- [`server/utils/outreach-scheduler.ts`](server/utils/outreach-scheduler.ts) — schedules queued outreach sends.
+- [`server/utils/parse-ai-output.ts`](server/utils/parse-ai-output.ts) — shared JSON parsing helper (strips markdown fences, falls back to `{ raw: text }`).
 
 ### Key Client Files
 - [`composables/usePipelineRunPage.ts`](composables/usePipelineRunPage.ts) — single large composable that owns all pipeline page state and logic. Provided via `provide(pipelineRunKey, pipeline)` from the page and injected in child components.
+- [`composables/usePipelineCanvas.ts`](composables/usePipelineCanvas.ts) — composable for the visual pipeline canvas (node positions, step overlay state).
+- [`composables/useActiveProject.ts`](composables/useActiveProject.ts) — tracks the currently selected project across pages.
+- [`composables/useGmailSync.ts`](composables/useGmailSync.ts) — polls and syncs Gmail thread status for the outreach workspace.
 - [`components/pipeline/PipelineStepConfig.vue`](components/pipeline/PipelineStepConfig.vue) — step configuration UI (prompt selection, context parts, manual context, input data editor).
+
+### Pages
+- `/pipeline/[id]` — visual pipeline canvas with DB panel, import panel, and outreach workspace (`components/canvas/`).
+- `/partners` — partner CRM: deal stages, action status, contact assignments, search (`pages/partners/`).
+- `/records` — global partner record browser across all pipeline runs (`pages/records.vue`).
 
 ### Library
 The `/library` page manages reusable assets: `SystemPrompt`, `ContextPart`, `SellingPoint`, and `EmailDraft`. All support a lineage tree (`derivedFromId`). System prompts are seeded by `prisma/seed.ts` with `isSystem: true`; step execution falls back to them when no custom prompt is selected.

@@ -123,7 +123,7 @@ function budgetPct(u: BudgetUser) {
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5">
                   <span class="text-sm font-medium text-gray-800 truncate">{{ u.name }}</span>
-                  <span v-if="u.isSuperAdmin" class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-semibold">SA</span>
+                  <span v-if="u.isAdmin" class="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-semibold">ADMIN</span>
                 </div>
                 <div class="mt-1">
                   <div v-if="u.budget?.limitUsd" class="flex items-center gap-2">

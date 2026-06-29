@@ -1,8 +1,8 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, 'admin.roles')
+  await requireAdmin(event)
 
   const userId = getRouterParam(event, 'id')!
   const body = await readBody<{ limitUsd: number | null }>(event)

@@ -1,12 +1,12 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { getActiveGroupId } from '~/server/utils/activeProject'
+import { getActiveProjectId } from '~/server/utils/activeProject'
 import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
   const globalRecordId = getRouterParam(event, 'id')!
-  const groupId = await getActiveGroupId(event)
+  const projectId = await getActiveProjectId(event)
   const body = await readBody<{
     action: 'dismiss' | 'blacklist' | 'add_contact'
     email: string
@@ -42,20 +42,20 @@ export default defineEventHandler(async (event) => {
       },
     })
 
-    if (groupId) {
-      const fulfillment = await prisma.partnerFulfillment.findUnique({
-        where: { globalRecordId_groupId: { globalRecordId, groupId } },
+    if (projectId) {
+      const projRecord = await prisma.projectRecord.findUnique({
+        where: { projectId_globalRecordId: { globalRecordId, projectId } },
         select: { contactBlacklist: true },
       })
 
-      const existing = Array.isArray(fulfillment?.contactBlacklist)
-        ? (fulfillment.contactBlacklist as string[])
+      const existing = Array.isArray(projRecord?.contactBlacklist)
+        ? (projRecord.contactBlacklist as string[])
         : []
 
       if (!existing.includes(email)) {
-        await prisma.partnerFulfillment.upsert({
-          where: { globalRecordId_groupId: { globalRecordId, groupId } },
-          create: { globalRecordId, groupId, contactBlacklist: [...existing, email] },
+        await prisma.projectRecord.upsert({
+          where: { projectId_globalRecordId: { globalRecordId, projectId } },
+          create: { globalRecordId, projectId, contactBlacklist: [...existing, email] },
           update: { contactBlacklist: [...existing, email] },
         })
       }

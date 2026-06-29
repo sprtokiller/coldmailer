@@ -40,38 +40,31 @@ export default defineEventHandler(async (event) => {
 
   await applyDefaultBudgetToUser(user.id)
 
-  // Apply default roles to newly created users
+  // Apply default project roles to newly created users
   const isNewUser = Date.now() - user.createdAt.getTime() < 30_000
   if (isNewUser) {
     const configRow = await prisma.systemConfig.findUnique({ where: { key: 'newUser.defaults' } })
     if (configRow?.value) {
-      const defaults = configRow.value as { roleIds?: string[]; projectRoleIds?: string[] }
-      await Promise.all([
-        ...(defaults.roleIds ?? []).map(roleId =>
-          prisma.userRole.upsert({
-            where: { userId_roleId: { userId: user.id, roleId } },
-            create: { userId: user.id, roleId },
-            update: {},
-          }).catch(() => {}),
-        ),
-        ...(defaults.projectRoleIds ?? []).map(projectRoleId =>
+      const defaults = configRow.value as { projectRoleIds?: string[] }
+      await Promise.all(
+        (defaults.projectRoleIds ?? []).map(projectRoleId =>
           prisma.userProjectRole.upsert({
             where: { userId_projectRoleId: { userId: user.id, projectRoleId } },
             create: { userId: user.id, projectRoleId },
             update: {},
           }).catch(() => {}),
         ),
-      ])
+      )
     }
   }
 
-  // If no superadmin exists in the system yet, promote the logging-in user
-  const superadminCount = await prisma.user.count({ where: { isSuperAdmin: true } })
-  if (superadminCount === 0) {
-    await prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } })
+  // If no admin exists in the system yet, promote the logging-in user
+  const adminCount = await prisma.user.count({ where: { isAdmin: true } })
+  if (adminCount === 0) {
+    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } })
   }
 
-  const finalUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, email: true, name: true, image: true, isSuperAdmin: true } })
+  const finalUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, email: true, name: true, image: true, isAdmin: true } })
 
   await setUserSession(event, {
     user: {
@@ -79,7 +72,7 @@ export default defineEventHandler(async (event) => {
       email: finalUser!.email,
       name: finalUser!.name,
       image: finalUser!.image,
-      isSuperAdmin: finalUser!.isSuperAdmin,
+      isAdmin: finalUser!.isAdmin,
     },
   })
 

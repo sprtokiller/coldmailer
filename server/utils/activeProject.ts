@@ -31,7 +31,7 @@ export async function getActiveScope(event: H3Event): Promise<ActiveScope> {
     })
 
     if (project) {
-      const allowed = access.isSuperAdmin || access.isAdmin || access.projectIds.includes(projectId)
+      const allowed = access.isAdmin || access.projectIds.includes(projectId)
       if (allowed) {
         return { project, group: project.group }
       }
@@ -58,7 +58,7 @@ export async function getActiveScope(event: H3Event): Promise<ActiveScope> {
     return null
   }
 
-  if (access.isSuperAdmin || access.isAdmin) {
+  if (access.isAdmin) {
     const result = await findAndSetProject()
     if (result) return result
   } else if (access.projectIds.length > 0) {

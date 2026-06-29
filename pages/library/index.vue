@@ -55,11 +55,11 @@ const { data: contextParts, refresh: refreshContext } = await useFetch('/api/lib
 const { data: sellingPoints, refresh: refreshSelling } = await useFetch('/api/library/selling-points', { default: () => [] })
 const { data: emailDrafts, refresh: refreshDrafts } = await useFetch('/api/library/email-drafts', { default: () => [] })
 const { data: sigData, refresh: refreshSignatures } = await useFetch<SignaturesResponse>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
-const { data: me } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me', { default: () => ({ effectivePermissions: [] }) })
+const { data: me } = await useFetch<{ user: { isAdmin: boolean } }>('/api/settings/me', { default: () => ({ user: { isAdmin: false } }) })
 
 const signatureTemplates = computed(() => sigData.value?.templates ?? [])
 const signaturePersonal = computed(() => sigData.value?.personal ?? [])
-const canEditSystemSignatures = computed(() => me.value?.effectivePermissions.includes('signatures.system.edit') ?? false)
+const canEditSystemSignatures = computed(() => me.value?.user.isAdmin ?? false)
 
 function safeHtml(html: string): string {
   return sanitizeHtml(html)

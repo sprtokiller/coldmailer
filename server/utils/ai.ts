@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
-import { OPENROUTER, MODELS, DEEP_RESEARCH_STEPS, STEP_MODEL } from '~/config/pipeline'
+import { OPENROUTER, MODELS, COPY_PROMPT_STEPS, STEP_MODEL } from '~/config/pipeline'
 
 function createClient(): OpenAI {
   const config = useRuntimeConfig()
@@ -18,7 +18,7 @@ export function modelForStep(stepType: string): string {
   return STEP_MODEL[stepType] ?? MODELS.CLAUDE_SONNET
 }
 
-export { DEEP_RESEARCH_STEPS }
+export { COPY_PROMPT_STEPS }
 
 export interface StepAIInput {
   stepType: string

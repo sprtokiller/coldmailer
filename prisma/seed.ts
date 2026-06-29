@@ -5,38 +5,6 @@ import { join, basename, extname } from 'path'
 
 const prisma = new PrismaClient()
 
-const ALL_PERMISSIONS = [
-  'prompts.system.read', 'prompts.system.edit',
-  'prompts.own.read', 'prompts.own.edit', 'prompts.own.delete',
-  'prompts.others.read', 'prompts.others.edit', 'prompts.others.delete',
-  'context.own.read', 'context.own.edit', 'context.own.delete',
-  'context.others.read', 'context.others.edit', 'context.others.delete',
-  'selling.own.read', 'selling.own.edit', 'selling.own.delete',
-  'selling.others.read', 'selling.others.edit', 'selling.others.delete',
-  'drafts.own.read', 'drafts.own.edit', 'drafts.own.delete',
-  'drafts.others.read', 'drafts.others.edit', 'drafts.others.delete',
-  'signatures.own.edit', 'signatures.system.edit',
-  'pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail',
-  'partners.create', 'partners.edit',
-  'admin.roles',
-  'admin.system',
-]
-
-const DEFAULT_PERMISSIONS = [
-  'prompts.system.read',
-  'prompts.own.read', 'prompts.own.edit', 'prompts.own.delete',
-  'prompts.others.read',
-  'context.own.read', 'context.own.edit', 'context.own.delete',
-  'context.others.read',
-  'selling.own.read', 'selling.own.edit', 'selling.own.delete',
-  'selling.others.read',
-  'drafts.own.read', 'drafts.own.edit', 'drafts.own.delete',
-  'drafts.others.read',
-  'signatures.own.edit',
-  'pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail',
-  'partners.create', 'partners.edit',
-]
-
 const PROMPTS_DIR = join(import.meta.dir, 'system-prompts')
 
 function loadPromptsFromDisk(): Record<string, string> {
@@ -91,23 +59,6 @@ async function main() {
   }
 }
 
-async function seedRoles() {
-  await prisma.role.upsert({
-    where: { id: 'role-administrator' },
-    create: {
-      id: 'role-administrator',
-      name: 'Administrátor',
-      description: 'Plný přístup ke všem funkcím kromě správy systému.',
-      color: '#6366f1',
-      isSystem: true,
-      permissions: ALL_PERMISSIONS,
-    },
-    update: { permissions: ALL_PERMISSIONS },
-  })
-  console.log('  ✓ Role: Administrátor')
-
-}
-
 const GROUPS = [
   { name: 'Tour de App', slug: 'tda', color: '#EF8A17' },
   { name: 'Prezentiáda', slug: 'ppt', color: '#A6CE39' },
@@ -134,16 +85,25 @@ async function seedGroups() {
   })
   console.log('  ✓ Project: Tour de App → TdA27')
 
-  const realUsers = await prisma.user.findMany({
-    where: { googleId: { not: 'system' } },
+  const { ensureDefaultProjectRoles } = await import('../server/utils/projectPermissions')
+  await ensureDefaultProjectRoles(tda27.id)
+
+  const defaultRole = await prisma.projectRole.findFirst({
+    where: { projectId: tda27.id, name: 'Obchodní tým' },
   })
-  for (const u of realUsers) {
-    await prisma.userProject.upsert({
-      where: { userId_projectId: { userId: u.id, projectId: tda27.id } },
-      create: { userId: u.id, projectId: tda27.id },
-      update: {},
+
+  if (defaultRole) {
+    const realUsers = await prisma.user.findMany({
+      where: { googleId: { not: 'system' } },
     })
-    console.log(`  ✓ User ${u.email} → Tour de App / TdA27`)
+    for (const u of realUsers) {
+      await prisma.userProjectRole.upsert({
+        where: { userId_projectRoleId: { userId: u.id, projectRoleId: defaultRole.id } },
+        create: { userId: u.id, projectRoleId: defaultRole.id },
+        update: {},
+      })
+      console.log(`  ✓ User ${u.email} → Tour de App / TdA27 (Obchodní tým)`)
+    }
   }
 
   const tables = [
@@ -180,7 +140,7 @@ const DEFAULT_INDUSTRY_TAGS = [
 
 const DEFAULT_PROJECT_ROLES = [
   {
-    name: 'Vedoucí obchodu',
+    name: 'Vedení obchodu',
     permissions: ['project.interactions.view_all', 'project.interactions.edit_all'],
     isSystem: true,
   },
@@ -319,25 +279,24 @@ async function seedTdaContent() {
   console.log('  ✓ Signature: Tour de App (systémová)')
 }
 
-const SUPER_ADMINS = ['kriz@scg.cz']
+const ADMINS = ['kriz@scg.cz']
 
-async function seedSuperAdmins() {
-  for (const email of SUPER_ADMINS) {
+async function seedAdmins() {
+  for (const email of ADMINS) {
     const result = await prisma.user.updateMany({
-      where: { email, isSuperAdmin: false },
-      data: { isSuperAdmin: true },
+      where: { email, isAdmin: false },
+      data: { isAdmin: true },
     })
-    if (result.count > 0) console.log(`  ✓ SuperAdmin: ${email}`)
-    else console.log(`  – SuperAdmin already set: ${email}`)
+    if (result.count > 0) console.log(`  ✓ Admin: ${email}`)
+    else console.log(`  – Admin already set: ${email}`)
   }
 }
 
 main()
-  .then(() => seedRoles())
   .then(() => seedGroups())
   .then(() => seedProjectRoles())
   .then(() => seedTags())
   .then(() => seedTdaContent())
-  .then(() => seedSuperAdmins())
+  .then(() => seedAdmins())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

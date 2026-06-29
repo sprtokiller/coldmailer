@@ -4,28 +4,6 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 
-const TABS = [
-  { key: 'COMPETITION',  label: 'Soutěže' },
-  { key: 'PARTNER',      label: 'Partneři' },
-] as const
-type TabKey = typeof TABS[number]['key']
-
-const LEVEL_LABELS: Record<string, string> = {
-  school: 'Školní', regional: 'Regionální', national: 'Národní', international: 'Mezinárodní',
-}
-const COMP_STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-50 text-green-700', inactive: 'bg-gray-100 text-gray-400', uncertain: 'bg-amber-50 text-amber-600',
-}
-const COMP_STATUS_LABELS: Record<string, string> = {
-  active: 'Aktivní', inactive: 'Neaktivní', uncertain: 'Nejistý',
-}
-const STATUS_NORMALIZE: Record<string, string> = {
-  aktivní: 'active', neaktivní: 'inactive', nejistý: 'uncertain',
-}
-function normalizeStatus(raw: string | undefined): string | undefined {
-  if (!raw) return raw
-  return STATUS_NORMALIZE[raw.toLowerCase()] ?? raw
-}
 const SIZE_LABELS: Record<string, string> = {
   micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
 }
@@ -50,9 +28,7 @@ interface GlobalRecord {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const VALID_TABS = TABS.map(t => t.key) as unknown as TabKey[]
-const initialTab = VALID_TABS.includes(route.query.tab as TabKey) ? (route.query.tab as TabKey) : 'COMPETITION'
-const activeTab = ref<TabKey>(initialTab)
+const activeTab = ref<'PARTNER'>('PARTNER')
 const records   = ref<GlobalRecord[]>([])
 const loading   = ref(false)
 const offset    = ref(0)
@@ -71,11 +47,6 @@ async function fetchRecords(reset = false) {
   }
 }
 
-watch(activeTab, (newTab) => {
-  router.replace({ query: { ...route.query, tab: newTab } })
-  resetFilters()
-  fetchRecords(true)
-})
 onMounted(() => fetchRecords(true))
 
 const hasMore = computed(() => records.value.length > 0 && records.value.length === offset.value + limit)
@@ -106,20 +77,13 @@ function getArr(rec: GlobalRecord, key: string): string[] {
 // ── Client-side filters ───────────────────────────────────────────────────────
 
 const search          = ref('')
-const filterType      = ref('')
-const filterLevel     = ref('')
-const filterStatus    = ref('')
 const filterIndustry  = ref('')
 const filterProfile   = ref<'' | 'profiled' | 'unprofiled'>('')
 
 function resetFilters() {
-  search.value = ''; filterType.value = ''; filterLevel.value = ''; filterStatus.value = ''
-  filterIndustry.value = ''; filterProfile.value = ''
+  search.value = ''; filterIndustry.value = ''; filterProfile.value = ''
 }
 
-const availableTypes      = computed(() => [...new Set(records.value.map(r => String(r.payload.type ?? '')).filter(Boolean))].sort())
-const availableLevels     = computed(() => ['school', 'regional', 'national', 'international'].filter(l => records.value.some(r => String(r.payload.level ?? '') === l)))
-const availableStatuses   = computed(() => ['active', 'inactive', 'uncertain'].filter(s => records.value.some(r => normalizeStatus(String(r.payload.status ?? '')) === s)))
 const availableIndustries = computed(() => [...new Set(records.value.map(r => String(r.payload.industry || r.payload.type || '')).filter(Boolean))].sort())
 
 function distinctPipelineCount(rec: GlobalRecord): number {
@@ -133,9 +97,6 @@ const filteredRecords = computed(() => {
   return records.value.filter(rec => {
     const p = rec.payload
     if (q && !rec.canonicalName.toLowerCase().includes(q)) return false
-    if (filterType.value     && String(p.type ?? '') !== filterType.value)           return false
-    if (filterLevel.value    && String(p.level ?? '') !== filterLevel.value)         return false
-    if (filterStatus.value   && normalizeStatus(String(p.status ?? '')) !== filterStatus.value) return false
     if (filterIndustry.value && String(p.industry || p.type || '') !== filterIndustry.value) return false
     if (filterProfile.value === 'profiled' && !isProfiled(rec)) return false
     if (filterProfile.value === 'unprofiled' && isProfiled(rec)) return false
@@ -144,7 +105,7 @@ const filteredRecords = computed(() => {
 })
 
 const activeFilterCount = computed(() =>
-  [filterType.value, filterLevel.value, filterStatus.value, filterIndustry.value, filterProfile.value].filter(Boolean).length
+  [filterIndustry.value, filterProfile.value].filter(Boolean).length
 )
 
 // ── Expand ────────────────────────────────────────────────────────────────────
@@ -158,8 +119,7 @@ function toggleExpand(id: string) {
 
 // ── Permissions ─────────────────────────────────────────────────────────────
 
-const { data: meData } = await useFetch<{ effectivePermissions: string[] }>('/api/settings/me')
-const canCreatePartner = computed(() => meData.value?.effectivePermissions.includes('partners.create') ?? false)
+const canCreatePartner = ref(true)
 const showCreatePartnerModal = ref(false)
 
 if (route.query.create === '1' && canCreatePartner.value) {
@@ -178,25 +138,16 @@ function onPartnerCreated() {
   <div>
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-gray-800">Databáze</h1>
-        <p class="text-sm text-gray-400 mt-1">Všechny záznamy uložené napříč pipeline</p>
+        <h1 class="text-2xl font-semibold text-gray-800">Partneři</h1>
+        <p class="text-sm text-gray-400 mt-1">Globální databáze partnerů</p>
       </div>
       <button
-        v-if="canCreatePartner && activeTab === 'PARTNER'"
+        v-if="canCreatePartner"
         class="text-sm font-medium text-white bg-primary px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
         @click="showCreatePartnerModal = true"
       >
         Nový partner
       </button>
-    </div>
-
-    <!-- Tabs -->
-    <div class="flex gap-1 border-b border-gray-200 mb-5">
-      <button
-        v-for="tab in TABS" :key="tab.key"
-        :class="['px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors', activeTab === tab.key ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']"
-        @click="activeTab = tab.key"
-      >{{ tab.label }}</button>
     </div>
 
     <!-- Search + filters -->
@@ -208,41 +159,7 @@ function onPartnerCreated() {
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
 
-      <template v-if="activeTab === 'COMPETITION'">
-        <div v-if="availableTypes.length" class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-gray-400 font-medium w-12 flex-shrink-0">Typ</span>
-          <button
-            v-for="t in availableTypes" :key="t"
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterType === t ? 'bg-blue-100 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterType = filterType === t ? '' : t"
-          >{{ t }}</button>
-        </div>
-
-        <div v-if="availableLevels.length" class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-gray-400 font-medium w-12 flex-shrink-0">Úroveň</span>
-          <button
-            v-for="l in availableLevels" :key="l"
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterLevel === l ? 'bg-purple-100 border-purple-300 text-purple-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterLevel = filterLevel === l ? '' : l"
-          >{{ LEVEL_LABELS[l] ?? l }}</button>
-        </div>
-
-        <div v-if="availableStatuses.length" class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-gray-400 font-medium w-12 flex-shrink-0">Stav</span>
-          <button
-            v-for="s in availableStatuses" :key="s"
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterStatus === s ? COMP_STATUS_COLORS[s] + ' border-current' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterStatus = filterStatus === s ? '' : s"
-          >{{ COMP_STATUS_LABELS[s] ?? s }}</button>
-        </div>
-
-        <div v-if="activeFilterCount > 0" class="flex items-center gap-2">
-          <span class="text-xs text-gray-400">{{ filteredRecords.length }} z {{ records.length }} záznamů</span>
-          <button class="text-xs text-indigo-500 hover:underline" @click="filterType = ''; filterLevel = ''; filterStatus = ''">Zrušit filtry</button>
-        </div>
-      </template>
-
-      <template v-else-if="activeTab === 'PARTNER'">
+      <template>
         <!-- Profile status filter -->
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs text-gray-400 font-medium w-16 flex-shrink-0">Průzkum</span>
@@ -273,95 +190,8 @@ function onPartnerCreated() {
       </template>
     </div>
 
-    <!-- ── COMPETITION table ── -->
-    <template v-if="activeTab === 'COMPETITION'">
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-gray-100 bg-gray-50 text-left">
-              <th class="px-4 py-3 w-7" />
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Pořadatel</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Použito</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přidal</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-50">
-            <tr v-if="loading && records.length === 0">
-              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
-            </tr>
-            <tr v-else-if="filteredRecords.length === 0">
-              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Žádné záznamy</td>
-            </tr>
-            <template v-else>
-              <template v-for="rec in filteredRecords" :key="rec.id">
-                <tr class="hover:bg-gray-50 cursor-pointer transition-colors" @click="toggleExpand(rec.id)">
-                  <td class="px-4 py-3">
-                    <svg class="w-3 h-3 text-gray-300 transition-transform" :class="expandedIds.has(rec.id) ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </td>
-                  <td class="px-4 py-3 font-medium text-gray-800">
-                    <div class="flex items-center gap-2">
-                      <span class="truncate max-w-64">{{ rec.canonicalName }}</span>
-                      <a v-if="rec.payload.url" :href="String(rec.payload.url)" target="_blank" rel="noopener" class="text-indigo-400 hover:text-indigo-600 text-xs flex-shrink-0" @click.stop>↗</a>
-                    </div>
-                  </td>
-                  <td class="px-4 py-3 text-xs text-gray-600 max-w-48 truncate">{{ rec.payload.organizer || '—' }}</td>
-                  <td class="px-4 py-3">
-                    <span v-if="rec.payload.status" :class="['text-xs px-2 py-0.5 rounded', COMP_STATUS_COLORS[normalizeStatus(String(rec.payload.status))!] ?? 'bg-gray-50 text-gray-400']">
-                      {{ COMP_STATUS_LABELS[normalizeStatus(String(rec.payload.status))!] ?? rec.payload.status }}
-                    </span>
-                    <span v-else class="text-xs text-gray-300">—</span>
-                  </td>
-                  <td class="px-4 py-3 text-center">
-                    <span class="text-xs font-medium text-gray-700">{{ rec._count.pipelineRefs }}</span>
-                  </td>
-                  <td class="px-4 py-3">
-                    <div class="flex items-center gap-1.5">
-                      <img v-if="rec.creator.image" :src="rec.creator.image" :alt="rec.creator.name" class="w-5 h-5 rounded-full flex-shrink-0" referrerpolicy="no-referrer" />
-                      <span class="text-xs text-gray-500 truncate max-w-28">{{ rec.creator.name }}</span>
-                    </div>
-                  </td>
-                </tr>
-
-                <tr v-if="expandedIds.has(rec.id)" class="bg-indigo-50/20">
-                  <td />
-                  <td colspan="5" class="px-4 py-4 space-y-3">
-                    <div class="flex flex-wrap gap-1.5">
-                      <span v-if="rec.payload.type"   class="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600">{{ rec.payload.type }}</span>
-                      <span v-if="rec.payload.level"  class="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-600">{{ LEVEL_LABELS[String(rec.payload.level)] ?? rec.payload.level }}</span>
-                      <span v-if="rec.payload.target_group" class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">{{ rec.payload.target_group }}</span>
-                      <span v-if="rec.payload.frequency" class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">{{ rec.payload.frequency === 'unknown' ? 'frekvence neznámá' : rec.payload.frequency }}</span>
-                    </div>
-                    <p v-if="rec.payload.description" class="text-sm text-gray-600 leading-relaxed">{{ rec.payload.description }}</p>
-                    <div v-if="rec.pipelineRefs.length > 0" class="flex flex-wrap gap-2">
-                      <NuxtLink
-                        v-for="ref in rec.pipelineRefs" :key="ref.id"
-                        :to="`/pipeline/${ref.pipelineRun.id}`"
-                        class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                      >
-                        <span>{{ ref.pipelineRun.name }}</span>
-                        <span class="text-gray-300">·</span>
-                        <span class="text-gray-400">{{ STEP_LABELS[ref.step.stepType] ?? ref.step.stepType }}</span>
-                      </NuxtLink>
-                      <span v-if="rec._count.pipelineRefs > rec.pipelineRefs.length" class="text-xs text-gray-400 self-center">
-                        + {{ rec._count.pipelineRefs - rec.pipelineRefs.length }} dalších
-                      </span>
-                    </div>
-                    <p v-else class="text-xs text-gray-400">Nepoužito v žádné pipeline</p>
-                  </td>
-                </tr>
-              </template>
-            </template>
-          </tbody>
-        </table>
-      </div>
-    </template>
-
     <!-- ── PARTNER table ── -->
-    <template v-else-if="activeTab === 'PARTNER'">
+    <template>
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table class="w-full text-sm">
           <thead>

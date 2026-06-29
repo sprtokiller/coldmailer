@@ -1,5 +1,6 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ name: string; content: string; isDefault?: boolean; isSystem?: boolean }>(event)
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const isSystem = body.isSystem ?? false
   const isDefault = isSystem ? false : (body.isDefault ?? false)
 
-  const user = await requirePermission(event, isSystem ? 'signatures.system.edit' : 'signatures.own.edit')
+  const user = isSystem ? await requireAdmin(event) : await requireAuth(event)
 
   if (isDefault) {
     await prisma.signature.updateMany({

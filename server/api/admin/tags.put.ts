@@ -1,12 +1,12 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 
 const TAG_KEY = 'tags.partnerIndustry'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
-  await requirePermission(event, 'admin.roles')
+  await requireAdmin(event)
 
   const body = await readBody<{ tags: string[] }>(event)
   if (!Array.isArray(body.tags)) {

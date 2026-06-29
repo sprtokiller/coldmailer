@@ -52,6 +52,7 @@ const {
         <CanvasStepDetailInputTabPi v-else-if="activeTab === 'input' && stepType === 'PARTNER_IDENTIFICATION'" />
         <CanvasStepDetailInputTab v-else-if="activeTab === 'input'" />
         <CanvasStepDetailConfigTab v-else-if="activeTab === 'config'" />
+        <CanvasStepDetailCopyPromptTab v-else-if="activeTab === 'result' && (stepType === 'MARKET_SCANNING' || stepType === 'PARTNER_PROFILING')" />
         <CanvasStepDetailResultTab v-else-if="activeTab === 'result'" />
       </div>
     </div>

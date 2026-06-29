@@ -15,33 +15,32 @@ export const OPENROUTER = {
 
 // ── Model identifiers ─────────────────────────────────────────────────────────
 export const MODELS = {
-  DEEP_RESEARCH: 'openai/o4-mini-deep-research',
+  COPY_PROMPT:   'copy-prompt',    // manual copy-paste flow (display only)
   CLAUDE_SONNET: 'anthropic/claude-sonnet-4.6',
   CLAUDE_HAIKU:  'anthropic/claude-haiku-4.5',
-  PIPELINE:      'pipeline',  // SerpAPI + Playwright + AI (display only)
+  PIPELINE:      'pipeline',       // SerpAPI + Playwright + AI (display only)
 } as const
- 
+
 // ── Step → model mapping ──────────────────────────────────────────────────────
 export const STEP_MODEL: Record<string, string> = {
-  MARKET_SCANNING:        MODELS.DEEP_RESEARCH,
+  MARKET_SCANNING:        MODELS.COPY_PROMPT,
   PARTNER_IDENTIFICATION: MODELS.PIPELINE,
-  PARTNER_PROFILING:      MODELS.DEEP_RESEARCH,
+  PARTNER_PROFILING:      MODELS.COPY_PROMPT,
 
   VALUE_ALIGNMENT:        MODELS.CLAUDE_SONNET,
   OUTREACH_PREPARATION:   MODELS.CLAUDE_SONNET,
 }
 
-// Steps that use the deep-research model (live web search, long-running).
-// Derived automatically so the set stays in sync with STEP_MODEL above.
-export const DEEP_RESEARCH_STEPS = new Set(
+// Steps that use the copy-prompt flow (no AI auto-execution).
+export const COPY_PROMPT_STEPS = new Set(
   Object.entries(STEP_MODEL)
-    .filter(([, model]) => model === MODELS.DEEP_RESEARCH)
+    .filter(([, model]) => model === MODELS.COPY_PROMPT)
     .map(([step]) => step),
 )
 
 // ── UI badge metadata per model (used in pipeline page) ───────────────────────
 export const MODEL_BADGE: Record<string, { label: string; cls: string }> = {
-  [MODELS.DEEP_RESEARCH]: { label: 'o4-mini deep research',     cls: 'bg-blue-100 text-blue-700'      },
+  [MODELS.COPY_PROMPT]:   { label: 'Zkopírovat prompt',         cls: 'bg-amber-100 text-amber-700'    },
   [MODELS.CLAUDE_SONNET]: { label: 'Claude Sonnet 4.5',         cls: 'bg-emerald-100 text-emerald-700' },
   [MODELS.PIPELINE]:      { label: 'SerpAPI + Playwright + AI', cls: 'bg-violet-100 text-violet-700'  },
 }

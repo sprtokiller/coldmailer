@@ -8,17 +8,17 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  googleId     String    @unique
-  email        String    @unique
-  name         String
-  image        String?
-  accessToken  String?
-  refreshToken String?
+  id            String    @id @default(cuid())
+  googleId      String    @unique
+  email         String    @unique
+  name          String
+  image         String?
+  accessToken   String?
+  refreshToken  String?
   tokenExpiry   DateTime?
   lastGmailSync DateTime?
   createdAt     DateTime  @default(now())
-  isSuperAdmin  Boolean   @default(false)
+  isAdmin       Boolean   @default(false)
 
   systemPrompts SystemPrompt[]
   contextParts  ContextPart[]
@@ -26,58 +26,20 @@ model User {
   emailDrafts   EmailDraft[]
   signatures    Signature[]
   pipelineRuns  PipelineRun[]
-  stepsRun      PipelineStep[]   @relation("StepRunner")
-  roles         UserRole[]
-  permOverrides UserPermission[]
+  stepsRun      PipelineStep[] @relation("StepRunner")
   budget        UserBudget?
-  groups        UserGroup[]
-  projects      UserProject[]
 
-  globalRecords      GlobalRecord[]
-  inputSources       InputSource[]
-  addedRefs          PipelineRecordRef[]
-  recordEvents       RecordEvent[]
-  partnerAssignments PartnerAssignment[] // @deprecated — replaced by InteractionAssignee
-  partnerMailEvents  PartnerMailEvent[] // @deprecated — replaced by Interaction
-  partnerNotes       PartnerNote[] // @deprecated — replaced by Interaction
-  usageEvents        UsageEvent[]
+  globalRecords GlobalRecord[]
+  inputSources  InputSource[]
+  addedRefs     PipelineRecordRef[]
+  recordEvents  RecordEvent[]
+  usageEvents   UsageEvent[]
 
   interactionsCreated    Interaction[]         @relation("InteractionCreator")
   interactionAssignments InteractionAssignee[]
   projectRoles           UserProjectRole[]
   assignedRefs           PipelineRecordRef[]   @relation("RefAssignee")
   coAssignedRefs         PipelineRecordRef[]   @relation("RefCoAssignees")
-}
-
-model Role {
-  id          String     @id @default(cuid())
-  name        String
-  description String?
-  color       String     @default("#6366f1")
-  permissions String[]
-  isSystem    Boolean    @default(false)
-  users       UserRole[]
-  createdAt   DateTime   @default(now())
-}
-
-model UserRole {
-  userId     String
-  roleId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  assignedAt DateTime @default(now())
-
-  @@id([userId, roleId])
-}
-
-model UserPermission {
-  id      String  @id @default(cuid())
-  userId  String
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  key     String
-  granted Boolean
-
-  @@unique([userId, key])
 }
 
 model Group {
@@ -87,14 +49,11 @@ model Group {
   color     String   @default("#6366f1")
   createdAt DateTime @default(now())
 
-  members             UserGroup[]
-  projects            Project[]
-  systemPrompts       SystemPrompt[]
-  contextParts        ContextPart[]
-  sellingPoints       SellingPoint[]
-  emailDrafts         EmailDraft[]
-  partnerNotes        PartnerNote[]
-  partnerFulfillments PartnerFulfillment[]
+  projects      Project[]
+  systemPrompts SystemPrompt[]
+  contextParts  ContextPart[]
+  sellingPoints SellingPoint[]
+  emailDrafts   EmailDraft[]
 }
 
 model Project {
@@ -105,38 +64,17 @@ model Project {
   group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
-  members       UserProject[]
-  systemPrompts SystemPrompt[]
-  contextParts  ContextPart[]
-  sellingPoints SellingPoint[]
-  emailDrafts   EmailDraft[]
-  pipelineRuns  PipelineRun[]
-  interactions  Interaction[]
-  projectRoles  ProjectRole[]
+  systemPrompts  SystemPrompt[]
+  contextParts   ContextPart[]
+  sellingPoints  SellingPoint[]
+  emailDrafts    EmailDraft[]
+  pipelineRuns   PipelineRun[]
+  interactions   Interaction[]
+  projectRoles   ProjectRole[]
+  projectRecords ProjectRecord[]
 
   @@unique([groupId, name])
   @@index([groupId])
-}
-
-model UserGroup {
-  userId   String
-  groupId  String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
-
-  @@id([userId, groupId])
-}
-
-model UserProject {
-  userId     String
-  projectId  String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedAt DateTime @default(now())
-
-  @@id([userId, projectId])
-  @@index([projectId])
 }
 
 enum BudgetResetPeriod {
@@ -287,6 +225,7 @@ model PipelineStep {
   emailDraft        EmailDraft?         @relation(fields: [emailDraftId], references: [id])
   inputData         Json?
   outputData        Json?
+  selectionData     Json?
   errorMessage      String?
   progress          Json?
   runnerId          String
@@ -365,14 +304,11 @@ model GlobalRecord {
   duplicateOf    GlobalRecord?  @relation("Duplicates", fields: [duplicateOfId], references: [id])
   duplicates     GlobalRecord[] @relation("Duplicates")
 
-  pipelineRefs PipelineRecordRef[]
-  events       RecordEvent[]
-  contacts     PartnerContact[]
-  assignments  PartnerAssignment[] // @deprecated — replaced by InteractionAssignee
-  mailEvents   PartnerMailEvent[] // @deprecated — replaced by Interaction
-  partnerNotes PartnerNote[] // @deprecated — replaced by Interaction
-  fulfillments PartnerFulfillment[] // @deprecated — replaced by Interaction
-  interactions Interaction[]
+  pipelineRefs   PipelineRecordRef[]
+  events         RecordEvent[]
+  contacts       PartnerContact[]
+  interactions   Interaction[]
+  projectRecords ProjectRecord[]
 
   @@unique([normalizedName, type])
 }
@@ -445,26 +381,26 @@ model PipelineRecordRef {
   addMethod               AddMethod
   localNote               String?
 
-  assigneeId              String?
-  assignee                User?        @relation("RefAssignee", fields: [assigneeId], references: [id])
-  coAssignees             User[]       @relation("RefCoAssignees")
-  actionStatus            ActionStatus?
-  dealStage               DealStage?
+  assigneeId   String?
+  assignee     User?         @relation("RefAssignee", fields: [assigneeId], references: [id])
+  coAssignees  User[]        @relation("RefCoAssignees")
+  actionStatus ActionStatus?
+  dealStage    DealStage?
 
   @@unique([pipelineRunId, stepId, globalRecordId])
   @@index([stepId, isSelectedForProcessing])
 }
 
 model RecordEvent {
-  id             String          @id @default(cuid())
+  id             String       @id @default(cuid())
   globalRecordId String
-  globalRecord   GlobalRecord    @relation(fields: [globalRecordId], references: [id])
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id])
   pipelineRunId  String?
   stepId         String?
   userId         String
-  user           User            @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
   eventType      String
-  timestamp      DateTime        @default(now())
+  timestamp      DateTime     @default(now())
   metadata       Json?
 }
 
@@ -519,11 +455,11 @@ enum DealStage {
 }
 
 model Interaction {
-  id             String            @id @default(cuid())
+  id             String          @id @default(cuid())
   globalRecordId String
-  globalRecord   GlobalRecord      @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  globalRecord   GlobalRecord    @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
   projectId      String
-  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   type           InteractionType
 
   content   String?
@@ -545,7 +481,7 @@ model Interaction {
   themToUs String?
 
   // Unknown contact detection
-  isUnknownContact      Boolean   @default(false)
+  isUnknownContact      Boolean @default(false)
   unknownContactAddress String?
 
   assignees InteractionAssignee[]
@@ -593,62 +529,19 @@ model UserProjectRole {
   @@id([userId, projectRoleId])
 }
 
-// ── Deprecated Partner CRM Models (replaced by Interaction) ──────────────────
+// ── Project CRM Records ─────────────────────────────────────────────────────────
 
-model PartnerAssignment {
-  globalRecordId String
-  userId         String
-  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id])
-  assignedAt     DateTime     @default(now())
-
-  @@id([globalRecordId, userId])
-}
-
-model PartnerMailEvent {
-  id             String        @id @default(cuid())
-  globalRecordId String
-  globalRecord   GlobalRecord  @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  direction      MailDirection
-  subject        String
-  body           String?
-  sentAt         DateTime
-  fromAddress    String?
-  toAddress      String?
-  gmailId        String?
-  createdBy      String
-  creator        User          @relation(fields: [createdBy], references: [id])
-  createdAt      DateTime      @default(now())
-
-  @@index([globalRecordId, sentAt])
-}
-
-model PartnerNote {
+model ProjectRecord {
   id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  content        String
-  authorId       String
-  author         User         @relation(fields: [authorId], references: [id])
-  groupId        String?
-  group          Group?       @relation(fields: [groupId], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
 
-  @@index([globalRecordId])
-}
-
-model PartnerFulfillment {
-  id               String       @id @default(cuid())
-  globalRecordId   String
-  globalRecord     GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  groupId          String?
-  group            Group?       @relation(fields: [groupId], references: [id])
-  myToThem         String?
-  themToUs         String?
+  // Moved from deprecated PartnerFulfillment
   contactBlacklist Json?
-  emailDisplayMode String       @default("text")
-  updatedAt        DateTime     @updatedAt
+  emailDisplayMode String @default("text")
 
-  @@unique([globalRecordId, groupId])
+  @@unique([projectId, globalRecordId])
+  @@index([globalRecordId])
 }

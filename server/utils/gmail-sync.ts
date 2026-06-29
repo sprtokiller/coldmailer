@@ -10,7 +10,7 @@ import {
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 200
 
-const FREE_EMAIL_DOMAINS = new Set([
+export const FREE_EMAIL_DOMAINS = new Set([
   'gmail.com', 'googlemail.com', 'seznam.cz', 'email.cz', 'post.cz',
   'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'yahoo.co.uk',
   'centrum.cz', 'atlas.cz', 'volny.cz', 'tiscali.cz',
@@ -18,11 +18,11 @@ const FREE_EMAIL_DOMAINS = new Set([
   'proton.me', 'mail.com', 'zoho.com', 'yandex.com', 'gmx.com', 'gmx.de',
 ])
 
-function getDomainFromEmail(email: string): string {
+export function getDomainFromEmail(email: string): string {
   return email.split('@')[1]?.toLowerCase() ?? ''
 }
 
-function getDomainFromUrl(url: string): string {
+export function getDomainFromUrl(url: string): string {
   try {
     const hostname = new URL(url).hostname.toLowerCase()
     return hostname.replace(/^www\./, '')
@@ -49,7 +49,7 @@ async function buildDomainContext(
       id: true,
       payload: true,
       contacts: { select: { address: true } },
-      fulfillments: { select: { contactBlacklist: true } },
+      projectRecords: { select: { contactBlacklist: true } },
     },
   })
 
@@ -78,7 +78,7 @@ async function buildDomainContext(
       }
     }
 
-    for (const f of rec.fulfillments) {
+    for (const f of rec.projectRecords) {
       if (Array.isArray(f.contactBlacklist)) {
         for (const email of f.contactBlacklist) {
           if (typeof email === 'string') blacklistedEmails.add(email.toLowerCase())
@@ -103,7 +103,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
       tokenExpiry: true,
       lastGmailSync: true,
       createdAt: true,
-      isSuperAdmin: true,
+      isAdmin: true,
     },
   })
 
@@ -115,7 +115,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   const afterDate = options?.forceLookbackDays
     ? (() => { const d = new Date(); d.setDate(d.getDate() - options.forceLookbackDays!); return d })()
     : computeSyncStart(user.lastGmailSync, user.createdAt, historyDays)
-  const partnerEmailMap = await collectPartnerEmails(user.id, user.isSuperAdmin)
+  const partnerEmailMap = await collectPartnerEmails(user.id, user.isAdmin)
 
   if (partnerEmailMap.size === 0) {
     return { synced: 0 }
@@ -291,7 +291,7 @@ type PartnerEmailEntry = { globalRecordId: string; projectId: string }
 
 async function collectPartnerEmails(
   userId: string,
-  isSuperAdmin: boolean,
+  isAdmin: boolean,
 ): Promise<Map<string, PartnerEmailEntry[]>> {
   // Find GlobalRecords where the user is primary assignee or co-assignee
   const globalRecords = await prisma.globalRecord.findMany({
@@ -363,6 +363,8 @@ async function processMessage(
 
   const matchedEntries: PartnerEmailEntry[] = []
   const seenRecords = new Set<string>()
+  const normalizedUserEmail = userEmail.toLowerCase()
+
   for (const addr of allAddresses) {
     const entries = partnerEmailMap.get(addr)
     if (entries) {
@@ -373,12 +375,40 @@ async function processMessage(
         }
       }
     }
+
+    if (addr !== normalizedUserEmail && domainCtx) {
+      const domain = getDomainFromEmail(addr)
+      if (domain) {
+        for (const [globalRecordId, ctx] of domainCtx.entries()) {
+          if (ctx.domains.has(domain) && !ctx.blacklistedEmails.has(addr)) {
+            if (!seenRecords.has(globalRecordId)) {
+              seenRecords.add(globalRecordId)
+              matchedEntries.push({ globalRecordId, projectId: ctx.projectId })
+            }
+            if (!ctx.knownEmails.has(addr)) {
+              prisma.partnerContact.create({
+                data: {
+                  globalRecordId,
+                  address: addr,
+                  label: 'Auto-added (domain match)'
+                }
+              }).catch(() => {})
+              ctx.knownEmails.add(addr)
+              
+              const existingMap = partnerEmailMap.get(addr) ?? []
+              existingMap.push({ globalRecordId, projectId: ctx.projectId })
+              partnerEmailMap.set(addr, existingMap)
+            }
+          }
+        }
+      }
+    }
   }
 
   if (matchedEntries.length === 0) return 0
 
   const fromAddresses = extractEmailAddresses(from)
-  const direction = fromAddresses.includes(userEmail.toLowerCase()) ? 'SENT' : 'RECEIVED'
+  const direction = fromAddresses.includes(normalizedUserEmail) ? 'SENT' : 'RECEIVED'
 
   let htmlBody = extractHtmlBody(msg.payload)
   const attachments = extractAttachments(msg.payload)
@@ -390,7 +420,6 @@ async function processMessage(
   }
 
   const sentAt = date ? new Date(date) : new Date(Number(msg.internalDate))
-  const normalizedUserEmail = userEmail.toLowerCase()
 
   let created = 0
   for (const entry of matchedEntries) {
@@ -408,6 +437,7 @@ async function processMessage(
           gmailId: msg.id,
           content: htmlBody,
           createdBy: userId,
+          isUnknownContact: false,
         },
       })
       created++
@@ -427,43 +457,6 @@ async function processMessage(
     } catch (e: any) {
       if (e?.code === 'P2002') continue
       throw e
-    }
-
-    if (!domainCtx) continue
-    const ctx = domainCtx.get(entry.globalRecordId)
-    if (!ctx || ctx.domains.size === 0) continue
-
-    for (const addr of allAddresses) {
-      if (addr === normalizedUserEmail) continue
-      if (ctx.knownEmails.has(addr)) continue
-      if (ctx.blacklistedEmails.has(addr)) continue
-
-      const domain = getDomainFromEmail(addr)
-      if (!domain || !ctx.domains.has(domain)) continue
-
-      try {
-        await prisma.interaction.create({
-          data: {
-            globalRecordId: entry.globalRecordId,
-            projectId: ctx.projectId || entry.projectId,
-            type: 'EMAIL',
-            direction,
-            subject,
-            sentAt,
-            fromAddress: from,
-            toAddress: to,
-            gmailId: msg.id,
-            content: htmlBody,
-            createdBy: userId,
-            isUnknownContact: true,
-            unknownContactAddress: addr,
-          },
-        })
-        created++
-      } catch (e: any) {
-        if (e?.code === 'P2002') continue
-        throw e
-      }
     }
   }
 

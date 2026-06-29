@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MeResponse, AdminUser, Role, GroupInfo, BudgetResponse } from '~/utils/settings-constants'
+import type { MeResponse, AdminUser, GroupInfo, BudgetResponse } from '~/utils/settings-constants'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -30,29 +30,23 @@ function fmt(n: number) { return n.toFixed(4) }
 // ── Current user profile ──────────────────────────────────────────────────────
 const { data: me } = await useFetch<MeResponse>('/api/settings/me')
 
-const isSuperAdmin = computed(() => me.value?.user.isSuperAdmin ?? false)
-const canManageRoles = computed(() => me.value?.effectivePermissions.includes('admin.roles') || isSuperAdmin.value)
-const canManageSystem = computed(() => me.value?.effectivePermissions.includes('admin.system') || isSuperAdmin.value)
+const isAdmin = computed(() => me.value?.user.isAdmin ?? false)
 
 // ── Admin data ───────────────────────────────────────────────────────────────
-const { data: adminUsers, refresh: refreshUsers } = canManageRoles.value
+const { data: adminUsers, refresh: refreshUsers } = isAdmin.value
   ? await useFetch<AdminUser[]>('/api/admin/users')
   : { data: ref<AdminUser[] | null>(null), refresh: async () => {} }
 
-const { data: adminRoles, refresh: refreshRoles } = canManageRoles.value
-  ? await useFetch<Role[]>('/api/admin/roles')
-  : { data: ref<Role[] | null>(null), refresh: async () => {} }
-
-const { data: adminGroups, refresh: refreshGroups } = canManageRoles.value
+const { data: adminGroups, refresh: refreshGroups } = isAdmin.value
   ? await useFetch<GroupInfo[]>('/api/admin/groups')
   : { data: ref<GroupInfo[] | null>(null), refresh: async () => {} }
 
-const { data: budgetData, refresh: refreshBudget } = canManageRoles.value
+const { data: budgetData, refresh: refreshBudget } = isAdmin.value
   ? await useFetch<BudgetResponse>('/api/admin/budget')
   : { data: ref<BudgetResponse | null>(null), refresh: async () => {} }
 
 // ── Sidebar navigation ────────────────────────────────────────────────────────
-type NavSection = 'permissions' | 'signatures' | 'users' | 'roles' | 'projects' | 'budget' | 'system'
+type NavSection = 'permissions' | 'signatures' | 'users' | 'projects' | 'budget' | 'system'
 
 interface NavItem {
   id: NavSection
@@ -66,13 +60,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'permissions', label: 'Moje oprávnění', icon: 'shield' },
   { id: 'signatures',  label: 'Můj podpis',     icon: 'pen' },
   { id: 'users',       label: 'Správa uživatelů', icon: 'users',  adminOnly: true },
-  { id: 'roles',       label: 'Správa rolí',      icon: 'tag',    adminOnly: true },
   { id: 'projects',    label: 'Správa projektů',  icon: 'folder', adminOnly: true },
   { id: 'budget',      label: 'Správa limitů',    icon: 'chart',  adminOnly: true },
   { id: 'system',      label: 'Systémová nastavení', icon: 'cog', adminOnly: true },
 ]
 
-const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'roles', 'projects', 'budget', 'system']
+const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'projects', 'budget', 'system']
 const initialSection = VALID_SECTIONS.includes(route.query.tab as NavSection) ? (route.query.tab as NavSection) : 'permissions'
 const activeSection = ref<NavSection>(initialSection)
 
@@ -82,8 +75,7 @@ watch(activeSection, (newSection) => {
 
 const visibleNav = computed(() =>
   NAV_ITEMS.filter(item => {
-    if (item.adminOnly && !canManageRoles.value) return false
-    if (item.permission && !me.value?.effectivePermissions.includes(item.permission) && !isSuperAdmin.value) return false
+    if (item.adminOnly && !isAdmin.value) return false
     return true
   }),
 )
@@ -238,17 +230,10 @@ const visibleNav = computed(() =>
           v-else-if="activeSection === 'users'"
           :me="me!"
           :admin-users="adminUsers"
-          :admin-roles="adminRoles"
           :admin-groups="adminGroups"
-          :is-super-admin="isSuperAdmin"
+          :is-admin="isAdmin"
           @refresh-users="refreshUsers()"
           @refresh-groups="async () => { await refreshGroups(); refreshProjects() }"
-        />
-
-        <SettingsRoles
-          v-else-if="activeSection === 'roles'"
-          :admin-roles="adminRoles"
-          @refresh="refreshRoles()"
         />
 
         <SettingsProjects
@@ -258,7 +243,7 @@ const visibleNav = computed(() =>
         />
 
         <SettingsSystem
-          v-else-if="activeSection === 'system' && canManageSystem"
+          v-else-if="activeSection === 'system' && isAdmin"
         />
       </main>
     </div>

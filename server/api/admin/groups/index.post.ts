@@ -1,8 +1,8 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, 'admin.roles')
+  await requireAdmin(event)
   const body = await readBody<{ name: string; slug: string; color?: string }>(event)
 
   if (!body.name?.trim() || !body.slug?.trim()) {

@@ -1,10 +1,10 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 
 export default defineEventHandler(async (event) => {
-  const session = await requirePermission(event, 'partners.edit')
+  const session = await requireAuth(event)
   const id = getRouterParam(event, 'id')!
 
   const body = await readBody<{

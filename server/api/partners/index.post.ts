@@ -1,5 +1,5 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 import { getActiveScope } from '~/server/utils/activeProject'
@@ -7,7 +7,7 @@ import { getInteractionAccess } from '~/server/utils/projectPermissions'
 import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
-  const session = await requirePermission(event, 'partners.create')
+  const session = await requireAuth(event)
 
   const body = await readBody<{
     canonicalName: string

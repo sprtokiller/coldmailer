@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
   const access = await getUserScopeAccess(session.id)
 
-  if (access.isSuperAdmin || access.isAdmin) {
+  if (access.isAdmin) {
     const groups = await prisma.group.findMany({
       include: { projects: { orderBy: { name: 'asc' } } },
       orderBy: { name: 'asc' },

@@ -1,15 +1,16 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission, requireResourceScopeAccess } from '~/server/utils/permissions'
+import { requireAdmin, requireResourceScopeAccess } from '~/server/utils/permissions'
+import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
-  const user = await requirePermission(event, 'selling.own.delete')
+  const user = await requireAuth(event)
   const id = getRouterParam(event, 'id')!
 
   const part = await prisma.sellingPoint.findUnique({ where: { id } })
   if (!part) throw createError({ statusCode: 404, statusMessage: 'Prodejní argument nenalezen' })
 
   if (part.authorId !== user.id) {
-    await requirePermission(event, 'selling.others.delete')
+    await requireAdmin(event)
   }
   await requireResourceScopeAccess(event, part)
 

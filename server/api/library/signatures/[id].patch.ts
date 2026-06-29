@@ -1,5 +1,5 @@
 import { prisma } from '~/server/utils/prisma'
-import { requirePermission, getEffectivePermissions } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
@@ -11,11 +11,9 @@ export default defineEventHandler(async (event) => {
   if (!sig) throw createError({ statusCode: 404, statusMessage: 'Podpis nenalezen' })
 
   if (sig.isSystem) {
-    await requirePermission(event, 'signatures.system.edit')
+    await requireAdmin(event)
   } else {
     if (sig.authorId !== user.id) throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění upravit tento podpis' })
-    const perms = await getEffectivePermissions(user.id)
-    if (!perms.includes('signatures.own.edit')) throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění: signatures.own.edit' })
   }
 
   const allowIsDefault = !sig.isSystem && body.isDefault !== undefined

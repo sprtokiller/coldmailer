@@ -16,7 +16,7 @@ export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
 
 export const DEFAULT_PROJECT_ROLES = [
   {
-    name: 'Vedoucí obchodu',
+    name: 'Vedení obchodu',
     permissions: ['project.interactions.view_all', 'project.interactions.edit_all'] as string[],
     isSystem: true,
   },
@@ -48,10 +48,10 @@ export async function getProjectPermissions(userId: string, projectId: string): 
 export async function getInteractionAccess(userId: string, projectId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isSuperAdmin: true },
+    select: { isAdmin: true },
   })
 
-  if (user?.isSuperAdmin) {
+  if (user?.isAdmin) {
     return { canViewAll: true, canEditAll: true, isAdmin: true }
   }
 
@@ -82,6 +82,11 @@ export async function requireInteractionAccess(
   }
 
   const access = await getInteractionAccess(session.id, interaction.projectId)
+
+  if (!access.isAdmin && !access.canViewAll && !access.canEditAll) {
+    throw createError({ statusCode: 403, statusMessage: 'K tomuto projektu nemáte přístup.' })
+  }
+
   const isAssignee = interaction.assignees.some(a => a.userId === session.id)
   const isCreator = interaction.createdBy === session.id
 

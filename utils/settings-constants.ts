@@ -1,5 +1,3 @@
-export type Role = { id: string; name: string; description: string | null; color: string; permissions: string[]; isSystem: boolean }
-export type PermOverride = { id: string; key: string; granted: boolean }
 export type BudgetResetPeriod = 'never' | 'daily' | 'weekly' | 'monthly'
 export type Budget = { limitUsd: number | null; usedUsd: number; resetPeriod: BudgetResetPeriod; periodStartAt: string | null }
 export type ProjectInfo = {
@@ -24,12 +22,9 @@ export type GroupInfo = {
 }
 
 export type MeResponse = {
-  user: { id: string; email: string; name: string; image: string | null; isSuperAdmin: boolean; createdAt: string }
-  roles: Role[]
-  permOverrides: PermOverride[]
+  user: { id: string; email: string; name: string; image: string | null; isAdmin: boolean; createdAt: string }
   budget: Budget | null
-  projects: ProjectInfo[]
-  effectivePermissions: string[]
+  projectRoles: ProjectRoleAssignment[]
 }
 
 export type ProjectRoleAssignment = {
@@ -39,67 +34,20 @@ export type ProjectRoleAssignment = {
 }
 export type AdminUser = {
   id: string; email: string; name: string; image: string | null
-  isSuperAdmin: boolean; createdAt: string
-  roles: Role[]; projectRoles: ProjectRoleAssignment[]; permOverrides: PermOverride[]
-  budget: Budget | null; effectivePermissions: string[]
+  isAdmin: boolean; createdAt: string
+  projectRoles: ProjectRoleAssignment[]
+  budget: Budget | null
 }
 
 export type BudgetUser = {
   id: string; name: string; email: string; image: string | null
-  isSuperAdmin: boolean; createdAt: string
+  isAdmin: boolean; createdAt: string
   budget: Budget | null
   stats30d: { aiCost: number; aiCount: number; serpCount: number }
 }
 
 export type DefaultBudgetCfg = { limitUsd: number | null; resetPeriod: BudgetResetPeriod }
 export type BudgetResponse = { users: BudgetUser[]; defaultBudget: DefaultBudgetCfg }
-
-export const PERMISSION_GROUPS = [
-  { label: 'Systémové prompty', keys: ['prompts.system.read', 'prompts.system.edit'] },
-  { label: 'Vlastní prompty', keys: ['prompts.own.read', 'prompts.own.edit'] },
-  { label: 'Cizí prompty', keys: ['prompts.others.read', 'prompts.others.edit'] },
-  { label: 'Kontextové části', keys: ['context.own.read', 'context.own.edit', 'context.others.read', 'context.others.edit'] },
-  { label: 'Prodejní argumenty', keys: ['selling.own.read', 'selling.own.edit', 'selling.others.read', 'selling.others.edit'] },
-  { label: 'Mailové šablony', keys: ['drafts.own.read', 'drafts.own.edit', 'drafts.others.read', 'drafts.others.edit'] },
-  { label: 'Podpisy', keys: ['signatures.own.edit', 'signatures.system.edit'] },
-  { label: 'Pipeline', keys: ['pipeline.serpapi', 'pipeline.deep_research', 'pipeline.claude', 'pipeline.gmail'] },
-  { label: 'Partneři', keys: ['partners.create', 'partners.edit'] },
-  { label: 'Správa', keys: ['admin.roles'] },
-]
-
-export const PERMISSION_LABELS: Record<string, string> = {
-  'prompts.system.read': 'Číst systémové prompty',
-  'prompts.system.edit': 'Upravovat systémové prompty',
-  'prompts.own.read': 'Číst vlastní prompty',
-  'prompts.own.edit': 'Vytvářet / editovat vlastní prompty',
-  'prompts.others.read': 'Číst cizí prompty',
-  'prompts.others.edit': 'Upravovat cizí prompty',
-  'context.own.read': 'Číst vlastní kontextové části',
-  'context.own.edit': 'Vytvářet / editovat vlastní kontextové části',
-  'context.others.read': 'Číst cizí kontextové části',
-  'context.others.edit': 'Upravovat cizí kontextové části',
-  'selling.own.read': 'Číst vlastní prodejní argumenty',
-  'selling.own.edit': 'Vytvářet / editovat vlastní prodejní argumenty',
-  'selling.others.read': 'Číst cizí prodejní argumenty',
-  'selling.others.edit': 'Upravovat cizí prodejní argumenty',
-  'drafts.own.read': 'Číst vlastní e-mailové šablony',
-  'drafts.own.edit': 'Vytvářet / editovat vlastní e-mailové šablony',
-  'drafts.others.read': 'Číst cizí e-mailové šablony',
-  'drafts.others.edit': 'Upravovat cizí e-mailové šablony',
-  'signatures.own.edit': 'Vytvářet / editovat vlastní podpisy',
-  'signatures.system.edit': 'Spravovat podpisové šablony (systémové)',
-  'pipeline.serpapi': 'Spouštět Partner Identification (SerpAPI)',
-  'pipeline.deep_research': 'Spouštět deep-research kroky (o4-mini)',
-  'pipeline.claude': 'Spouštět Claude kroky',
-  'pipeline.gmail': 'Vytvářet Gmail drafty',
-  'partners.create': 'Vytvářet partnery ručně',
-  'partners.edit': 'Upravovat profily partnerů',
-  'admin.roles': 'Správa rolí a oprávnění uživatelů',
-}
-
-export const ALL_PERMISSION_KEYS = Object.keys(PERMISSION_LABELS)
-
-export const ROLE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b']
 
 export const RESET_PERIOD_LABELS: Record<BudgetResetPeriod, string> = {
   never: 'Bez resetu',

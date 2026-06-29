@@ -2,24 +2,15 @@ import { sendStream, setResponseHeaders } from 'h3'
 import { Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requirePermission } from '~/server/utils/permissions'
 import { streamStepAI, modelForStep } from '~/server/utils/ai'
 import { runPartnerIdentification } from '~/server/utils/partner-identification'
-import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
 import { registerJob, cleanupJob } from '~/server/utils/job-registry'
+import { COPY_PROMPT_STEPS } from '~/server/utils/ai'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS, GROUP_FONTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
-
-const STEP_PERMISSION_MAP: Record<string, 'pipeline.serpapi' | 'pipeline.deep_research' | 'pipeline.claude' | 'pipeline.gmail'> = {
-  PARTNER_IDENTIFICATION: 'pipeline.serpapi',
-  MARKET_SCANNING: 'pipeline.deep_research',
-  PARTNER_PROFILING: 'pipeline.deep_research',
-  VALUE_ALIGNMENT: 'pipeline.claude',
-  OUTREACH_PREPARATION: 'pipeline.claude',
-}
 
 interface ExecuteBody {
   stepType: string
@@ -46,9 +37,8 @@ export default defineEventHandler(async (event) => {
   const runId = getRouterParam(event, 'id')!
   const body = await readBody<ExecuteBody>(event)
 
-  const stepPerm = STEP_PERMISSION_MAP[body.stepType]
-  if (stepPerm) {
-    await requirePermission(event, stepPerm)
+  if (COPY_PROMPT_STEPS.has(body.stepType)) {
+    throw createError({ statusCode: 400, statusMessage: `Krok ${body.stepType} používá copy-prompt flow — použijte /import-ai endpoint.` })
   }
 
   // Budget enforcement: reject if user has exceeded their limit (with lazy period reset)
@@ -208,20 +198,20 @@ export default defineEventHandler(async (event) => {
       const execute = async () => {
         try {
           if (body.stepType === 'PARTNER_IDENTIFICATION') {
-            // Read actual selection from DB — overrides client-sent inputData
+            // Read competitions from MS step's outputData/selectionData — no GlobalRecord for competitions
             const msStep = await prisma.pipelineStep.findFirst({
               where: { pipelineRunId: runId, stepType: 'MARKET_SCANNING' },
               orderBy: { createdAt: 'desc' },
             })
             let piInputData: Record<string, unknown> = body.inputData ?? {}
-            if (msStep) {
-              const selectedRefs = await prisma.pipelineRecordRef.findMany({
-                where: { stepId: msStep.id, isSelectedForProcessing: true },
-                include: { globalRecord: { select: { payload: true, canonicalName: true } } },
-                orderBy: { addedAt: 'asc' },
-              })
-              if (selectedRefs.length > 0) {
-                piInputData = { items: selectedRefs.map(r => ({ ...(r.globalRecord.payload as Record<string, unknown>), name: r.globalRecord.canonicalName })) }
+            if (msStep && Array.isArray(msStep.outputData) && (msStep.outputData as unknown[]).length > 0) {
+              const allItems = msStep.outputData as Array<Record<string, unknown>>
+              const selectedNames = Array.isArray(msStep.selectionData) ? new Set(msStep.selectionData as string[]) : null
+              const items = selectedNames
+                ? allItems.filter(item => selectedNames.has(String(item.name ?? item.nazev ?? '')))
+                : allItems
+              if (items.length > 0) {
+                piInputData = { items }
               }
             }
             const gen = runPartnerIdentification({
@@ -261,143 +251,6 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: finalOutput as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
-          } else if (body.stepType === 'PARTNER_PROFILING') {
-            // inputData: { partners: [{ partnerId?, name, frequency?, itemNames? }] }
-            const inputPartners = (() => {
-              const d = body.inputData
-              if (Array.isArray(d)) return d
-              const p = (d as Record<string, unknown> | undefined)?.partners
-              if (Array.isArray(p)) return p
-              return []
-            })() as Array<{ partnerId?: string; name: string; frequency?: number; itemNames?: string[] }>
-
-            if (inputPartners.length === 0) {
-              throw new Error('Žádní partneři k prozkoumání. Vyberte je z výsledků Kroku 2.')
-            }
-
-            // Enrich each partner with GlobalRecord details
-            const partnerIds = inputPartners.filter(p => p.partnerId).map(p => p.partnerId!)
-            const globalRecords = await prisma.globalRecord.findMany({
-              where: { id: { in: partnerIds } },
-              select: { id: true, canonicalName: true, payload: true },
-            })
-            const dbMap = new Map(globalRecords.map(gr => {
-              const p = gr.payload as Record<string, unknown>
-              return [gr.id, {
-                id: gr.id,
-                name: gr.canonicalName,
-                website: (p.website ?? p.url ?? null) as string | null,
-                description: (p.description ?? null) as string | null,
-                type: (p.type ?? null) as string | null,
-              }] as const
-            }))
-
-            const allProfiles: unknown[] = []
-            const ppProgressItems: Array<{ index: number; total: number; name: string; status: string; error?: string }> = []
-
-            for (let i = 0; i < inputPartners.length; i++) {
-              const ip = inputPartners[i]
-              const db = ip.partnerId ? dbMap.get(ip.partnerId) : undefined
-
-              const ppItem = { index: i + 1, total: inputPartners.length, name: ip.name, status: 'processing' }
-              ppProgressItems.push(ppItem)
-              write({ profilingItem: ppItem })
-              prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
-              write({ chunk: `\n── [${i + 1}/${inputPartners.length}] ${ip.name}\n` })
-
-              const userMsg = [
-                'Prozkoumej tohoto kandidáta na partnerství a vrať strukturovaný JSON definovaný v systémovém promptu. Veškerá textová pole piš v češtině.',
-                '',
-                `Název: ${ip.name}`,
-                db?.website     ? `Web: ${db.website}` : null,
-                db?.description ? `Popis: ${db.description}` : null,
-                db?.type        ? `Typ partnerství: ${db.type}` : null,
-                ip.frequency    ? `Nalezen v ${ip.frequency} kontextu/kontextech: ${(ip.itemNames ?? []).join(', ')}` : null,
-              ].filter(Boolean).join('\n')
-
-              try {
-                let partnerOutput = ''
-                const { stream: aiStream, getCost } = streamStepAI({
-                  stepType: body.stepType,
-                  systemPrompt: systemPromptText,
-                  contextParts: allContextParts,
-                  userMessage: userMsg,
-                }, undefined, jobController.signal)
-                for await (const chunk of aiStream) {
-                  partnerOutput += chunk
-                  write({ chunk })
-                }
-                await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-                const parsedResult = parseAIOutput(partnerOutput)
-                const cleaned = stripMarkdownArtifacts(parsedResult.data)
-                const profile = {
-                  partnerId: ip.partnerId,
-                  name: ip.name,
-                  ...((typeof cleaned === 'object' && cleaned !== null && !Array.isArray(cleaned))
-                    ? cleaned
-                    : { raw: partnerOutput }),
-                }
-                allProfiles.push(profile)
-                ppProgressItems[i] = { ...ppProgressItems[i], status: 'done' }
-                write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'done', profile } })
-                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err)
-                write({ chunk: `  ❌ ${msg}\n` })
-                allProfiles.push({ partnerId: ip.partnerId, name: ip.name, error: msg })
-                ppProgressItems[i] = { ...ppProgressItems[i], status: 'error', error: msg }
-                write({ profilingItem: { index: i + 1, total: inputPartners.length, name: ip.name, status: 'error', error: msg } })
-                prisma.pipelineStep.update({ where: { id: step.id }, data: { progress: { items: ppProgressItems } as Prisma.InputJsonValue } }).catch(() => {})
-              }
-            }
-
-            write({ chunk: `\n✅ Hotovo! Prozkoumáno ${inputPartners.length} partnerů.\n` })
-            await prisma.pipelineStep.update({
-              where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: allProfiles as never, completedAt: new Date(), progress: Prisma.DbNull },
-            })
-
-            // Persist profile data back to GlobalRecord so the Database page can display it
-            const { syncProfileContactsToDb } = await import('~/server/utils/sync-contacts')
-            for (const profile of allProfiles as Array<Record<string, unknown>>) {
-              if (profile.error) continue
-              const { partnerId: _, error: __, raw: ___, name: profileName, ...profileData } = profile
-              const pid = profile.partnerId as string | undefined
-              let existingGr = pid
-                ? await prisma.globalRecord.findUnique({ where: { id: pid }, select: { id: true, payload: true } })
-                : null
-              if (!existingGr && profileName) {
-                const { normalizeName } = await import('~/server/utils/deduplication')
-                existingGr = await prisma.globalRecord.findFirst({
-                  where: { type: 'PARTNER', normalizedName: normalizeName(String(profileName)) },
-                  select: { id: true, payload: true },
-                })
-              }
-              if (!existingGr) continue
-
-              if (Array.isArray(profile.contacts)) {
-                await syncProfileContactsToDb(existingGr.id, profile.contacts as any[])
-              }
-
-              const stripMd = (s: string) => s.replace(/\s*\(\s*\[[^\]]*\]\([^)]*\)\s*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/ {2,}/g, ' ').trim()
-              const cleaned: Record<string, unknown> = { name: profileName, ...profileData }
-              for (const key of Object.keys(cleaned)) {
-                const v = cleaned[key]
-                if (typeof v === 'string' && v.includes('](')) {
-                  cleaned[key] = stripMd(v)
-                } else if (Array.isArray(v)) {
-                  cleaned[key] = v.map(item => typeof item === 'string' && item.includes('](') ? stripMd(item) : item)
-                }
-              }
-              const merged = {
-                ...((existingGr.payload as Record<string, unknown>) ?? {}),
-                ...cleaned,
-              }
-              await prisma.globalRecord.update({
-                where: { id: existingGr.id },
-                data: { payload: merged as never },
-              }).catch(() => {})
-            }
           } else if (body.stepType === 'VALUE_ALIGNMENT') {
             // inputData: { partners: [<full profile objects from PARTNER_PROFILING>] }
             const inputPartners = (() => {
@@ -571,55 +424,6 @@ export default defineEventHandler(async (event) => {
               where: { id: step.id },
               data: { status: 'COMPLETED', outputData: allEmails as never, completedAt: new Date(), progress: Prisma.DbNull },
             })
-          } else if (body.stepType === 'MARKET_SCANNING') {
-            let fullOutput = ''
-            const { stream: aiStream, getCost } = streamStepAI({
-              stepType: body.stepType,
-              systemPrompt: systemPromptText,
-              contextParts: allContextParts,
-              userMessage: `${USER_MESSAGE_LABELS[body.stepType] ?? 'Task'}:\n\n${JSON.stringify(body.inputData ?? {}, null, 2)}`,
-            }, undefined, jobController.signal)
-            for await (const chunk of aiStream) {
-              fullOutput += chunk
-              write({ chunk })
-            }
-            await trackCost(getCost, user.id, { model: modelForStep(body.stepType), pipelineStepId: step.id, stepType: body.stepType })
-            const outputData = parseAIOutput(fullOutput).data ?? { raw: fullOutput }
-            await prisma.pipelineStep.update({
-              where: { id: step.id },
-              data: { status: 'COMPLETED', outputData: outputData as never, completedAt: new Date() },
-            })
-
-            // GlobalRecord extraction — non-fatal, runs after outputData is persisted
-            const msItems = Array.isArray(outputData) ? outputData as Record<string, unknown>[] : []
-            if (msItems.length > 0) {
-              const inputSource = await prisma.inputSource.create({
-                data: {
-                  type: 'MINI_DEEP_RESEARCH',
-                  pipelineRunId: runId,
-                  stepId: step.id,
-                  label: `Market Scanning – ${new Date().toLocaleString('cs-CZ')}`,
-                  createdBy: user.id,
-                  metadata: {
-                    config: {
-                      systemPromptId: body.systemPromptId ?? null,
-                      contextPartIds: body.contextPartIds ?? [],
-                      manualContext: body.manualContext ?? '',
-                      inputData: (body.inputData ?? {}) as Prisma.InputJsonValue,
-                    },
-                  } as Prisma.InputJsonValue,
-                },
-              })
-              for (const item of msItems) {
-                const name = String(item.name ?? item.nazev ?? item.itemName ?? '')
-                if (!name) continue
-                const url = String(item.url ?? item.website ?? item.web ?? '') || undefined
-                await findOrCreateGlobalRecord(
-                  { name, url, type: 'COMPETITION', payload: item },
-                  user.id, runId, step.id, inputSource.id, 'GENERATED'
-                ).catch((err) => console.error('[MS execute] GlobalRecord link failed for "%s":', name, err))
-              }
-            }
           } else {
             let fullOutput = ''
             const { stream: aiStream, getCost } = streamStepAI({

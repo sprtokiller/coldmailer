@@ -42,6 +42,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const access = await getInteractionAccess(session.id, projectId)
+  if (!access.isAdmin && !access.canEditAll) {
+    throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění vytvořit záznam jednání v tomto projektu.' })
+  }
   const assigneeIds = body.assigneeIds ?? []
 
   const interaction = await prisma.interaction.create({

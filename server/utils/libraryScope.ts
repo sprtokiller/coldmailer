@@ -73,7 +73,7 @@ export async function getLibraryScopeFilter(event: H3Event) {
   }
 
   const access = await getUserScopeAccess(session.id)
-  if (access.isSuperAdmin || access.isAdmin) return {}
+  if (access.isAdmin) return {}
   if (access.projectIds.length === 0 && access.groupIds.length === 0) {
     return { id: { equals: '__no_access__' } }
   }

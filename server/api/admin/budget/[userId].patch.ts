@@ -1,5 +1,5 @@
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requirePermission } from '~/server/utils/permissions'
+import { requireAdmin } from '~/server/utils/permissions'
 import { prisma } from '~/server/utils/prisma'
 
 interface PatchBody {
@@ -10,7 +10,7 @@ interface PatchBody {
 
 export default defineEventHandler(async (event) => {
   await requireAuth(event)
-  await requirePermission(event, 'admin.roles')
+  await requireAdmin(event)
 
   const userId = getRouterParam(event, 'userId')!
   const body = await readBody<PatchBody>(event)

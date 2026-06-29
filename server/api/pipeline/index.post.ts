@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await requireProjectAccess(event, body.projectId, { directAssignment: true })
+  await requireProjectAccess(event, body.projectId)
 
   const mode = body.mode === 'short' ? 'short' : 'full'
 

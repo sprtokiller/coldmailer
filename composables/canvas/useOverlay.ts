@@ -39,6 +39,11 @@ export function useOverlay() {
     return s5Alignments.value.length > 0 ? `Vstup (${pl?.step5SelectedCount?.() ?? 0}/${s5Alignments.value.length})` : 'Vstup'
   })
   const resultTabLabel = computed(() => {
+    if (stepType.value === 'MARKET_SCANNING') {
+      const msOutput = pipeline?.getStepResult('MARKET_SCANNING')?.outputData
+      const count = Array.isArray(msOutput) ? (msOutput as unknown[]).length : 0
+      return count > 0 ? `Výsledek (${count})` : 'Výsledek'
+    }
     if (stepType.value === 'PARTNER_PROFILING') return ppProfiles.value.length > 0 ? `Výsledek (${ppProfiles.value.length})` : 'Výsledek'
     if (stepType.value === 'VALUE_ALIGNMENT') return vaAlignments.value.length > 0 ? `Výsledek (${vaAlignments.value.length})` : 'Výsledek'
     if (stepType.value === 'OUTREACH_PREPARATION') return opEmails.value.length > 0 ? `Výsledek (${opEmails.value.length})` : 'Výsledek'
@@ -53,8 +58,6 @@ export function useOverlay() {
   const STICKY_TABS_BY_STEP: Record<string, Array<{ key: StickyCategory; label: string; icon: string; style: string; nodeId: string }>> = {
     MARKET_SCANNING: [
       { key: 'run', label: 'Market Scanning', icon: '▶', style: 'run', nodeId: 'step-MARKET_SCANNING' },
-      { key: 'import', label: 'Importované', icon: '↑', style: 'import', nodeId: 'ms-imported' },
-      { key: 'db', label: 'Z databáze', icon: '🔍', style: 'db', nodeId: 'ms-globaldb' },
     ],
     PARTNER_IDENTIFICATION: [
       { key: 'run', label: 'Identifikace partnerů', icon: '▶', style: 'run', nodeId: 'step-PARTNER_IDENTIFICATION' },
@@ -136,8 +139,7 @@ export function useOverlay() {
     }
     if (activeTab.value !== 'config') { canvas.selectedNodeBorderId.value = null; return }
     if (stepType.value === 'MARKET_SCANNING') {
-      const sub = records.configSubSection.value
-      canvas.selectedNodeBorderId.value = sub === 'import' ? 'ms-imported' : sub === 'db' ? 'ms-globaldb' : 'step-MARKET_SCANNING'
+      canvas.selectedNodeBorderId.value = 'step-MARKET_SCANNING'
     } else if (stepType.value === 'PARTNER_IDENTIFICATION') {
       const sub = records.configSubSection.value
       canvas.selectedNodeBorderId.value = sub === 'import' ? 'pi-imported' : sub === 'db' ? 'pi-globaldb' : 'step-PARTNER_IDENTIFICATION'
