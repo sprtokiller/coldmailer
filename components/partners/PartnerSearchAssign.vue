@@ -95,7 +95,7 @@ const SIZE_LABELS: Record<string, string> = {
               <p class="text-xs text-gray-400">Žádní partneři nenalezeni</p>
               <button
                 class="mt-2 text-sm font-medium text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg hover:bg-indigo-50 transition-colors"
-                @click="emit('close'); navigateTo('/records?tab=PARTNER&create=1')"
+                @click="emit('close'); navigateTo('/partners?tab=PARTNER&create=1')"
               >
                 Vytvořit nového partnera
               </button>

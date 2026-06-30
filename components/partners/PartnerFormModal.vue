@@ -126,7 +126,7 @@ async function save() {
       }
       error.value = e.data?.message ?? e.statusMessage ?? 'Partner s tímto názvem již existuje.'
       if (existingId) {
-        duplicateLink.value = `/partners/${existingId}`
+        duplicateLink.value = `/negotiations/${existingId}`
       }
     } else {
       error.value = e.statusMessage ?? e.message ?? 'Nepodařilo se uložit.'

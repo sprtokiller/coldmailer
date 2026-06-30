@@ -117,7 +117,7 @@ function selectPartner(name: string) {
         <!-- Tag -->
         <NuxtLink
           v-if="getTag(p.name) === 'sent' && emailMap.get(normalizeKey(p.name))?.partnerId"
-          :to="`/partners/${emailMap.get(normalizeKey(p.name))!.partnerId}`"
+          :to="`/negotiations/${emailMap.get(normalizeKey(p.name))!.partnerId}`"
           class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
           title="Zobrazit plnění partnera"
           @click.stop

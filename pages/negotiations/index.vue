@@ -124,7 +124,7 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
             v-for="p in partners"
             :key="p.id"
             class="hover:bg-gray-50 cursor-pointer transition-colors"
-            @click="navigateTo(`/partners/${p.id}`)"
+            @click="navigateTo(`/negotiations/${p.id}`)"
           >
             <td class="px-4 py-3 font-medium text-gray-800">
               <div class="flex items-center gap-2">

@@ -124,11 +124,11 @@ async function logout() {
 
         <template v-if="loggedIn">
           <NuxtLink
-            to="/partners"
+            to="/negotiations"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"
           >
-            Partneři
+            Jednání
           </NuxtLink>
           <NuxtLink
             to="/"
@@ -145,11 +145,11 @@ async function logout() {
             Knihovna
           </NuxtLink>
           <NuxtLink
-            to="/records"
+            to="/partners"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"
           >
-            Databáze
+            Partneři
           </NuxtLink>
           <NuxtLink
             to="/settings"
