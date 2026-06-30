@@ -38,23 +38,23 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<ExecuteBody>(event)
 
   if (COPY_PROMPT_STEPS.has(body.stepType)) {
-    throw createError({ statusCode: 400, statusMessage: `Krok ${body.stepType} používá copy-prompt flow — použijte /import-ai endpoint.` })
+    throw createError({ statusCode: 400, message: `Krok ${body.stepType} používá copy-prompt flow — použijte /import-ai endpoint.` })
   }
 
   // Budget enforcement: reject if user has exceeded their limit (with lazy period reset)
   const { over, limitUsd } = await isOverBudget(user.id)
   if (over) {
-    throw createError({ statusCode: 402, statusMessage: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
+    throw createError({ statusCode: 402, message: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
   }
 
   const run = await prisma.pipelineRun.findUnique({
     where: { id: runId },
     include: { project: { include: { group: true } } },
   })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
 
   if (run.mode === 'short' && (body.stepType === 'MARKET_SCANNING' || body.stepType === 'PARTNER_IDENTIFICATION')) {
-    throw createError({ statusCode: 400, statusMessage: 'Zkrácená pipeline nepodporuje tento krok.' })
+    throw createError({ statusCode: 400, message: 'Zkrácená pipeline nepodporuje tento krok.' })
   }
 
   const scopeFilter = libraryScopeForProject(run.project)
@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
       const blocker = nonProfiling[0] ?? runningSteps[0]
       throw createError({
         statusCode: 409,
-        statusMessage: `Krok ${blocker.stepType} právě běží (spustil/a ${blocker.runner?.name ?? 'neznámý'}).`,
+        message: `Krok ${blocker.stepType} právě běží (spustil/a ${blocker.runner?.name ?? 'neznámý'}).`,
       })
     }
     // Parallel PARTNER_PROFILING allowed — check for partner name overlap
@@ -85,7 +85,7 @@ export default defineEventHandler(async (event) => {
         if (name && requestedNames.has(name)) {
           throw createError({
             statusCode: 409,
-            statusMessage: `Partner "${item.name}" se právě profiluje.`,
+            message: `Partner "${item.name}" se právě profiluje.`,
           })
         }
       }
@@ -118,16 +118,16 @@ export default defineEventHandler(async (event) => {
   ])
 
   if (body.contextPartIds?.length && contextParts.length !== new Set(body.contextPartIds).size) {
-    throw createError({ statusCode: 403, statusMessage: 'Některé kontextové části nejsou dostupné pro tento projekt.' })
+    throw createError({ statusCode: 403, message: 'Některé kontextové části nejsou dostupné pro tento projekt.' })
   }
   if (body.systemPromptId && !customPrompt) {
-    throw createError({ statusCode: 403, statusMessage: 'Vybraný prompt není dostupný pro tento projekt.' })
+    throw createError({ statusCode: 403, message: 'Vybraný prompt není dostupný pro tento projekt.' })
   }
   if (body.sellingPointId && !sellingPoint) {
-    throw createError({ statusCode: 403, statusMessage: 'Vybraný prodejní argument není dostupný pro tento projekt.' })
+    throw createError({ statusCode: 403, message: 'Vybraný prodejní argument není dostupný pro tento projekt.' })
   }
   if (body.emailDraftId && !emailDraft) {
-    throw createError({ statusCode: 403, statusMessage: 'Vybraná e-mailová šablona není dostupná pro tento projekt.' })
+    throw createError({ statusCode: 403, message: 'Vybraná e-mailová šablona není dostupná pro tento projekt.' })
   }
 
   const rawPromptText =

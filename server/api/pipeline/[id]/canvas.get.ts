@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
       },
     },
   })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Run not found' })
 
   // Latest step per type
   const latestByType = new Map<string, typeof run.steps[0]>()

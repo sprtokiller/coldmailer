@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const draft = await prisma.emailDraft.findUnique({ where: { id } })
-  if (!draft) throw createError({ statusCode: 404, statusMessage: 'Draft not found' })
+  if (!draft) throw createError({ statusCode: 404, message: 'Draft not found' })
 
   if (draft.authorId !== user.id) {
     await requireAdmin(event)

@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+﻿import OpenAI from 'openai'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { OPENROUTER, MODELS } from '~/config/pipeline'
@@ -54,3 +54,4 @@ export default defineEventHandler(async (event) => {
     .slice(0, 20)
     .map(i => candidates[i])
 })
+

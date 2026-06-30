@@ -1,4 +1,4 @@
-import { requireAuth } from '~/server/utils/requireAuth'
+﻿import { requireAuth } from '~/server/utils/requireAuth'
 
 interface OpenRouterCreditsResponse {
   data: {
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const managementKey = config.openRouterManagementKey
 
   if (!managementKey) {
-    throw createError({ statusCode: 503, statusMessage: 'OPEN_ROUTER_MANAGEMENT_KEY není nastaven' })
+    throw createError({ statusCode: 503, message: 'OPEN_ROUTER_MANAGEMENT_KEY nenĂ­ nastaven' })
   }
 
   const res = await fetch('https://openrouter.ai/api/v1/credits', {
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
-    throw createError({ statusCode: res.status, statusMessage: `OpenRouter API error: ${text}` })
+    throw createError({ statusCode: res.status, message: `OpenRouter API error: ${text}` })
   }
 
   const json = await res.json() as OpenRouterCreditsResponse
@@ -37,3 +37,4 @@ export default defineEventHandler(async (event) => {
     remainingCredits: total_credits - total_usage,
   }
 })
+

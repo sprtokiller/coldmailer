@@ -8,12 +8,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ name?: string; content?: string; isDefault?: boolean }>(event)
 
   const sig = await prisma.signature.findUnique({ where: { id } })
-  if (!sig) throw createError({ statusCode: 404, statusMessage: 'Podpis nenalezen' })
+  if (!sig) throw createError({ statusCode: 404, message: 'Podpis nenalezen' })
 
   if (sig.isSystem) {
     await requireAdmin(event)
   } else {
-    if (sig.authorId !== user.id) throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění upravit tento podpis' })
+    if (sig.authorId !== user.id) throw createError({ statusCode: 403, message: 'Nemáte oprávnění upravit tento podpis' })
   }
 
   const allowIsDefault = !sig.isSystem && body.isDefault !== undefined

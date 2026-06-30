@@ -8,12 +8,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ name: string; slug: string }>(event)
 
   if (!body.name?.trim() || !body.slug?.trim()) {
-    throw createError({ statusCode: 400, statusMessage: 'Název a slug jsou povinné' })
+    throw createError({ statusCode: 400, message: 'Název a slug jsou povinné' })
   }
 
   const group = await prisma.group.findUnique({ where: { id: groupId } })
   if (!group) {
-    throw createError({ statusCode: 404, statusMessage: 'Typ projektu nebyl nalezen.' })
+    throw createError({ statusCode: 404, message: 'Typ projektu nebyl nalezen.' })
   }
 
   const project = await prisma.project.create({

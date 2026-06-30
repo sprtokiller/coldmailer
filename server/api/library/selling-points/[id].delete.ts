@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const part = await prisma.sellingPoint.findUnique({ where: { id } })
-  if (!part) throw createError({ statusCode: 404, statusMessage: 'Prodejní argument nenalezen' })
+  if (!part) throw createError({ statusCode: 404, message: 'Prodejní argument nenalezen' })
 
   if (part.authorId !== user.id) {
     await requireAdmin(event)

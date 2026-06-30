@@ -1,4 +1,4 @@
-function extractFromFence(text: string): string {
+﻿function extractFromFence(text: string): string {
   const openMatch = text.match(/```(?:json)?\s*\n?/)
   if (!openMatch || openMatch.index === undefined) return text.trim()
   const contentStart = openMatch.index + openMatch[0].length

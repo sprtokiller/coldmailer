@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+﻿import type { H3Event } from 'h3'
 import { getActiveProject, getActiveScope } from '~/server/utils/activeProject'
 import { getUserScopeAccess, requireLibraryScopeAccess, requireProjectAccess } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
@@ -27,7 +27,7 @@ export async function resolveLibraryScope(event: H3Event, input: LibraryScopeInp
 
   throw createError({
     statusCode: 400,
-    statusMessage: 'Nejprve musí být vybrán nebo přiřazen projekt nebo typ projektu.',
+    message: 'Nejprve musĂ­ bĂ˝t vybrĂˇn nebo pĹ™iĹ™azen projekt nebo typ projektu.',
   })
 }
 
@@ -95,3 +95,4 @@ export function libraryScopeForProject(project: { id: string; groupId: string })
     ],
   }
 }
+

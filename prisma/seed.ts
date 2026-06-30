@@ -27,6 +27,16 @@ async function main() {
 
   console.log(`System user: ${systemUser.id}`)
 
+  const adminEmails = (process.env.NUXT_ADMIN_EMAILS ?? '').split(',').map(s => s.trim()).filter(Boolean)
+  for (const email of adminEmails) {
+    await prisma.user.upsert({
+      where: { email },
+      update: { isAdmin: true },
+      create: { googleId: `seed:${email}`, email, name: email.split('@')[0], isAdmin: true },
+    })
+    console.log(`  ✓ Admin user: ${email}`)
+  }
+
   const prompts = loadPromptsFromDisk()
   console.log(`Loaded ${Object.keys(prompts).length} prompts from prisma/system-prompts/`)
 
@@ -187,8 +197,8 @@ function readTdaFile(filename: string) {
 }
 
 async function seedTdaContent() {
-  const kriz = await prisma.user.findUnique({ where: { email: 'kriz@scg.cz' } })
-  if (!kriz) { console.log('  ⚠ kriz@scg.cz not found, skipping TdA content'); return }
+  const kriz = await prisma.user.findFirst({ where: { isAdmin: true, googleId: { not: 'system' } } })
+  if (!kriz) { console.log('  ⚠ No admin user found, skipping TdA content'); return }
 
   const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
   if (!tdaGroup) { console.log('  ⚠ TdA group not found, skipping TdA content'); return }
@@ -279,24 +289,10 @@ async function seedTdaContent() {
   console.log('  ✓ Signature: Tour de App (systémová)')
 }
 
-const ADMINS = ['kriz@scg.cz']
-
-async function seedAdmins() {
-  for (const email of ADMINS) {
-    const result = await prisma.user.updateMany({
-      where: { email, isAdmin: false },
-      data: { isAdmin: true },
-    })
-    if (result.count > 0) console.log(`  ✓ Admin: ${email}`)
-    else console.log(`  – Admin already set: ${email}`)
-  }
-}
-
 main()
   .then(() => seedGroups())
   .then(() => seedProjectRoles())
   .then(() => seedTags())
   .then(() => seedTdaContent())
-  .then(() => seedAdmins())
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

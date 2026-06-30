@@ -20,11 +20,11 @@ export default defineEventHandler(async (event) => {
   const profiles = normalizeProfiles(body?.profiles)
 
   if (profiles.length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'profiles must contain at least one profile object' })
+    throw createError({ statusCode: 400, message: 'profiles must contain at least one profile object' })
   }
 
   const run = await prisma.pipelineRun.findUnique({ where: { id: runId }, select: { id: true } })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
 
   const existingStep = await prisma.pipelineStep.findFirst({
     where: { pipelineRunId: runId, stepType: 'PARTNER_PROFILING' },

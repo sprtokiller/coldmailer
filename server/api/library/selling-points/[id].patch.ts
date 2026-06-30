@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const part = await prisma.sellingPoint.findUnique({ where: { id } })
-  if (!part) throw createError({ statusCode: 404, statusMessage: 'Selling point not found' })
+  if (!part) throw createError({ statusCode: 404, message: 'Selling point not found' })
 
   if (part.authorId !== user.id) {
     await requireAdmin(event)

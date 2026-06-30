@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 const CONFIG_KEY = 'email.syncHistoryDays'
@@ -10,3 +10,4 @@ export default defineEventHandler(async (event) => {
   const days = typeof row?.value === 'number' ? row.value : DEFAULT_DAYS
   return { emailSyncHistoryDays: days }
 })
+

@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!step) {
-    throw createError({ statusCode: 404, statusMessage: 'Krok nebyl nalezen nebo již neběží.' })
+    throw createError({ statusCode: 404, message: 'Krok nebyl nalezen nebo již neběží.' })
   }
 
   cancelJob(stepId)

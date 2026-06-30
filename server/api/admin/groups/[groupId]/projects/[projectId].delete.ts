@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
 
   const project = await prisma.project.findUnique({ where: { id: projectId } })
   if (!project) {
-    throw createError({ statusCode: 404, statusMessage: 'Projekt nebyl nalezen.' })
+    throw createError({ statusCode: 404, message: 'Projekt nebyl nalezen.' })
   }
 
   await prisma.project.delete({ where: { id: projectId } })

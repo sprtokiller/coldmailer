@@ -16,9 +16,9 @@ export default defineEventHandler(async (event) => {
     where: { id: stepId },
     select: { stepType: true },
   })
-  if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
+  if (!step) throw createError({ statusCode: 404, message: 'Step not found' })
   if (step.stepType !== 'MARKET_SCANNING') {
-    throw createError({ statusCode: 400, statusMessage: 'Selection endpoint is only for MARKET_SCANNING steps.' })
+    throw createError({ statusCode: 400, message: 'Selection endpoint is only for MARKET_SCANNING steps.' })
   }
 
   await prisma.pipelineStep.update({

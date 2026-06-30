@@ -6,9 +6,9 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const run = await prisma.pipelineRun.findUnique({ where: { id }, select: { authorId: true } })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline nenalezena.' })
+  if (!run) throw createError({ statusCode: 404, message: 'Pipeline nenalezena.' })
   if (run.authorId !== user.id) {
-    throw createError({ statusCode: 403, statusMessage: 'Pouze autor může pipeline smazat.' })
+    throw createError({ statusCode: 403, message: 'Pouze autor může pipeline smazat.' })
   }
 
   await prisma.pipelineRun.delete({ where: { id } })

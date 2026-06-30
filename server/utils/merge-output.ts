@@ -1,4 +1,4 @@
-export function mergeScalar(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
+﻿export function mergeScalar(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
   const result = { ...existing }
   for (const [k, v] of Object.entries(incoming)) {
     if (v !== null && v !== undefined && v !== '') result[k] = v
@@ -123,3 +123,4 @@ export function mergeOutputData(existing: unknown, newData: unknown, stepType: s
   }
   return [...recordMap.values()]
 }
+

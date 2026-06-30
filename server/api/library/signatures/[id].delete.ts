@@ -7,12 +7,12 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const sig = await prisma.signature.findUnique({ where: { id } })
-  if (!sig) throw createError({ statusCode: 404, statusMessage: 'Podpis nenalezen' })
+  if (!sig) throw createError({ statusCode: 404, message: 'Podpis nenalezen' })
 
   if (sig.isSystem) {
     await requireAdmin(event)
   } else {
-    if (sig.authorId !== user.id) throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění smazat tento podpis' })
+    if (sig.authorId !== user.id) throw createError({ statusCode: 403, message: 'Nemáte oprávnění smazat tento podpis' })
   }
 
   await prisma.signature.delete({ where: { id } })

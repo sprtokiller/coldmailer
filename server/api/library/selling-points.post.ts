@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
@@ -28,3 +28,4 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
+

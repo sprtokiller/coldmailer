@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const draft = await prisma.emailDraft.findUnique({ where: { id } })
-  if (!draft) throw createError({ statusCode: 404, statusMessage: 'E-mailová šablona nenalezena' })
+  if (!draft) throw createError({ statusCode: 404, message: 'E-mailová šablona nenalezena' })
 
   if (draft.authorId !== user.id) {
     await requireAdmin(event)

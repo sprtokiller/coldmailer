@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  if (!record) throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  if (!record) throw createError({ statusCode: 404, message: 'Not found' })
 
   const currentRef = record.pipelineRefs[0]
 

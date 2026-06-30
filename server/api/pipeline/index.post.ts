@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { requireProjectAccess } from '~/server/utils/permissions'
 
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!body.projectId) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Uživatel musí být přiřazen ke konkrétnímu projektu.',
+      message: 'UĹľivatel musĂ­ bĂ˝t pĹ™iĹ™azen ke konkrĂ©tnĂ­mu projektu.',
     })
   }
 
@@ -32,3 +32,4 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
+

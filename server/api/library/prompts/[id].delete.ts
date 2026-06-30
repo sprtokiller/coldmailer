@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const prompt = await prisma.systemPrompt.findUnique({ where: { id } })
-  if (!prompt) throw createError({ statusCode: 404, statusMessage: 'Prompt nenalezen' })
+  if (!prompt) throw createError({ statusCode: 404, message: 'Prompt nenalezen' })
 
   if (prompt.isSystem) {
     await requireAdmin(event)

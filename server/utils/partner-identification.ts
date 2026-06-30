@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+﻿import OpenAI from 'openai'
 import { serpSearch, type SerpResult } from './serpapi'
 import { fetchPages, isSkippableUrl } from './page-fetcher'
 import { prisma } from './prisma'
@@ -22,11 +22,11 @@ export function findItemArray(
   if (Array.isArray(data)) return { items: data as Record<string, unknown>[] }
   if (data && typeof data === 'object') {
     const arrays = Object.values(data as Record<string, unknown>).filter(Array.isArray) as unknown[][]
-    if (arrays.length === 0) return { error: 'Vstupní JSON neobsahuje žádné pole.' }
-    if (arrays.length > 1) return { error: `Vstupní JSON obsahuje ${arrays.length} pole – musí být právě jedno.` }
+    if (arrays.length === 0) return { error: 'VstupnĂ­ JSON neobsahuje ĹľĂˇdnĂ© pole.' }
+    if (arrays.length > 1) return { error: `VstupnĂ­ JSON obsahuje ${arrays.length} pole â€“ musĂ­ bĂ˝t prĂˇvÄ› jedno.` }
     return { items: arrays[0] as Record<string, unknown>[] }
   }
-  return { error: 'Vstupní data nejsou JSON objekt ani pole.' }
+  return { error: 'VstupnĂ­ data nejsou JSON objekt ani pole.' }
 }
 
 async function fetchGenerationCost(generationId: string): Promise<number> {
@@ -74,13 +74,13 @@ function buildExtractionContext(serp: SerpResult, page?: { url: string; title: s
     parts.push(
       `Page title: ${page.title}`,
       `Page text:\n${page.text.slice(0, 8_000)}`,
-      page.links.length ? `Links:\n${page.links.slice(0, 50).map(l => `${l.text} → ${l.href}`).join('\n')}` : '',
+      page.links.length ? `Links:\n${page.links.slice(0, 50).map(l => `${l.text} â†’ ${l.href}`).join('\n')}` : '',
       page.alts.length ? `Image alts: ${page.alts.join(', ')}` : '',
     )
   } else if (!serp.snippet?.trim()) {
     return null
   } else {
-    parts.push('(Stránku se nepodařilo načíst – použij Google snippet a název výsledku.)')
+    parts.push('(StrĂˇnku se nepodaĹ™ilo naÄŤĂ­st â€“ pouĹľij Google snippet a nĂˇzev vĂ˝sledku.)')
   }
 
   return parts.filter(Boolean).join('\n\n')
@@ -108,15 +108,15 @@ function classifySerpPage(serp: SerpResult, page?: { ok: boolean; text: string }
 }
 
 const PAGE_STATUS_LABELS: Record<SerpPageStatus, string> = {
-  loaded: '✓ načteno',
-  snippet: '⚠ nedostupná → snippet z Google',
-  unavailable: '✗ nedostupná',
-  skipped: '⊘ přeskočeno (sociální síť)',
+  loaded: 'âś“ naÄŤteno',
+  snippet: 'âš  nedostupnĂˇ â†’ snippet z Google',
+  unavailable: 'âś— nedostupnĂˇ',
+  skipped: 'âŠ pĹ™eskoÄŤeno (sociĂˇlnĂ­ sĂ­ĹĄ)',
 }
 
 function formatSerpPagesProgress(pages: SerpPageInfo[]): string {
   if (pages.length === 0) return ''
-  return `  📋 Nalezené stránky:\n${pages.map(p => `    ${PAGE_STATUS_LABELS[p.status]}  ${p.url}`).join('\n')}\n`
+  return `  đź“‹ NalezenĂ© strĂˇnky:\n${pages.map(p => `    ${PAGE_STATUS_LABELS[p.status]}  ${p.url}`).join('\n')}\n`
 }
 
 export interface ItemProgress {
@@ -153,18 +153,18 @@ export async function* runPartnerIdentification(
   const client = createClient()
 
   const found = findItemArray(inputData)
-  if ('error' in found) { yield { type: 'progress', text: `❌ ${found.error}\n` }; return }
+  if ('error' in found) { yield { type: 'progress', text: `âťŚ ${found.error}\n` }; return }
   const items = found.items
-  if (items.length === 0) { yield { type: 'progress', text: '❌ Pole je prázdné.\n' }; return }
+  if (items.length === 0) { yield { type: 'progress', text: 'âťŚ Pole je prĂˇzdnĂ©.\n' }; return }
 
-  yield { type: 'progress', text: `✓ Nalezeno ${items.length} položek. Spouštím pipeline…\n` }
+  yield { type: 'progress', text: `âś“ Nalezeno ${items.length} poloĹľek. SpouĹˇtĂ­m pipelineâ€¦\n` }
 
   const inputSource = await prisma.inputSource.create({
     data: {
       type: 'MINI_DEEP_RESEARCH',
       pipelineRunId,
       stepId,
-      label: `Partner Identification – ${new Date().toLocaleString('cs-CZ')}`,
+      label: `Partner Identification â€“ ${new Date().toLocaleString('cs-CZ')}`,
       createdBy: userId,
     },
   })
@@ -173,29 +173,29 @@ export async function* runPartnerIdentification(
 
   for (let i = 0; i < items.length; i++) {
     if (signal?.aborted) {
-      yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }
+      yield { type: 'progress', text: '\nâ›” Krok byl zruĹˇen.\n' }
       return
     }
     const item = items[i]
-    const itemName = String(item.name ?? item.title ?? item.url ?? `Položka ${i + 1}`)
+    const itemName = String(item.name ?? item.title ?? item.url ?? `PoloĹľka ${i + 1}`)
 
-    yield { type: 'progress', text: `\n── [${i + 1}/${items.length}] ${itemName}\n` }
+    yield { type: 'progress', text: `\nâ”€â”€ [${i + 1}/${items.length}] ${itemName}\n` }
     yield { type: 'item', item: { index: i + 1, total: items.length, itemName, status: 'processing' } }
 
     try {
-      // a) Search term — constructed directly, no AI call needed
-      const searchTerm = `${itemName} partneři`
-      yield { type: 'progress', text: `  ✓ search term: "${searchTerm}"\n` }
+      // a) Search term â€” constructed directly, no AI call needed
+      const searchTerm = `${itemName} partneĹ™i`
+      yield { type: 'progress', text: `  âś“ search term: "${searchTerm}"\n` }
 
       // b) SerpAPI
-      yield { type: 'progress', text: `  ⧳ Hledám v Google…\n` }
+      yield { type: 'progress', text: `  â§ł HledĂˇm v Googleâ€¦\n` }
       const serpResults = prioritizeSerpResults(await serpSearch(searchTerm, {
         userId,
         pipelineStepId: stepId,
         stepType: 'PARTNER_IDENTIFICATION',
       }))
-      if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
-      yield { type: 'progress', text: `  ✓ ${serpResults.length} výsledků\n` }
+      if (signal?.aborted) { yield { type: 'progress', text: '\nâ›” Krok byl zruĹˇen.\n' }; return }
+      yield { type: 'progress', text: `  âś“ ${serpResults.length} vĂ˝sledkĹŻ\n` }
       yield {
         type: 'progress',
         text: serpResults.map((r, n) => `    ${n + 1}. ${r.title}\n       ${r.url}`).join('\n') + '\n',
@@ -208,16 +208,16 @@ export async function* runPartnerIdentification(
       }
 
       // c-d) Fetch pages via Playwright (fallback to SerpAPI snippet when unreachable)
-      yield { type: 'progress', text: `  ⟳ Načítám ${serpResults.length} stránek…\n` }
+      yield { type: 'progress', text: `  âźł NaÄŤĂ­tĂˇm ${serpResults.length} strĂˇnekâ€¦\n` }
       let pages: Awaited<ReturnType<typeof fetchPages>> = []
       try {
         pages = await fetchPages(serpResults.map(r => r.url))
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        yield { type: 'progress', text: `  ⚠ Načítání stránek selhalo (${msg}) – pokračuji se snippety z Google\n` }
+        yield { type: 'progress', text: `  âš  NaÄŤĂ­tĂˇnĂ­ strĂˇnek selhalo (${msg}) â€“ pokraÄŤuji se snippety z Google\n` }
         pages = serpResults.map(r => ({ url: r.url, title: '', text: '', links: [], alts: [], ok: false }))
       }
-      if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
+      if (signal?.aborted) { yield { type: 'progress', text: '\nâ›” Krok byl zruĹˇen.\n' }; return }
       const pageByUrl = new Map(pages.map(p => [p.url, p]))
       const pageStatuses = serpResults.map(serp => classifySerpPage(serp, pageByUrl.get(serp.url)))
       const pagesLoaded = pageStatuses.filter(p => p.status === 'loaded').length
@@ -227,7 +227,7 @@ export async function* runPartnerIdentification(
       yield { type: 'progress', text: formatSerpPagesProgress(pageStatuses) }
       yield {
         type: 'progress',
-        text: `  ✓ Načteno ${pagesLoaded}/${serpResults.length}${snippetFallbacks ? `, ${snippetFallbacks}× snippet` : ''}${unavailable ? `, ${unavailable}× nedostupné` : ''}\n`,
+        text: `  âś“ NaÄŤteno ${pagesLoaded}/${serpResults.length}${snippetFallbacks ? `, ${snippetFallbacks}Ă— snippet` : ''}${unavailable ? `, ${unavailable}Ă— nedostupnĂ©` : ''}\n`,
       }
       yield {
         type: 'item',
@@ -246,7 +246,7 @@ export async function* runPartnerIdentification(
       // e) Extract partners from each result (page content or SerpAPI snippet)
       const foundPartners: Array<{ name: string; website?: string; description?: string; type?: string }> = []
       for (const serp of serpResults) {
-        if (signal?.aborted) { yield { type: 'progress', text: '\n⛔ Krok byl zrušen.\n' }; return }
+        if (signal?.aborted) { yield { type: 'progress', text: '\nâ›” Krok byl zruĹˇen.\n' }; return }
         const pg = pageByUrl.get(serp.url)
         const ctx = buildExtractionContext(serp, pg)
         if (!ctx) continue
@@ -266,10 +266,10 @@ export async function* runPartnerIdentification(
           foundPartners.push(...(list as typeof foundPartners).filter(p => p?.name))
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          yield { type: 'progress', text: `  ⚠ Extrakce z ${serp.url} selhala: ${msg}\n` }
+          yield { type: 'progress', text: `  âš  Extrakce z ${serp.url} selhala: ${msg}\n` }
         }
       }
-      yield { type: 'progress', text: `  ✓ ${foundPartners.length} potenciálních partnerů\n` }
+      yield { type: 'progress', text: `  âś“ ${foundPartners.length} potenciĂˇlnĂ­ch partnerĹŻ\n` }
 
       // f-g) Dedup + save to GlobalRecord
       let newCount = 0; let existingCount = 0
@@ -295,7 +295,7 @@ export async function* runPartnerIdentification(
         } catch {}
       }
 
-      yield { type: 'progress', text: `  ✓ Uloženo: ${newCount} nových, ${existingCount} existujících\n` }
+      yield { type: 'progress', text: `  âś“ UloĹľeno: ${newCount} novĂ˝ch, ${existingCount} existujĂ­cĂ­ch\n` }
       allResults.push({ itemName, searchTerm, serpResults: serpResults.length, pagesLoaded, pages: pageStatuses, partners: savedPartners })
       yield {
         type: 'item',
@@ -313,12 +313,13 @@ export async function* runPartnerIdentification(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      yield { type: 'progress', text: `  ❌ ${msg}\n` }
+      yield { type: 'progress', text: `  âťŚ ${msg}\n` }
       yield { type: 'item', item: { index: i + 1, total: items.length, itemName, status: 'error', error: msg } }
       allResults.push({ itemName, error: msg })
     }
   }
 
-  yield { type: 'progress', text: `\n✅ Hotovo! Zpracováno ${items.length} položek.\n` }
+  yield { type: 'progress', text: `\nâś… Hotovo! ZpracovĂˇno ${items.length} poloĹľek.\n` }
   yield { type: 'output', data: { items: allResults, totalItems: items.length }, totalCostUsd }
 }
+

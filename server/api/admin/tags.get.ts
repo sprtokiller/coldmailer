@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 const TAG_KEY = 'tags.partnerIndustry'
@@ -9,3 +9,4 @@ export default defineEventHandler(async (event) => {
   const tags = (row?.value as string[] | null) ?? []
   return { tags }
 })
+

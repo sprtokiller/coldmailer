@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
   const step = await prisma.pipelineStep.findUnique({ where: { id: stepId } })
-  if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
+  if (!step) throw createError({ statusCode: 404, message: 'Step not found' })
 
   const refs = await getStepRecords(stepId, {
     inputSourceId: query.inputSourceId as string | undefined,

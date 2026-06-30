@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const runId = getRouterParam(event, 'id')!
   const stepId = getRouterParam(event, 'stepId')!
   const { name, url, type = 'COMPETITION' } = await readBody<{ name: string; url?: string; type?: string }>(event)
-  if (!name?.trim()) throw createError({ statusCode: 400, statusMessage: 'name required' })
+  if (!name?.trim()) throw createError({ statusCode: 400, message: 'name required' })
 
   const step = await prisma.pipelineStep.findUnique({ where: { id: stepId } })
   if (!step) throw createError({ statusCode: 404 })

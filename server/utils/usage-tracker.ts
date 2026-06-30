@@ -1,6 +1,6 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface TrackAIOptions {
   userId: string
@@ -17,7 +17,7 @@ export interface TrackSerpOptions {
   stepType?: string
 }
 
-// ── Reset helpers ─────────────────────────────────────────────────────────────
+// â”€â”€ Reset helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getNextResetDate(from: Date, period: string): Date | null {
   const d = new Date(from)
@@ -43,7 +43,7 @@ export async function maybeResetBudget(userId: string) {
   const nextReset = getNextResetDate(budget.periodStartAt, budget.resetPeriod)
   if (!nextReset || new Date() < nextReset) return budget
 
-  // Atomic conditional update — only resets if periodStartAt hasn't changed (CAS pattern)
+  // Atomic conditional update â€” only resets if periodStartAt hasn't changed (CAS pattern)
   await prisma.userBudget.updateMany({
     where: { userId, periodStartAt: budget.periodStartAt },
     data: { usedUsd: 0, periodStartAt: new Date() },
@@ -52,7 +52,7 @@ export async function maybeResetBudget(userId: string) {
   return prisma.userBudget.findUnique({ where: { userId } })
 }
 
-// ── Cost enforcement ──────────────────────────────────────────────────────────
+// â”€â”€ Cost enforcement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Returns true if the user has exceeded their limit.
@@ -64,11 +64,11 @@ export async function isOverBudget(userId: string): Promise<{ over: boolean; lim
   return { over: budget.usedUsd >= budget.limitUsd, limitUsd: budget.limitUsd }
 }
 
-// ── Tracking ──────────────────────────────────────────────────────────────────
+// â”€â”€ Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Records an AI completion event and increments the user's usedUsd counter.
- * Non-fatal — errors are swallowed so pipeline never breaks.
+ * Non-fatal â€” errors are swallowed so pipeline never breaks.
  */
 export async function trackAIUsage(opts: TrackAIOptions): Promise<void> {
   try {
@@ -119,7 +119,7 @@ export async function trackSerpUsage(opts: TrackSerpOptions): Promise<void> {
   }
 }
 
-// ── System config helpers ─────────────────────────────────────────────────────
+// â”€â”€ System config helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface DefaultBudgetConfig {
   limitUsd: number | null
@@ -169,3 +169,4 @@ export async function applyDefaultBudgetToUser(userId: string): Promise<void> {
     },
   })
 }
+

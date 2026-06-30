@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ outputData: unknown }>(event)
 
   const step = await prisma.pipelineStep.findUnique({ where: { id: stepId } })
-  if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
+  if (!step) throw createError({ statusCode: 404, message: 'Step not found' })
 
   return prisma.pipelineStep.update({
     where: { id: stepId },

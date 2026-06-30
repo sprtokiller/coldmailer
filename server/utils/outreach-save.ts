@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+﻿import { Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 
 export function matchPartnerName(entry: Record<string, unknown>, partnerName: string): boolean {
@@ -80,3 +80,4 @@ export async function markOutreachError(
     sendErrorAt: new Date().toISOString(),
   })
 }
+

@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  if (!record) throw createError({ statusCode: 404, statusMessage: 'GlobalRecord not found' })
+  if (!record) throw createError({ statusCode: 404, message: 'GlobalRecord not found' })
 
   const currentPayload = asProfileData(record.payload)
   const current = currentPayload && hasProfileData(currentPayload)

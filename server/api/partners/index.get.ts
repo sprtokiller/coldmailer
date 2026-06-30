@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 
@@ -74,3 +74,4 @@ export default defineEventHandler(async (event) => {
     }
   })
 })
+

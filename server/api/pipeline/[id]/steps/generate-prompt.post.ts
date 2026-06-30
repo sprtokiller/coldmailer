@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     where: { id: runId },
     include: { project: { include: { group: true } } },
   })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Run not found' })
 
   const scopeFilter = libraryScopeForProject(run.project)
 

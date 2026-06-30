@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
 
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   if (!body.content.includes('<[[SCHEMA]]>')) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
+      message: 'Prompt musĂ­ obsahovat placeholder <[[SCHEMA]]> pro vloĹľenĂ­ vĂ˝stupnĂ­ho schĂ©matu.',
     })
   }
 
@@ -38,3 +38,4 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
+

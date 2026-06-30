@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 
   const name = body.canonicalName?.trim()
   if (!name) {
-    throw createError({ statusCode: 400, statusMessage: 'Název partnera je povinný.' })
+    throw createError({ statusCode: 400, message: 'NĂˇzev partnera je povinnĂ˝.' })
   }
 
   const normalized = normalizeName(name)
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   if (existing) {
     throw createError({
       statusCode: 409,
-      statusMessage: `Partner "${existing.canonicalName}" již existuje.`,
+      message: `Partner "${existing.canonicalName}" jiĹľ existuje.`,
       data: { existingId: existing.id, existingName: existing.canonicalName },
     })
   }
@@ -112,3 +112,4 @@ export default defineEventHandler(async (event) => {
 
   return { record, interaction }
 })
+

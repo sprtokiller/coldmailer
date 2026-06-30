@@ -1,4 +1,4 @@
-import { chromium } from 'playwright'
+﻿import { chromium } from 'playwright'
 
 export interface PageContent {
   url: string
@@ -89,3 +89,4 @@ export async function fetchPages(urls: string[]): Promise<PageContent[]> {
   }
   return results
 }
+

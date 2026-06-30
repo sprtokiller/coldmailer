@@ -1,7 +1,7 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import type { RecordType } from '@prisma/client'
 
-// ── Jaro-Winkler ─────────────────────────────────────────────────────────────
+// â”€â”€ Jaro-Winkler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function jaro(s1: string, s2: string): number {
   if (s1 === s2) return 1
@@ -45,11 +45,11 @@ function jaroWinkler(s1: string, s2: string, p = 0.1): number {
   return j + prefix * p * (1 - j)
 }
 
-// ── Name normalisation ────────────────────────────────────────────────────────
+// â”€â”€ Name normalisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const LEGAL_SUFFIXES = /\b(s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.?\s*s\.?\s*r\.?\s*o\.?|k\.s\.|v\.o\.s\.|z\.?\s*s\.?|o\.?\s*p\.?\s*s\.?|LLC|Ltd\.?|GmbH\.?|Inc\.?|Corp\.?|Co\.?|S\.A\.|N\.V\.)\b/gi
 const BUSINESS_SUFFIXES = /\b(group|holding|systems|services|solutions)\b/gi
-const CZECH_COMPETITION_SUFFIXES = /\b(olympiáda|soutěž|liga|challenge|hackathon|cup|championship)\b/gi
+const CZECH_COMPETITION_SUFFIXES = /\b(olympiĂˇda|soutÄ›Ĺľ|liga|challenge|hackathon|cup|championship)\b/gi
 const PARENTHETICALS = /\([^)]*\)/g
 
 export function normalizeName(name: string): string {
@@ -72,7 +72,7 @@ function extractDomain(url: string): string | null {
   }
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface DeduplicationResult {
   matchStatus: 'exact_match' | 'probable_match' | 'possible_match' | 'unique'
@@ -88,7 +88,7 @@ interface DeduplicationCandidate {
   type: RecordType
 }
 
-// ── LLM adjudication (Tier 3) ─────────────────────────────────────────────────
+// â”€â”€ LLM adjudication (Tier 3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function llmAdjudicate(
   candidate: DeduplicationCandidate,
@@ -117,7 +117,7 @@ async function llmAdjudicate(
 Candidate: "${candidate.name}"${candidate.url ? ` (${candidate.url})` : ''}
 
 Existing records:
-${top3.map((r, i) => `${i + 1}. "${r.name}" — ${r.snippet}`).join('\n')}
+${top3.map((r, i) => `${i + 1}. "${r.name}" â€” ${r.snippet}`).join('\n')}
 
 Reply with JSON only: { "matchIndex": 1|2|3|null, "confidence": 0.0-1.0, "explanation": "..." }
 matchIndex is the 1-based index of the best match, or null if none match.`,
@@ -140,7 +140,7 @@ matchIndex is the 1-based index of the best match, or null if none match.`,
   }
 }
 
-// ── Main deduplication check ───────────────────────────────────────────────────
+// â”€â”€ Main deduplication check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function checkDuplicate(candidate: DeduplicationCandidate): Promise<DeduplicationResult> {
   const normalizedCandidate = normalizeName(candidate.name)
@@ -235,7 +235,7 @@ export async function checkDuplicate(candidate: DeduplicationCandidate): Promise
           matchStatus: 'possible_match',
           confidence: llm.confidence,
           matchedRecordId: llm.matchedId,
-          explanation: `LLM: uncertain match — ${llm.explanation}`,
+          explanation: `LLM: uncertain match â€” ${llm.explanation}`,
           recommendedAction: 'review',
         }
       }
@@ -248,8 +248,9 @@ export async function checkDuplicate(candidate: DeduplicationCandidate): Promise
     matchStatus: 'unique',
     confidence: bestScore,
     explanation: bestScore >= 0.70
-      ? `Best fuzzy match "${bestRecord?.canonicalName}" (${(bestScore * 100).toFixed(0)}%) — LLM ruled out`
+      ? `Best fuzzy match "${bestRecord?.canonicalName}" (${(bestScore * 100).toFixed(0)}%) â€” LLM ruled out`
       : `No close match found (best similarity: ${(bestScore * 100).toFixed(0)}%)`,
     recommendedAction: 'create',
   }
 }
+

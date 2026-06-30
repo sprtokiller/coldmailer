@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const roleId = getRouterParam(event, 'roleId')!
   const { userId } = await readBody<{ userId: string }>(event)
 
-  if (!userId) throw createError({ statusCode: 400, statusMessage: 'userId je povinné' })
+  if (!userId) throw createError({ statusCode: 400, message: 'userId je povinné' })
 
   return prisma.userProjectRole.upsert({
     where: { userId_projectRoleId: { userId, projectRoleId: roleId } },

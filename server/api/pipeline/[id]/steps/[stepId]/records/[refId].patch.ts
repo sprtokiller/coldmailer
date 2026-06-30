@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const ref = await prisma.pipelineRecordRef.findUnique({ where: { id: refId } })
-  if (!ref) throw createError({ statusCode: 404, statusMessage: 'Ref not found' })
+  if (!ref) throw createError({ statusCode: 404, message: 'Ref not found' })
 
   return prisma.pipelineRecordRef.update({
     where: { id: refId },

@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const part = await prisma.contextPart.findUnique({ where: { id } })
-  if (!part) throw createError({ statusCode: 404, statusMessage: 'Context part not found' })
+  if (!part) throw createError({ statusCode: 404, message: 'Context part not found' })
 
   if (part.authorId !== user.id) {
     await requireAdmin(event)

@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<SaveBody>(event)
 
   if (!body.partnerName) {
-    throw createError({ statusCode: 400, statusMessage: 'partnerName je povinný.' })
+    throw createError({ statusCode: 400, message: 'partnerName je povinný.' })
   }
 
   const { entry } = await upsertOutreachEntry(runId, user.id, user.name, body.partnerName, {

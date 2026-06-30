@@ -1,4 +1,4 @@
-import { StepType, type Prisma } from '@prisma/client'
+﻿import { StepType, type Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getLibraryScopeFilter } from '~/server/utils/libraryScope'
@@ -30,3 +30,4 @@ export default defineEventHandler(async (event) => {
     orderBy: { createdAt: 'desc' },
   })
 })
+

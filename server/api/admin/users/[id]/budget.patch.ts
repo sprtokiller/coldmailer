@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ limitUsd: number | null }>(event)
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) throw createError({ statusCode: 404, statusMessage: 'Uživatel nenalezen' })
+  if (!user) throw createError({ statusCode: 404, message: 'Uživatel nenalezen' })
 
   return prisma.userBudget.upsert({
     where: { userId },

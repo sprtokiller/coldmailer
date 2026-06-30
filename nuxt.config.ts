@@ -77,6 +77,7 @@ export default defineNuxtConfig({
     googleClientId: '',
     googleClientSecret: '',
     googleRedirectUri: 'http://localhost:3000/api/auth/callback/google',
+    adminEmails: '',
     openRouterApiKey: '',
     openRouterManagementKey: '',
     serpApiKeys: '',

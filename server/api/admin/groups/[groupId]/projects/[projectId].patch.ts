@@ -8,18 +8,18 @@ export default defineEventHandler(async (event) => {
 
   const project = await prisma.project.findUnique({ where: { id: projectId } })
   if (!project) {
-    throw createError({ statusCode: 404, statusMessage: 'Projekt nebyl nalezen.' })
+    throw createError({ statusCode: 404, message: 'Projekt nebyl nalezen.' })
   }
 
   const data: Record<string, unknown> = {}
   if (body.name !== undefined) {
     const trimmed = body.name.trim()
-    if (!trimmed) throw createError({ statusCode: 400, statusMessage: 'Název nesmí být prázdný.' })
+    if (!trimmed) throw createError({ statusCode: 400, message: 'Název nesmí být prázdný.' })
     data.name = trimmed
   }
 
   if (Object.keys(data).length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'Nic ke změně.' })
+    throw createError({ statusCode: 400, message: 'Nic ke změně.' })
   }
 
   return prisma.project.update({

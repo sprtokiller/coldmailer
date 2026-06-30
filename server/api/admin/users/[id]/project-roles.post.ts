@@ -10,8 +10,8 @@ export default defineEventHandler(async (event) => {
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.projectRole.findUnique({ where: { id: body.projectRoleId } }),
   ])
-  if (!user) throw createError({ statusCode: 404, statusMessage: 'Uživatel nenalezen.' })
-  if (!projectRole) throw createError({ statusCode: 404, statusMessage: 'Projektová role nenalezena.' })
+  if (!user) throw createError({ statusCode: 404, message: 'Uživatel nenalezen.' })
+  if (!projectRole) throw createError({ statusCode: 404, message: 'Projektová role nenalezena.' })
 
   return prisma.userProjectRole.upsert({
     where: { userId_projectRoleId: { userId, projectRoleId: body.projectRoleId } },

@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
 
   const part = await prisma.contextPart.findUnique({ where: { id } })
-  if (!part) throw createError({ statusCode: 404, statusMessage: 'Kontextová část nenalezena' })
+  if (!part) throw createError({ statusCode: 404, message: 'Kontextová část nenalezena' })
 
   if (part.authorId !== user.id) {
     await requireAdmin(event)

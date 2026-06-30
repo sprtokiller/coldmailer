@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+﻿import OpenAI from 'openai'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
 import { OPENROUTER, MODELS, COPY_PROMPT_STEPS, STEP_MODEL } from '~/config/pipeline'
 
@@ -110,3 +110,4 @@ export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, exte
 
   return { stream: generator(), getCost }
 }
+

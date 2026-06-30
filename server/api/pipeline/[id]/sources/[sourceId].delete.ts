@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     include: { recordRefs: { select: { id: true, globalRecordId: true } } },
   })
   if (!source || source.pipelineRunId !== pipelineRunId) {
-    throw createError({ statusCode: 404, statusMessage: 'Source not found' })
+    throw createError({ statusCode: 404, message: 'Source not found' })
   }
 
   if (action === 'delete_new') {

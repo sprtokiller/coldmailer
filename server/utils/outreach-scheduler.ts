@@ -1,4 +1,4 @@
-interface ScheduledSend {
+﻿interface ScheduledSend {
   timerId: ReturnType<typeof setTimeout>
   runId: string
   userId: string
@@ -31,3 +31,4 @@ export function cancelOutreachSend(id: string, userId: string): boolean {
   pending.delete(id)
   return true
 }
+

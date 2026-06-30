@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAdmin } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
@@ -11,3 +11,4 @@ export default defineEventHandler(async (event) => {
     orderBy: { name: 'asc' },
   })
 })
+

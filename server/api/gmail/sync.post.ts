@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { syncGmailForUser } from '~/server/utils/gmail-sync'
 
@@ -34,3 +34,4 @@ export default defineEventHandler(async (event) => {
     return { synced: 0, skipped: 'error' }
   }
 })
+

@@ -1,4 +1,4 @@
-const registry = new Map<string, AbortController>()
+﻿const registry = new Map<string, AbortController>()
 
 export function registerJob(stepId: string): AbortController {
   const controller = new AbortController()
@@ -9,7 +9,7 @@ export function registerJob(stepId: string): AbortController {
 export function cancelJob(stepId: string): boolean {
   const controller = registry.get(stepId)
   if (!controller) return false
-  controller.abort(new Error('Zrušeno uživatelem'))
+  controller.abort(new Error('ZruĹˇeno uĹľivatelem'))
   registry.delete(stepId)
   return true
 }
@@ -17,3 +17,4 @@ export function cancelJob(stepId: string): boolean {
 export function cleanupJob(stepId: string): void {
   registry.delete(stepId)
 }
+

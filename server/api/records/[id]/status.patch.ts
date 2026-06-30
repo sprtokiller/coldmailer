@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const { status, pipelineRunId } = await readBody<{ status: string; pipelineRunId?: string }>(event)
 
   const record = await prisma.globalRecord.findUnique({ where: { id: recordId } })
-  if (!record) throw createError({ statusCode: 404, statusMessage: 'Record not found' })
+  if (!record) throw createError({ statusCode: 404, message: 'Record not found' })
 
   await updateRelevanceStatus(recordId, status as never, user.id, pipelineRunId)
   return { id: recordId, relevanceStatus: status }

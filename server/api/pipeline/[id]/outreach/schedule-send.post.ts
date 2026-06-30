@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<ScheduleBody>(event)
 
   if (!body.to || !body.subject || !body.body || !body.partnerName) {
-    throw createError({ statusCode: 400, statusMessage: 'partnerName, to, subject a body jsou povinné.' })
+    throw createError({ statusCode: 400, message: 'partnerName, to, subject a body jsou povinné.' })
   }
 
   const { stepId } = await upsertOutreachEntry(runId, user.id, user.name, body.partnerName, {

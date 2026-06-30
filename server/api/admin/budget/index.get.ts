@@ -1,4 +1,4 @@
-import { requireAuth } from '~/server/utils/requireAuth'
+﻿import { requireAuth } from '~/server/utils/requireAuth'
 import { requireAdmin } from '~/server/utils/permissions'
 import { prisma } from '~/server/utils/prisma'
 import { getDefaultBudgetConfig } from '~/server/utils/usage-tracker'
@@ -53,3 +53,4 @@ export default defineEventHandler(async (event) => {
 
   return { users: usersWithStats, defaultBudget }
 })
+

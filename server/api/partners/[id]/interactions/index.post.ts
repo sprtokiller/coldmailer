@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const projectId = scope.project?.id
 
   if (!projectId) {
-    throw createError({ statusCode: 400, statusMessage: 'Není vybrán žádný projekt.' })
+    throw createError({ statusCode: 400, message: 'Není vybrán žádný projekt.' })
   }
 
   const body = await readBody<{
@@ -28,22 +28,22 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   if (!body.type) {
-    throw createError({ statusCode: 400, statusMessage: 'Typ jednání je povinný.' })
+    throw createError({ statusCode: 400, message: 'Typ jednání je povinný.' })
   }
 
   if (body.type === 'NOTE' && !body.content?.trim()) {
-    throw createError({ statusCode: 400, statusMessage: 'Obsah poznámky je povinný.' })
+    throw createError({ statusCode: 400, message: 'Obsah poznámky je povinný.' })
   }
 
   if (body.type === 'EMAIL') {
-    if (!body.subject?.trim()) throw createError({ statusCode: 400, statusMessage: 'Předmět je povinný.' })
-    if (!body.sentAt) throw createError({ statusCode: 400, statusMessage: 'Datum odeslání je povinné.' })
-    if (!body.direction) throw createError({ statusCode: 400, statusMessage: 'Směr je povinný.' })
+    if (!body.subject?.trim()) throw createError({ statusCode: 400, message: 'Předmět je povinný.' })
+    if (!body.sentAt) throw createError({ statusCode: 400, message: 'Datum odeslání je povinné.' })
+    if (!body.direction) throw createError({ statusCode: 400, message: 'Směr je povinný.' })
   }
 
   const access = await getInteractionAccess(session.id, projectId)
   if (!access.isAdmin && !access.canEditAll) {
-    throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění vytvořit záznam jednání v tomto projektu.' })
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění vytvořit záznam jednání v tomto projektu.' })
   }
   const assigneeIds = body.assigneeIds ?? []
 

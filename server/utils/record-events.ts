@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 
 interface LogEventParams {
   globalRecordId: string
@@ -51,3 +51,4 @@ export async function getEventHistory(globalRecordId: string) {
     orderBy: { timestamp: 'desc' },
   })
 }
+

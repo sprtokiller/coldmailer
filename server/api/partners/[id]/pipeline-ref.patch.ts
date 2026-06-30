@@ -10,12 +10,12 @@ export default defineEventHandler(async (event) => {
   const projectId = scope.project?.id
 
   if (!projectId) {
-    throw createError({ statusCode: 400, statusMessage: 'No active project context' })
+    throw createError({ statusCode: 400, message: 'No active project context' })
   }
 
   const access = await getInteractionAccess(session.id, projectId)
   if (!access.canEditAll && !access.isAdmin) {
-    throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění editovat tohoto partnera.' })
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat tohoto partnera.' })
   }
 
   const body = await readBody(event)
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!currentRef) {
-    throw createError({ statusCode: 404, statusMessage: 'PipelineRecordRef not found for this partner in current project' })
+    throw createError({ statusCode: 404, message: 'PipelineRecordRef not found for this partner in current project' })
   }
 
   const data: any = {}

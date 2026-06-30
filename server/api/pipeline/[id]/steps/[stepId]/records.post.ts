@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
     prisma.pipelineStep.findUnique({ where: { id: stepId } }),
     prisma.globalRecord.findUnique({ where: { id: globalRecordId } }),
   ])
-  if (!step) throw createError({ statusCode: 404, statusMessage: 'Step not found' })
-  if (!record) throw createError({ statusCode: 404, statusMessage: 'GlobalRecord not found' })
+  if (!step) throw createError({ statusCode: 404, message: 'Step not found' })
+  if (!record) throw createError({ statusCode: 404, message: 'GlobalRecord not found' })
 
   // Enforce priority: skip if a higher-priority source already holds this record
   const existing = await prisma.pipelineRecordRef.findUnique({

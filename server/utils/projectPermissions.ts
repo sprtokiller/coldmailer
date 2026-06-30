@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+﻿import type { H3Event } from 'h3'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
@@ -10,18 +10,18 @@ export const PROJECT_PERMISSIONS = [
 export type ProjectPermissionKey = typeof PROJECT_PERMISSIONS[number]
 
 export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
-  'project.interactions.view_all': 'Vidí všechna jednání v projektu',
-  'project.interactions.edit_all': 'Edituje všechna jednání v projektu',
+  'project.interactions.view_all': 'VidĂ­ vĹˇechna jednĂˇnĂ­ v projektu',
+  'project.interactions.edit_all': 'Edituje vĹˇechna jednĂˇnĂ­ v projektu',
 }
 
 export const DEFAULT_PROJECT_ROLES = [
   {
-    name: 'Vedení obchodu',
+    name: 'VedenĂ­ obchodu',
     permissions: ['project.interactions.view_all', 'project.interactions.edit_all'] as string[],
     isSystem: true,
   },
   {
-    name: 'Obchodní tým',
+    name: 'ObchodnĂ­ tĂ˝m',
     permissions: ['project.interactions.view_all'] as string[],
     isSystem: true,
   },
@@ -78,13 +78,13 @@ export async function requireInteractionAccess(
   })
 
   if (!interaction) {
-    throw createError({ statusCode: 404, statusMessage: 'Jednání nebylo nalezeno.' })
+    throw createError({ statusCode: 404, message: 'JednĂˇnĂ­ nebylo nalezeno.' })
   }
 
   const access = await getInteractionAccess(session.id, interaction.projectId)
 
   if (!access.isAdmin && !access.canViewAll && !access.canEditAll) {
-    throw createError({ statusCode: 403, statusMessage: 'K tomuto projektu nemáte přístup.' })
+    throw createError({ statusCode: 403, message: 'K tomuto projektu nemĂˇte pĹ™Ă­stup.' })
   }
 
   const isAssignee = interaction.assignees.some(a => a.userId === session.id)
@@ -92,13 +92,14 @@ export async function requireInteractionAccess(
 
   if (mode === 'view') {
     if (!access.canViewAll && !isAssignee && !isCreator && !access.isAdmin) {
-      throw createError({ statusCode: 403, statusMessage: 'K tomuto jednání nemáte přístup.' })
+      throw createError({ statusCode: 403, message: 'K tomuto jednĂˇnĂ­ nemĂˇte pĹ™Ă­stup.' })
     }
   } else {
     if (!access.canEditAll && !isAssignee && !isCreator && !access.isAdmin) {
-      throw createError({ statusCode: 403, statusMessage: 'Nemáte oprávnění editovat toto jednání.' })
+      throw createError({ statusCode: 403, message: 'NemĂˇte oprĂˇvnÄ›nĂ­ editovat toto jednĂˇnĂ­.' })
     }
   }
 
   return { session, interaction, access, isAssignee, isCreator }
 }
+

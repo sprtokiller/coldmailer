@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+﻿import type { H3Event } from 'h3'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getUserScopeAccess } from '~/server/utils/permissions'
@@ -85,4 +85,5 @@ export async function getActiveGroup(event: H3Event) {
 export async function getActiveGroupId(event: H3Event): Promise<string | null> {
   return (await getActiveGroup(event))?.id ?? null
 }
+
 

@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 
 interface ProfileContact {
   email?: string
@@ -44,3 +44,4 @@ export async function syncProfileContactsToDb(
     }).catch(() => {})
   }
 }
+

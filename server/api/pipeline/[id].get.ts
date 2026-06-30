@@ -21,6 +21,6 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
   return run
 })

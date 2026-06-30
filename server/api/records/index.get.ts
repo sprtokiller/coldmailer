@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
@@ -58,3 +58,4 @@ export default defineEventHandler(async (event) => {
   const [records, total] = await Promise.all([findMany, prisma.globalRecord.count({ where })])
   return { records, total }
 })
+

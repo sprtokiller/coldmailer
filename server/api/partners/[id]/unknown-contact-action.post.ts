@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   if (!body.email || !body.action) {
-    throw createError({ statusCode: 400, statusMessage: 'email and action are required' })
+    throw createError({ statusCode: 400, message: 'email and action are required' })
   }
 
   const email = body.email.trim().toLowerCase()
@@ -103,5 +103,5 @@ export default defineEventHandler(async (event) => {
     return { ok: true }
   }
 
-  throw createError({ statusCode: 400, statusMessage: 'Invalid action' })
+  throw createError({ statusCode: 400, message: 'Invalid action' })
 })

@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
       },
     },
   })
-  if (!user) throw createError({ statusCode: 404, statusMessage: 'Uživatel nenalezen' })
+  if (!user) throw createError({ statusCode: 404, message: 'UĹľivatel nenalezen' })
 
   return {
     user: {
@@ -36,3 +36,4 @@ export default defineEventHandler(async (event) => {
     })),
   }
 })
+

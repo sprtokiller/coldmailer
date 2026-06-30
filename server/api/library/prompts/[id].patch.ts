@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const prompt = await prisma.systemPrompt.findUnique({ where: { id } })
-  if (!prompt) throw createError({ statusCode: 404, statusMessage: 'Prompt not found' })
+  if (!prompt) throw createError({ statusCode: 404, message: 'Prompt not found' })
 
   // isSystem prompts require prompts.system.edit
   if (prompt.isSystem) {
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   if (!body.content.includes('<[[SCHEMA]]>')) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
+      message: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
     })
   }
 

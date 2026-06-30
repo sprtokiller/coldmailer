@@ -8,14 +8,14 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ isAdmin: boolean }>(event)
 
   const user = await prisma.user.findUnique({ where: { id: targetUserId, googleId: { not: 'system' } } })
-  if (!user) throw createError({ statusCode: 404, statusMessage: 'Uživatel nenalezen' })
+  if (!user) throw createError({ statusCode: 404, message: 'Uživatel nenalezen' })
 
   if (!body.isAdmin) {
     const otherAdminCount = await prisma.user.count({
       where: { isAdmin: true, id: { not: targetUserId }, googleId: { not: 'system' } },
     })
     if (otherAdminCount === 0) {
-      throw createError({ statusCode: 400, statusMessage: 'Nelze odebrat status posledního admina. Nejprve přidělte admin status jinému uživateli.' })
+      throw createError({ statusCode: 400, message: 'Nelze odebrat status posledního admina. Nejprve přidělte admin status jinému uživateli.' })
     }
   }
 

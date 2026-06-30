@@ -17,12 +17,12 @@ export default defineEventHandler(async (event) => {
     isPrimary?: boolean
   }>(event)
 
-  if (!body.address) throw createError({ statusCode: 400, statusMessage: 'address required' })
+  if (!body.address) throw createError({ statusCode: 400, message: 'address required' })
 
   const address = body.address.trim().toLowerCase()
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(address)) {
-    throw createError({ statusCode: 400, statusMessage: 'invalid email format' })
+    throw createError({ statusCode: 400, message: 'invalid email format' })
   }
 
   if (body.isPrimary) {

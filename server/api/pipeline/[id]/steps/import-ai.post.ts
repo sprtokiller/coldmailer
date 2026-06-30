@@ -71,17 +71,17 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<ImportBody>(event)
 
   if (!body.rawInputText?.trim()) {
-    throw createError({ statusCode: 400, statusMessage: 'rawInputText is required' })
+    throw createError({ statusCode: 400, message: 'rawInputText is required' })
   }
   if (!SUPPORTED_STEPS.includes(body.stepType)) {
-    throw createError({ statusCode: 400, statusMessage: `AI Import not supported for step ${body.stepType}` })
+    throw createError({ statusCode: 400, message: `AI Import not supported for step ${body.stepType}` })
   }
 
   const run = await prisma.pipelineRun.findUnique({
     where: { id: runId },
     include: { project: true },
   })
-  if (!run) throw createError({ statusCode: 404, statusMessage: 'Pipeline run not found' })
+  if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
   const scopeFilter = libraryScopeForProject(run.project)
 
   const [customPrompt, dbSystemPrompt, existingStep] = await Promise.all([
@@ -103,7 +103,7 @@ export default defineEventHandler(async (event) => {
     }),
   ])
   if (body.systemPromptId && !customPrompt) {
-    throw createError({ statusCode: 403, statusMessage: 'Vybraný prompt není dostupný pro tento projekt.' })
+    throw createError({ statusCode: 403, message: 'Vybraný prompt není dostupný pro tento projekt.' })
   }
 
   const existingData = existingStep?.outputData ?? null
@@ -194,7 +194,7 @@ PRAVIDLA:
     console.error('[import-ai] parse failed. finish_reason=%s length=%d parseError=%s\nRAW OUTPUT:\n%s', finishReason, rawOutput.length, parseError, rawOutput)
     throw createError({
       statusCode: 422,
-      statusMessage: `AI returned invalid JSON (length=${rawOutput.length}, finish_reason=${finishReason}, error=${parseError?.slice(0, 120)})`,
+      message: `AI returned invalid JSON (length=${rawOutput.length}, finish_reason=${finishReason}, error=${parseError?.slice(0, 120)})`,
     })
   }
 

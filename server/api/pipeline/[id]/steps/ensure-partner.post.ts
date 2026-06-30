@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const { globalRecordId } = await readBody<{ globalRecordId: string }>(event)
 
   const record = await prisma.globalRecord.findUnique({ where: { id: globalRecordId } })
-  if (!record) throw createError({ statusCode: 404, statusMessage: 'GlobalRecord not found' })
+  if (!record) throw createError({ statusCode: 404, message: 'GlobalRecord not found' })
 
   // Find or create the PI step for this run
   let piStep = await prisma.pipelineStep.findFirst({

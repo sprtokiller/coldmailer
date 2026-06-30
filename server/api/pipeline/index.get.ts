@@ -1,4 +1,4 @@
-import { prisma } from '~/server/utils/prisma'
+﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveProjectId } from '~/server/utils/activeProject'
 
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   })
 
   return runs.map(run => {
-    // Latest completed step per type (asc order → last wins)
+    // Latest completed step per type (asc order â†’ last wins)
     const latest = new Map<string, typeof run.steps[0]>()
     for (const s of run.steps) {
       if (s.status === 'COMPLETED') latest.set(s.stepType, s)
@@ -66,3 +66,4 @@ export default defineEventHandler(async (event) => {
     }
   })
 })
+

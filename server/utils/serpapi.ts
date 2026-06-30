@@ -1,4 +1,4 @@
-import { trackSerpUsage } from '~/server/utils/usage-tracker'
+﻿import { trackSerpUsage } from '~/server/utils/usage-tracker'
 
 export interface SerpResult {
   title: string
@@ -59,7 +59,7 @@ export async function serpSearch(
     organic_results?: Array<{ title?: string; link?: string; snippet?: string }>
   }
 
-  // Track usage asynchronously — never blocks the search result
+  // Track usage asynchronously â€” never blocks the search result
   if (ctx.userId) {
     trackSerpUsage({
       userId:         ctx.userId,
@@ -73,3 +73,4 @@ export async function serpSearch(
     .map(r => ({ title: r.title ?? '', url: r.link ?? '', snippet: r.snippet ?? '' }))
     .filter(r => Boolean(r.url))
 }
+

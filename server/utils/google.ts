@@ -1,4 +1,4 @@
-const SCOPES = [
+﻿const SCOPES = [
   'openid',
   'email',
   'profile',
@@ -180,3 +180,4 @@ export async function sendGmailMessage(
   )
   return res
 }
+

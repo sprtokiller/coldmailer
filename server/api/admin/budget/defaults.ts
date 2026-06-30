@@ -1,4 +1,4 @@
-import { requireAuth } from '~/server/utils/requireAuth'
+﻿import { requireAuth } from '~/server/utils/requireAuth'
 import { requireAdmin } from '~/server/utils/permissions'
 import { getDefaultBudgetConfig, setDefaultBudgetConfig } from '~/server/utils/usage-tracker'
 
@@ -23,3 +23,4 @@ export default defineEventHandler(async (event) => {
   )
   return getDefaultBudgetConfig()
 })
+

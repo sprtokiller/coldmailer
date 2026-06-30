@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const existing = await prisma.globalRecord.findUnique({ where: { id } })
-  if (!existing) throw createError({ statusCode: 404, statusMessage: 'Partner nenalezen.' })
-  if (existing.type !== 'PARTNER') throw createError({ statusCode: 400, statusMessage: 'Záznam není typu PARTNER.' })
+  if (!existing) throw createError({ statusCode: 404, message: 'Partner nenalezen.' })
+  if (existing.type !== 'PARTNER') throw createError({ statusCode: 400, message: 'Záznam není typu PARTNER.' })
 
   const nameUpdate: Record<string, string> = {}
   if (body.canonicalName?.trim()) {
@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
     return updated
   } catch (e: any) {
     if (e?.code === 'P2002') {
-      throw createError({ statusCode: 409, statusMessage: 'Partner s tímto názvem již existuje.' })
+      throw createError({ statusCode: 409, message: 'Partner s tímto názvem již existuje.' })
     }
     throw e
   }
