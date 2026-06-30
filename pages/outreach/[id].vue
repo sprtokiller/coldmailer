@@ -13,10 +13,10 @@ const { syncError } = useGmailSync()
 const { user: sessionUser } = useUserSession()
 const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
 
-// Show claim view when a non-admin selects an unassigned partner
+// Show claim view when an obchodní tým member selects an unassigned partner
 const showClaimView = computed(() => {
   if (!ctx.selectedPartnerId.value) return false
-  if (isAdmin.value) return false
+  if (ctx.isManagement.value) return false
   return !ctx.isAssignedToMe.value
 })
 

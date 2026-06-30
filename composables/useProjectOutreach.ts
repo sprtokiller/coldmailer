@@ -53,6 +53,8 @@ export interface ProjectOutreachContext {
   streamOutput: Ref<string>
   isAssignedToMe: ComputedRef<boolean>
   canRunAI: ComputedRef<boolean>
+  isManagement: ComputedRef<boolean>
+  currentUserId: ComputedRef<string | undefined>
   selectPartner: (id: string | null) => Promise<void>
   refreshPartners: () => Promise<void>
   refreshDetail: () => Promise<void>
@@ -89,6 +91,20 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
   const currentUserId = computed(() => (sessionUser.value as any)?.id as string | undefined)
 
+  // Role "Vedení obchodu" je rozpoznána přes oprávnění project.interactions.edit_all
+  // (viz server/utils/projectPermissions.ts DEFAULT_PROJECT_ROLES).
+  const projectRoles = ref<Array<{ permissions: string[]; project: { id: string } }>>([])
+  $fetch<{ projectRoles: typeof projectRoles.value }>('/api/settings/me')
+    .then((me) => { projectRoles.value = me.projectRoles })
+    .catch(() => { /* non-fatal — bez rolí se chová jako obchodní tým */ })
+
+  const isManagement = computed(() => {
+    if (isAdmin.value) return true
+    const pid = projectIdRef.value
+    if (!pid) return false
+    return projectRoles.value.some(pr => pr.project.id === pid && pr.permissions.includes('project.interactions.edit_all'))
+  })
+
   const selectedPartner = computed(() => partners.value.find(p => p.id === selectedPartnerId.value) ?? null)
 
   const isAssignedToMe = computed(() => {
@@ -96,7 +112,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     return !!a && a.assigneeId === currentUserId.value
   })
 
-  const canRunAI = computed(() => isAdmin.value || isAssignedToMe.value)
+  const canRunAI = computed(() => isManagement.value || isAssignedToMe.value)
 
   function promptsForStep(step: string) {
     return prompts.value.filter(p => p.stepType === step)
@@ -259,6 +275,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     streamOutput,
     isAssignedToMe,
     canRunAI,
+    isManagement,
+    currentUserId,
     selectPartner,
     refreshPartners,
     refreshDetail,

@@ -15,7 +15,7 @@ const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
 
 const showClaimView = computed(() => {
   if (!ctx.selectedPartnerId.value) return false
-  if (isAdmin.value) return false
+  if (ctx.isManagement.value) return false
   return !ctx.isAssignedToMe.value
 })
 

@@ -39,6 +39,28 @@ function removeContext(id: string) { ctx.vaConfig.value.contextPartIds = ctx.vaC
 
 const selectedContextNames = computed(() => ctx.vaConfig.value.contextPartIds.map(id => vaContextParts.value.find(c => c.id === id)).filter(Boolean) as Array<{ id: string; name: string }>)
 
+// Zastupování: Admin/Vedení obchodu spouští analýzu za partnera přiřazeného jinému uživateli.
+const assignment = computed(() => ctx.partnerDetail.value?.assignment ?? null)
+const representsOther = computed(() => {
+  const a = assignment.value
+  return ctx.isManagement.value && !!a && a.assigneeId !== ctx.currentUserId.value
+})
+// Re-generace: pro partnera už existuje hotová analýza, přepsání spotřebuje kredity.
+const isRegeneration = computed(() => !!alignment.value)
+const needsConfirm = computed(() => representsOther.value || isRegeneration.value)
+
+const showConfirm = ref(false)
+
+function onRunClick() {
+  if (needsConfirm.value) { showConfirm.value = true; return }
+  runAnalysis()
+}
+
+function confirmAndRun() {
+  showConfirm.value = false
+  runAnalysis()
+}
+
 async function runAnalysis() {
   try { await ctx.runAlignment() } catch (err) { alert(`Chyba: ${err instanceof Error ? err.message : String(err)}`) }
 }
@@ -130,13 +152,13 @@ function relTime(iso: string | null | undefined): string {
         <button
           :disabled="ctx.executing.value !== null"
           class="btn-run btn-run--violet"
-          @click="runAnalysis"
+          @click="onRunClick"
         >
           <svg v-if="ctx.executing.value === 'alignment'" class="btn-spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {{ ctx.executing.value === 'alignment' ? 'Analyzuji…' : alignment ? 'Přeanalyzovat' : 'Spustit analýzu' }}
+          {{ ctx.executing.value === 'alignment' ? 'Analyzuji…' : alignment ? 'Znovu analyzovat' : 'Spustit analýzu' }}
         </button>
       </div>
 
@@ -177,6 +199,30 @@ function relTime(iso: string | null | undefined): string {
         </div>
       </div>
     </template>
+
+    <!-- Confirmation modal: zastupování jiného uživatele a/nebo re-generace -->
+    <div v-if="showConfirm" class="confirm-overlay" @click.self="showConfirm = false">
+      <div class="confirm-modal">
+        <div class="confirm-header">
+          <h3 class="confirm-title">Potvrzení akce</h3>
+          <button class="confirm-close" @click="showConfirm = false">✕</button>
+        </div>
+        <div class="confirm-body">
+          <p v-if="representsOther" class="confirm-warn">
+            Tuto analýzu spouštíte jménem jiného člena týmu — partner je přiřazen uživateli
+            <strong>{{ assignment?.assignee.name }}</strong>, ne vám.
+          </p>
+          <p v-if="isRegeneration" class="confirm-warn">
+            Pro tohoto partnera už existuje hotová analýza Value Alignment. Spuštěním dojde k jejímu
+            <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
+          </p>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-btn--cancel" @click="showConfirm = false">Zrušit</button>
+          <button class="confirm-btn confirm-btn--confirm" @click="confirmAndRun">Potvrdit a spustit</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -488,4 +534,103 @@ function relTime(iso: string | null | undefined): string {
   padding: 12px;
   overflow-x: auto;
 }
+
+/* ── Confirmation modal ──────────────────────────────────── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  padding: 16px;
+}
+
+.confirm-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+
+.confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e9eaec;
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1d23;
+  margin: 0;
+}
+
+.confirm-close {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.confirm-close:hover { color: #6b7280; }
+
+.confirm-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-warn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4b5563;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid #e9eaec;
+}
+
+.confirm-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.confirm-btn--cancel {
+  background: transparent;
+  color: #6b7280;
+}
+
+.confirm-btn--cancel:hover { color: #374151; }
+
+.confirm-btn--confirm {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #fff;
+}
+
+.confirm-btn--confirm:hover { opacity: 0.9; }
 </style>
