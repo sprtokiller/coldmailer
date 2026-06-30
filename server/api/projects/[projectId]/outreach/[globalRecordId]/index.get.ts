@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
       payload: globalRecord.payload,
       contacts: globalRecord.contacts,
     },
-    profileData: null,
+    profileData: (alignment?.profileSnapshot as Record<string, unknown> | null) ?? (globalRecord.payload as Record<string, unknown>),
     alignment,
     draft,
     assignment,

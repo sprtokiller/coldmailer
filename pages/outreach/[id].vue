@@ -164,7 +164,7 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
   width: 100%;
   min-height: 0;
   /* Narrow the sides slightly for breathing room */
-  padding: 0 16px 12px;
+  padding: 12px 16px;
   gap: 12px;
   background: #f0f1f5;
   overflow: hidden;
