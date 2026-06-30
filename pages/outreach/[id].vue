@@ -10,7 +10,44 @@ const ctx = useProjectOutreach(projectId)
 provide(projectOutreachKey, ctx)
 
 const { syncError } = useGmailSync()
+const { user: sessionUser } = useUserSession()
+const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
 
+// Show claim view when a non-admin selects an unassigned partner
+const showClaimView = computed(() => {
+  if (!ctx.selectedPartnerId.value) return false
+  if (isAdmin.value) return false
+  return !ctx.isAssignedToMe.value
+})
+
+// Admin assignment UI
+const showAssignDropdown = ref(false)
+const assignMembers = ref<Array<{ id: string; name: string; email: string; image: string | null }>>([])
+const loadingMembers = ref(false)
+
+async function openAssignDropdown() {
+  loadingMembers.value = true
+  showAssignDropdown.value = true
+  try {
+    assignMembers.value = await $fetch<typeof assignMembers.value>(`/api/projects/${projectId.value}/members`)
+  } finally {
+    loadingMembers.value = false
+  }
+}
+
+async function doAssign(userId: string | null) {
+  showAssignDropdown.value = false
+  try {
+    await ctx.assignPartner(userId)
+  } catch (err) {
+    alert(err instanceof Error ? err.message : String(err))
+  }
+}
+
+// Close dropdown on outside click
+function closeAssignDropdown() { showAssignDropdown.value = false }
+onMounted(() => { document.addEventListener('click', closeAssignDropdown) })
+onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) })
 </script>
 
 <template>
@@ -41,26 +78,70 @@ const { syncError } = useGmailSync()
       <!-- Divider -->
       <div class="col-divider" />
 
-      <!-- Col 2: Value Alignment -->
-      <section class="outreach-col outreach-col--alignment">
-        <div class="col-header">
-          <span class="col-step-pill col-step-pill--violet">1</span>
-          <h2 class="col-title">Value Alignment</h2>
-        </div>
-        <OutreachAlignmentPanel class="col-body" />
-      </section>
+      <!-- Non-admin viewing unassigned partner: show claim view spanning both cols -->
+      <template v-if="showClaimView">
+        <section class="outreach-col outreach-col--claim">
+          <div class="col-header">
+            <h2 class="col-title">Zpracování partnera</h2>
+          </div>
+          <OutreachClaimPanel class="col-body" />
+        </section>
+      </template>
 
-      <!-- Divider -->
-      <div class="col-divider" />
+      <template v-else>
+        <!-- Col 2: Value Alignment -->
+        <section class="outreach-col outreach-col--alignment">
+          <div class="col-header">
+            <span class="col-step-pill col-step-pill--violet">1</span>
+            <h2 class="col-title">Value Alignment</h2>
+            <!-- Admin assignment control -->
+            <ClientOnly>
+              <div v-if="isAdmin && ctx.selectedPartnerId.value" class="assignment-ctrl" @click.stop>
+                <button class="assignment-ctrl-btn" @click="openAssignDropdown">
+                  <span v-if="ctx.selectedPartner.value?.assignment">
+                    {{ ctx.selectedPartner.value.assignment.assignee.name.split(' ')[0] }}
+                  </span>
+                  <span v-else class="assignment-ctrl-free">Přiřadit</span>
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div v-if="showAssignDropdown" class="assignment-dropdown">
+                  <div v-if="loadingMembers" class="assignment-dropdown-loading">Načítám…</div>
+                  <template v-else>
+                    <button
+                      v-for="m in assignMembers"
+                      :key="m.id"
+                      class="assignment-dropdown-item"
+                      :class="{ 'assignment-dropdown-item--active': ctx.selectedPartner.value?.assignment?.assigneeId === m.id }"
+                      @click="doAssign(m.id)"
+                    >
+                      {{ m.name }}
+                    </button>
+                    <div class="assignment-dropdown-divider" />
+                    <button class="assignment-dropdown-item assignment-dropdown-item--remove" @click="doAssign(null)">
+                      Odebrat přiřazení
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </ClientOnly>
+          </div>
+          <OutreachAlignmentPanel class="col-body" />
+        </section>
 
-      <!-- Col 3: Email -->
-      <section class="outreach-col outreach-col--email">
-        <div class="col-header">
-          <span class="col-step-pill col-step-pill--indigo">2</span>
-          <h2 class="col-title">E-mail</h2>
-        </div>
-        <OutreachEmailPanel class="col-body" />
-      </section>
+        <!-- Divider -->
+        <div class="col-divider" />
+
+        <!-- Col 3: Email -->
+        <section class="outreach-col outreach-col--email">
+          <div class="col-header">
+            <span class="col-step-pill col-step-pill--indigo">2</span>
+            <h2 class="col-title">E-mail</h2>
+          </div>
+          <OutreachEmailPanel class="col-body" />
+        </section>
+      </template>
     </div>
   </div>
 </template>
@@ -115,6 +196,11 @@ const { syncError } = useGmailSync()
 .outreach-col--email {
   flex: 1.6 1 0;
   min-width: 380px;
+}
+
+.outreach-col--claim {
+  flex: 2.6 1 0;
+  min-width: 320px;
 }
 
 /* ── Dividers ────────────────────────────────────────────── */
@@ -177,6 +263,76 @@ const { syncError } = useGmailSync()
 .col-step-pill--indigo {
   background: #e0e7ff;
   color: #4338ca;
+}
+
+/* ── Assignment control (admin) ──────────────────────────── */
+.assignment-ctrl {
+  position: relative;
+  margin-left: auto;
+}
+
+.assignment-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.assignment-ctrl-btn:hover { background: #f0ebff; border-color: #c4b5fd; color: #6d28d9; }
+
+.assignment-ctrl-free { color: #7c3aed; }
+
+.assignment-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 50;
+  min-width: 160px;
+  padding: 4px;
+}
+
+.assignment-dropdown-loading {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.assignment-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1f2937;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.assignment-dropdown-item:hover { background: #f5f3ff; }
+.assignment-dropdown-item--active { font-weight: 700; color: #7c3aed; }
+.assignment-dropdown-item--remove { color: #dc2626; }
+.assignment-dropdown-item--remove:hover { background: #fef2f2; }
+
+.assignment-dropdown-divider {
+  height: 1px;
+  background: #e9eaec;
+  margin: 4px 0;
 }
 
 /* ── Column body (scrollable area) ──────────────────────── */

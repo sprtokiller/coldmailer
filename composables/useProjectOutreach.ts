@@ -7,6 +7,11 @@
  */
 import type { InjectionKey } from 'vue'
 
+export interface OutreachAssignment {
+  assigneeId: string
+  assignee: { id: string; name: string; image: string | null }
+}
+
 export interface OutreachPartner {
   id: string
   canonicalName: string
@@ -18,6 +23,7 @@ export interface OutreachPartner {
   }>
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null
+  assignment: OutreachAssignment | null
 }
 
 export interface OutreachConfig {
@@ -34,7 +40,7 @@ export interface ProjectOutreachContext {
   loadingPartners: Ref<boolean>
   selectedPartnerId: Ref<string | null>
   selectedPartner: ComputedRef<OutreachPartner | null>
-  partnerDetail: Ref<{ globalRecord: Record<string, unknown>; profileData: Record<string, unknown> | null; alignment: Record<string, unknown> | null; draft: Record<string, unknown> | null } | null>
+  partnerDetail: Ref<{ globalRecord: Record<string, unknown>; profileData: Record<string, unknown> | null; alignment: Record<string, unknown> | null; draft: Record<string, unknown> | null; assignment: OutreachAssignment | null } | null>
   loadingDetail: Ref<boolean>
   prompts: Ref<Array<{ id: string; name: string; content: string; stepType: string; isSystem: boolean; author: { name: string } }>>
   contextParts: Ref<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>
@@ -45,6 +51,8 @@ export interface ProjectOutreachContext {
   opConfig: Ref<OutreachConfig>
   executing: Ref<'alignment' | 'draft' | null>
   streamOutput: Ref<string>
+  isAssignedToMe: ComputedRef<boolean>
+  canRunAI: ComputedRef<boolean>
   selectPartner: (id: string | null) => Promise<void>
   refreshPartners: () => Promise<void>
   refreshDetail: () => Promise<void>
@@ -52,6 +60,8 @@ export interface ProjectOutreachContext {
   runDraft: (opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) => Promise<void>
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
   sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
+  claimPartner: () => Promise<void>
+  assignPartner: (userId: string | null) => Promise<void>
   promptsForStep: (step: string) => Array<{ id: string; name: string; content: string; stepType: string; isSystem: boolean; author: { name: string } }>
 }
 
@@ -75,7 +85,18 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const vaConfig = ref<OutreachConfig>({ systemPromptId: '', contextPartIds: [], sellingPointId: '', emailDraftId: '', manualContext: '' })
   const opConfig = ref<OutreachConfig>({ systemPromptId: '', contextPartIds: [], sellingPointId: '', emailDraftId: '', manualContext: '' })
 
+  const { user: sessionUser } = useUserSession()
+  const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+  const currentUserId = computed(() => (sessionUser.value as any)?.id as string | undefined)
+
   const selectedPartner = computed(() => partners.value.find(p => p.id === selectedPartnerId.value) ?? null)
+
+  const isAssignedToMe = computed(() => {
+    const a = selectedPartner.value?.assignment
+    return !!a && a.assigneeId === currentUserId.value
+  })
+
+  const canRunAI = computed(() => isAdmin.value || isAssignedToMe.value)
 
   function promptsForStep(step: string) {
     return prompts.value.filter(p => p.stepType === step)
@@ -198,6 +219,20 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     await refreshDetail(); await refreshPartners()
   }
 
+  async function claimPartner() {
+    const pid = projectIdRef.value; const gid = selectedPartnerId.value
+    if (!pid || !gid) return
+    await $fetch(`/api/projects/${pid}/outreach/${gid}/claim`, { method: 'POST' })
+    await refreshPartners(); await refreshDetail()
+  }
+
+  async function assignPartner(userId: string | null) {
+    const pid = projectIdRef.value; const gid = selectedPartnerId.value
+    if (!pid || !gid) return
+    await $fetch(`/api/projects/${pid}/outreach/${gid}/assign`, { method: 'POST', body: { userId } })
+    await refreshPartners(); await refreshDetail()
+  }
+
   async function sendDraft(fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) throw new Error('Není vybrán partner nebo projekt.')
@@ -222,6 +257,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     opConfig,
     executing,
     streamOutput,
+    isAssignedToMe,
+    canRunAI,
     selectPartner,
     refreshPartners,
     refreshDetail,
@@ -229,6 +266,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     runDraft,
     saveDraft,
     sendDraft,
+    claimPartner,
+    assignPartner,
     promptsForStep,
   } as ProjectOutreachContext
 }

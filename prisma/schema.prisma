@@ -36,8 +36,10 @@ model User {
   projectRoles           UserProjectRole[]
 
   partnerAlignments    PartnerAlignment[]
-  outreachDraftsSaved  PartnerOutreachDraft[] @relation("OutreachDraftSavedBy")
-  outreachDraftsSent   PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
+  outreachDraftsSaved      PartnerOutreachDraft[] @relation("OutreachDraftSavedBy")
+  outreachDraftsSent       PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
+  outreachAssignments      OutreachAssignment[]   @relation("OutreachAssignee")
+  outreachAssignmentsGiven OutreachAssignment[]   @relation("OutreachAssignedBy")
 }
 
 model Group {
@@ -69,8 +71,9 @@ model Project {
   interactions       Interaction[]
   projectRoles       ProjectRole[]
   projectRecords     ProjectRecord[]
-  partnerAlignments  PartnerAlignment[]
-  outreachDrafts     PartnerOutreachDraft[]
+  partnerAlignments   PartnerAlignment[]
+  outreachDrafts      PartnerOutreachDraft[]
+  outreachAssignments OutreachAssignment[]
 
   @@unique([groupId, name])
   @@index([groupId])
@@ -231,8 +234,9 @@ model GlobalRecord {
   contacts          PartnerContact[]
   interactions      Interaction[]
   projectRecords    ProjectRecord[]
-  partnerAlignments PartnerAlignment[]
-  outreachDrafts    PartnerOutreachDraft[]
+  partnerAlignments   PartnerAlignment[]
+  outreachDrafts      PartnerOutreachDraft[]
+  outreachAssignments OutreachAssignment[]
 
   @@unique([normalizedName, type])
 }
@@ -475,3 +479,19 @@ model PartnerOutreachDraft {
   @@index([projectId])
 }
 
+// Přiřazení zodpovědnosti za zpracování partnera v outreach workflow
+model OutreachAssignment {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  assigneeId     String
+  assignee       User         @relation("OutreachAssignee", fields: [assigneeId], references: [id])
+  assignedAt     DateTime     @default(now())
+  assignedById   String?
+  assignedBy     User?        @relation("OutreachAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([projectId, globalRecordId])
+  @@index([projectId])
+}

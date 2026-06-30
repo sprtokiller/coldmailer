@@ -5,13 +5,31 @@ const ctx = inject(projectOutreachKey)!
 
 const { user: sessionUser } = useUserSession()
 const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+const myId = computed(() => (sessionUser.value as any)?.id as string | undefined)
 const showAssignModal = ref(false)
 
 const search = ref('')
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
-  return ctx.partners.value.filter(p => !q || p.canonicalName.toLowerCase().includes(q))
+  const all = ctx.partners.value.filter(p => !q || p.canonicalName.toLowerCase().includes(q))
+
+  if (isAdmin.value) {
+    return [...all].sort((a, b) => {
+      const aScore = !a.assignment ? 1 : a.assignment.assigneeId === myId.value ? 0 : 2
+      const bScore = !b.assignment ? 1 : b.assignment.assigneeId === myId.value ? 0 : 2
+      return aScore - bScore || a.canonicalName.localeCompare(b.canonicalName)
+    })
+  }
+
+  // Non-admins: only see partners assigned to me or unassigned
+  return [...all]
+    .filter(p => !p.assignment || p.assignment.assigneeId === myId.value)
+    .sort((a, b) => {
+      const aScore = a.assignment ? 0 : 1
+      const bScore = b.assignment ? 0 : 1
+      return aScore - bScore || a.canonicalName.localeCompare(b.canonicalName)
+    })
 })
 
 function getStatus(p: typeof filtered.value[0]): 'sent' | 'saved' | 'aligned' | null {
@@ -84,16 +102,22 @@ const STATUS_META = {
           {{ p.canonicalName.charAt(0).toUpperCase() }}
         </div>
 
-        <!-- Name + status -->
+        <!-- Name + status + assignment -->
         <div class="partner-info">
           <span class="partner-name" :title="p.canonicalName">{{ p.canonicalName }}</span>
-          <span
-            v-if="getStatus(p)"
-            class="partner-status"
-            :class="STATUS_META[getStatus(p)!].cls"
-          >
-            {{ STATUS_META[getStatus(p)!].icon }} {{ STATUS_META[getStatus(p)!].label }}
-          </span>
+          <div class="partner-meta">
+            <span
+              v-if="getStatus(p)"
+              class="partner-status"
+              :class="STATUS_META[getStatus(p)!].cls"
+            >
+              {{ STATUS_META[getStatus(p)!].icon }} {{ STATUS_META[getStatus(p)!].label }}
+            </span>
+            <span v-if="p.assignment" class="assignment-tag assignment-tag--assigned" :title="p.assignment.assignee.name">
+              {{ p.assignment.assigneeId === myId ? 'Moje' : p.assignment.assignee.name.split(' ')[0] }}
+            </span>
+            <span v-else class="assignment-tag assignment-tag--free">Volno</span>
+          </div>
         </div>
       </button>
     </div>
@@ -238,6 +262,13 @@ const STATUS_META = {
   gap: 2px;
 }
 
+.partner-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .partner-name {
   font-size: 13px;
   font-weight: 500;
@@ -263,4 +294,24 @@ const STATUS_META = {
 .status--sent    { color: #2563eb; }
 .status--saved   { color: #059669; }
 .status--aligned { color: #7c3aed; }
+
+/* ── Assignment tags ─────────────────────────────────────── */
+.assignment-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.assignment-tag--assigned {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.assignment-tag--free {
+  background: #f0fdf4;
+  color: #15803d;
+}
 </style>

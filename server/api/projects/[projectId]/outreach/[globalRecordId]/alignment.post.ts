@@ -7,7 +7,7 @@
 import { sendStream, setResponseHeaders } from 'h3'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requireProjectAccess } from '~/server/utils/permissions'
+import { requireProjectAccess, getUserScopeAccess } from '~/server/utils/permissions'
 import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
@@ -29,6 +29,17 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<AlignmentBody>(event)
 
   const { project } = await requireProjectAccess(event, projectId)
+
+  const access = await getUserScopeAccess(user.id)
+  if (!access.isAdmin) {
+    const assignment = await prisma.outreachAssignment.findUnique({
+      where: { projectId_globalRecordId: { projectId, globalRecordId } },
+      select: { assigneeId: true },
+    })
+    if (!assignment || assignment.assigneeId !== user.id) {
+      throw createError({ statusCode: 403, message: 'K tomuto partnerovi nemáte přiřazení.' })
+    }
+  }
 
   const { over, limitUsd } = await isOverBudget(user.id)
   if (over) throw createError({ statusCode: 402, message: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })

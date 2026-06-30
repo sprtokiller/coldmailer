@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   if (globalRecordIds.length === 0) return []
 
-  const [globalRecords, alignments, drafts] = await Promise.all([
+  const [globalRecords, alignments, drafts, assignments] = await Promise.all([
     prisma.globalRecord.findMany({
       where: { id: { in: globalRecordIds } },
       include: {
@@ -45,10 +45,15 @@ export default defineEventHandler(async (event) => {
       where: { projectId, globalRecordId: { in: globalRecordIds } },
       select: { globalRecordId: true, savedAt: true, sentAt: true, sendError: true, toAddress: true, subject: true, savedBy: { select: { name: true } } },
     }),
+    prisma.outreachAssignment.findMany({
+      where: { projectId, globalRecordId: { in: globalRecordIds } },
+      select: { globalRecordId: true, assigneeId: true, assignee: { select: { id: true, name: true, image: true } } },
+    }),
   ])
 
   const alignmentMap = new Map(alignments.map(a => [a.globalRecordId, a]))
   const draftMap = new Map(drafts.map(d => [d.globalRecordId, d]))
+  const assignmentMap = new Map(assignments.map(a => [a.globalRecordId, a]))
 
   return globalRecords.map(gr => ({
     id: gr.id,
@@ -58,5 +63,6 @@ export default defineEventHandler(async (event) => {
     contacts: gr.contacts,
     alignment: alignmentMap.get(gr.id) ?? null,
     draft: draftMap.get(gr.id) ?? null,
+    assignment: assignmentMap.get(gr.id) ?? null,
   }))
 })

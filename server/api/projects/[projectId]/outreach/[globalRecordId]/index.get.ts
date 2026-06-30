@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
-  const [globalRecord, alignment, draft] = await Promise.all([
+  const [globalRecord, alignment, draft, assignment] = await Promise.all([
     prisma.globalRecord.findUnique({
       where: { id: globalRecordId },
       include: {
@@ -34,6 +34,10 @@ export default defineEventHandler(async (event) => {
         sentBy: { select: { id: true, name: true } },
       },
     }),
+    prisma.outreachAssignment.findUnique({
+      where: { projectId_globalRecordId: { projectId, globalRecordId } },
+      include: { assignee: { select: { id: true, name: true, image: true } } },
+    }),
   ])
 
   if (!globalRecord) throw createError({ statusCode: 404, message: 'Partner nenalezen.' })
@@ -49,5 +53,6 @@ export default defineEventHandler(async (event) => {
     profileData: null,
     alignment,
     draft,
+    assignment,
   }
 })
