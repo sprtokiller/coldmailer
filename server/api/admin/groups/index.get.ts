@@ -6,7 +6,6 @@ export default defineEventHandler(async (event) => {
   return prisma.group.findMany({
     include: {
       projects: { include: { projectRoles: { orderBy: { name: 'asc' } } }, orderBy: { name: 'asc' } },
-      members: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
     },
     orderBy: { name: 'asc' },
   })
