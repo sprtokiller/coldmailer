@@ -2,7 +2,7 @@ export interface SendNotification {
   id: string
   partnerName: string
   scheduledId: string
-  pipelineId: string
+  cancelUrl: string
   countdownMs: number
   gracePeriodMs: number
   status: 'pending' | 'sent' | 'error'
@@ -28,7 +28,7 @@ function ensureTick() {
 }
 
 export function useSendNotifications() {
-  function add(n: Omit<SendNotification, 'countdownMs' | 'status'> & { gracePeriodMs: number }) {
+  function add(n: Omit<SendNotification, 'countdownMs' | 'status'>) {
     notifications.value.push({
       ...n,
       countdownMs: n.gracePeriodMs,
@@ -63,7 +63,7 @@ export function useSendNotifications() {
     const n = notifications.value.find(n => n.id === id)
     if (!n) return
     try {
-      await $fetch(`/api/pipeline/${n.pipelineId}/outreach/cancel-send`, {
+      await $fetch(n.cancelUrl, {
         method: 'POST',
         body: { scheduledId: n.scheduledId },
       })

@@ -1,0 +1,17 @@
+/**
+ * POST /api/projects/[projectId]/outreach/[globalRecordId]/cancel-send
+ *
+ * Zruší naplánované odeslání e-mailu ve grace period.
+ */
+import { requireAuth } from '~/server/utils/requireAuth'
+import { cancelOutreachSend } from '~/server/utils/outreach-scheduler'
+
+export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event)
+  const body = await readBody<{ scheduledId: string }>(event)
+
+  if (!body.scheduledId) throw createError({ statusCode: 400, message: 'scheduledId je povinný.' })
+
+  const cancelled = cancelOutreachSend(body.scheduledId, user.id)
+  return { cancelled }
+})

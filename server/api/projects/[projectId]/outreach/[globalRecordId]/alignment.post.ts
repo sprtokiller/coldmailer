@@ -1,0 +1,141 @@
+/**
+ * POST /api/projects/[projectId]/outreach/[globalRecordId]/alignment
+ *
+ * Spustí VALUE_ALIGNMENT pro jednoho partnera a výsledek uloží do PartnerAlignment.
+ * Streamuje SSE: { chunk } | { done, alignmentId } | { error }
+ */
+import { sendStream, setResponseHeaders } from 'h3'
+import { prisma } from '~/server/utils/prisma'
+import { requireAuth } from '~/server/utils/requireAuth'
+import { requireProjectAccess } from '~/server/utils/permissions'
+import { streamStepAI } from '~/server/utils/ai'
+import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
+import { parseAIOutput } from '~/server/utils/parse-ai-output'
+import { libraryScopeForProject } from '~/server/utils/libraryScope'
+import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
+
+interface AlignmentBody {
+  systemPromptId?: string
+  contextPartIds?: string[]
+  sellingPointId?: string
+  manualContext?: string
+  profileData?: Record<string, unknown> // profilovací data předaná z frontendu
+}
+
+export default defineEventHandler(async (event) => {
+  const user = await requireAuth(event)
+  const projectId = getRouterParam(event, 'projectId')!
+  const globalRecordId = getRouterParam(event, 'globalRecordId')!
+  const body = await readBody<AlignmentBody>(event)
+
+  const { project } = await requireProjectAccess(event, projectId)
+
+  const { over, limitUsd } = await isOverBudget(user.id)
+  if (over) throw createError({ statusCode: 402, message: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
+
+  const globalRecord = await prisma.globalRecord.findUnique({ where: { id: globalRecordId } })
+  if (!globalRecord) throw createError({ statusCode: 404, message: 'Partner nenalezen.' })
+
+  const scopeFilter = libraryScopeForProject(project)
+  const STEP = 'VALUE_ALIGNMENT'
+
+  const [contextParts, customPrompt, dbSystemPrompt, sellingPoint] = await Promise.all([
+    body.contextPartIds?.length
+      ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds }, ...scopeFilter } })
+      : Promise.resolve([]),
+    body.systemPromptId
+      ? prisma.systemPrompt.findFirst({ where: { id: body.systemPromptId, OR: [{ isSystem: true }, scopeFilter] } })
+      : Promise.resolve(null),
+    prisma.systemPrompt.findFirst({ where: { stepType: STEP as never, isSystem: true }, orderBy: { createdAt: 'desc' } }),
+    body.sellingPointId
+      ? prisma.sellingPoint.findFirst({ where: { id: body.sellingPointId, ...scopeFilter } })
+      : Promise.resolve(null),
+  ])
+
+  const rawPromptText = customPrompt?.content ?? dbSystemPrompt?.content ?? STEP_SYSTEM_PROMPTS[STEP] ?? 'You are a helpful assistant.'
+  const outputSchema = (customPrompt?.outputSchema as object | null) ?? (dbSystemPrompt?.outputSchema as object | null) ?? STEP_OUTPUT_SCHEMAS[STEP] ?? null
+  const systemPromptText = outputSchema ? rawPromptText.replace('<[[SCHEMA]]>', formatSchemaForPrompt(outputSchema)) : rawPromptText
+
+  const allContextParts = [
+    ...contextParts.map(c => `${c.name}:\n${c.content}`),
+    ...(sellingPoint ? [`Prodejní argumenty (${sellingPoint.name}):\n${sellingPoint.content}`] : []),
+    ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
+  ]
+
+  // Profil partnera — buď předaný z frontendu, nebo fallback z GlobalRecord.payload
+  const profileInput = body.profileData ?? (globalRecord.payload as Record<string, unknown>)
+
+  const userMsg = [
+    'Analyzuj soulad mezi tímto partnerem a našimi prodejními argumenty. Vrať strukturovaný JSON dle systémového promptu.',
+    '',
+    'Profil partnera:',
+    '```json',
+    JSON.stringify(profileInput, null, 2),
+    '```',
+  ].join('\n')
+
+  setResponseHeaders(event, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      const write = (data: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+
+      const execute = async () => {
+        try {
+          let output = ''
+          const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, contextParts: allContextParts, userMessage: userMsg })
+          for await (const chunk of aiStream) {
+            output += chunk
+            write({ chunk })
+          }
+          try {
+            const costUsd = await getCost()
+            await trackAIUsage({ userId: user.id, model: 'anthropic/claude-sonnet-4.6', costUsd, stepType: STEP })
+          } catch { /* non-fatal */ }
+
+          const parsed = parseAIOutput(output)
+          const alignmentData = (typeof parsed.data === 'object' && parsed.data !== null && !Array.isArray(parsed.data))
+            ? parsed.data as Record<string, unknown>
+            : { raw: output }
+
+          const saved = await prisma.partnerAlignment.upsert({
+            where: { projectId_globalRecordId: { projectId, globalRecordId } },
+            create: {
+              projectId,
+              globalRecordId,
+              outputData: alignmentData as never,
+              systemPromptId: body.systemPromptId ?? null,
+              contextPartIds: body.contextPartIds ?? [],
+              sellingPointId: body.sellingPointId ?? null,
+              profileSnapshot: profileInput as never,
+              authorId: user.id,
+            },
+            update: {
+              outputData: alignmentData as never,
+              systemPromptId: body.systemPromptId ?? null,
+              contextPartIds: body.contextPartIds ?? [],
+              sellingPointId: body.sellingPointId ?? null,
+              profileSnapshot: profileInput as never,
+              authorId: user.id,
+            },
+          })
+
+          write({ done: true, alignmentId: saved.id })
+        } catch (err) {
+          write({ error: err instanceof Error ? err.message : String(err), done: true })
+        } finally {
+          controller.close()
+        }
+      }
+      execute()
+    },
+  })
+
+  return sendStream(event, stream)
+})

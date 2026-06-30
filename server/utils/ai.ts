@@ -1,6 +1,6 @@
 ﻿import OpenAI from 'openai'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
-import { OPENROUTER, MODELS, COPY_PROMPT_STEPS, STEP_MODEL } from '~/config/pipeline'
+import { OPENROUTER, MODELS } from '~/config/pipeline'
 
 function createClient(): OpenAI {
   const config = useRuntimeConfig()
@@ -13,12 +13,6 @@ function createClient(): OpenAI {
     },
   })
 }
-
-export function modelForStep(stepType: string): string {
-  return STEP_MODEL[stepType] ?? MODELS.CLAUDE_SONNET
-}
-
-export { COPY_PROMPT_STEPS }
 
 export interface StepAIInput {
   stepType: string
@@ -34,7 +28,7 @@ export interface StreamStepAIResult {
 
 export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, externalSignal?: AbortSignal): StreamStepAIResult {
   const client = createClient()
-  const model = modelForStep(input.stepType)
+  const model = MODELS.CLAUDE_SONNET
 
   const contextBlock = input.contextParts.length
     ? `\n\n<context>\n${input.contextParts.join('\n\n')}\n</context>`

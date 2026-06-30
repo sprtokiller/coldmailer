@@ -1,59 +1,70 @@
 <script setup lang="ts">
-definePageMeta({ middleware: 'auth', layout: 'pipeline' })
+import { projectOutreachKey, useProjectOutreach } from '~/composables/useProjectOutreach'
 
-const { data: runs, pending } = await useFetch('/api/pipeline', { default: () => [] })
+definePageMeta({ middleware: 'auth' })
 
-// Auto-redirect to first run
-watch(runs, (val) => {
-  if (val.length > 0) {
-    navigateTo(`/outreach/${val[0].id}`, { replace: true })
-  }
-}, { immediate: true })
+const { activeProject } = useActiveProject()
+const projectId = computed(() => activeProject.value?.id ?? null)
+
+const ctx = useProjectOutreach(projectId)
+provide(projectOutreachKey, ctx)
+
+type Tab = 'alignment' | 'email'
+const activeTab = ref<Tab>('alignment')
+
+// Pokud partner nemá alignment, zůstaňme na alignment tabu;
+// po dokončení alignment automaticky přepni na email
+watch(() => ctx.executing.value, (val, prev) => {
+  if (prev === 'alignment' && val === null) activeTab.value = 'email'
+})
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto px-6 pt-8">
-    <div v-if="pending" class="flex items-center justify-center py-20 text-gray-400 text-sm">
-      Načítám...
-    </div>
+  <div class="flex h-[calc(100vh-4rem)]">
+    <!-- Partner sidebar -->
+    <aside class="w-56 shrink-0 border-r border-gray-100 flex flex-col bg-white overflow-hidden">
+      <div class="px-3 py-2 border-b border-gray-100 shrink-0">
+        <h2 class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Oslovení</h2>
+      </div>
+      <OutreachPartnerSidebar class="flex-1 min-h-0" />
+    </aside>
 
-    <div v-else-if="runs.length === 0" class="flex flex-col items-center justify-center py-20 text-center gap-3">
-      <svg class="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      </svg>
-      <p class="text-gray-500 text-sm">Žádné pipeline runy pro tento projekt.</p>
-      <NuxtLink to="/" class="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">
-        Vytvořit pipeline →
-      </NuxtLink>
-    </div>
-
-    <!-- List of runs to choose from -->
-    <div v-else class="max-w-lg mx-auto">
-      <h1 class="text-lg font-semibold text-gray-800 mb-4">Vyberte pipeline</h1>
-      <div class="space-y-2">
-        <NuxtLink
-          v-for="run in runs"
-          :key="run.id"
-          :to="`/outreach/${run.id}`"
-          class="flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-sm transition-all"
+    <!-- Main area with tabs -->
+    <div class="flex-1 flex flex-col min-w-0 bg-white overflow-hidden">
+      <!-- Tab bar -->
+      <div class="flex items-center border-b border-gray-100 shrink-0 px-4">
+        <button
+          class="px-3 py-2.5 text-xs font-medium border-b-2 transition-colors mr-1"
+          :class="activeTab === 'alignment'
+            ? 'border-violet-500 text-violet-700'
+            : 'border-transparent text-gray-500 hover:text-gray-700'"
+          @click="activeTab = 'alignment'"
         >
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-sm font-medium text-gray-800 truncate">{{ run.name }}</span>
-              <span
-                class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
-                :class="run.mode === 'short' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'"
-              >{{ run.mode === 'short' ? 'Zkrácená' : 'Úplná' }}</span>
-            </div>
-            <p class="text-xs text-gray-400">
-              {{ run.author.name }} · {{ new Date(run.createdAt).toLocaleDateString('cs-CZ') }}
-              <template v-if="run.stats?.alignments"> · {{ run.stats.alignments }} alignmentů</template>
-            </p>
-          </div>
-          <svg class="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </NuxtLink>
+          1 · Value Alignment
+          <span
+            v-if="ctx.partnerDetail.value?.alignment"
+            class="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-violet-400"
+          />
+        </button>
+        <button
+          class="px-3 py-2.5 text-xs font-medium border-b-2 transition-colors"
+          :class="activeTab === 'email'
+            ? 'border-indigo-500 text-indigo-700'
+            : 'border-transparent text-gray-500 hover:text-gray-700'"
+          @click="activeTab = 'email'"
+        >
+          2 · E-mail
+          <span
+            v-if="ctx.partnerDetail.value?.draft"
+            class="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-green-400"
+          />
+        </button>
+      </div>
+
+      <!-- Tab panels -->
+      <div class="flex-1 min-h-0 overflow-hidden">
+        <OutreachAlignmentPanel v-show="activeTab === 'alignment'" class="h-full" />
+        <OutreachEmailPanel v-show="activeTab === 'email'" class="h-full" />
       </div>
     </div>
   </div>

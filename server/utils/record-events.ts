@@ -2,8 +2,6 @@
 
 interface LogEventParams {
   globalRecordId: string
-  pipelineRunId?: string
-  stepId?: string
   userId: string
   eventType: string
   metadata?: Record<string, unknown>
@@ -13,8 +11,6 @@ export async function logEvent(params: LogEventParams): Promise<void> {
   await prisma.recordEvent.create({
     data: {
       globalRecordId: params.globalRecordId,
-      pipelineRunId: params.pipelineRunId,
-      stepId: params.stepId,
       userId: params.userId,
       eventType: params.eventType,
       metadata: (params.metadata ?? {}) as never,

@@ -4,6 +4,9 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 
+const { user: sessionUser } = useUserSession()
+const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+
 const SIZE_LABELS: Record<string, string> = {
   micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
 }
@@ -107,6 +110,7 @@ function toggleExpand(id: string) {
 }
 
 const editingPartner = ref<GlobalRecord | null>(null)
+const partnerToAssign = ref<GlobalRecord | null>(null)
 
 // ── Permissions ─────────────────────────────────────────────────────────────
 
@@ -258,11 +262,18 @@ function onImportClose() {
                     </div>
                   </td>
                   <td class="px-4 py-3">
-                    <button class="text-gray-400 hover:text-gray-600 transition-colors" title="Upravit partnera" @click.stop="editingPartner = rec">
-                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
+                    <div class="flex items-center justify-end gap-3">
+                      <button v-if="isAdmin" class="text-indigo-400 hover:text-indigo-600 transition-colors" title="Přiřadit do aktuálního projektu" @click.stop="partnerToAssign = rec">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button class="text-gray-400 hover:text-gray-600 transition-colors" title="Upravit partnera" @click.stop="editingPartner = rec">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
 
@@ -351,6 +362,19 @@ function onImportClose() {
 
     <PartnersPartnerFormModal v-if="showCreatePartnerModal" mode="create" @close="showCreatePartnerModal = false" @saved="onPartnerCreated" />
     <PartnersPartnerFormModal v-if="editingPartner" mode="edit" :partner="editingPartner" @close="editingPartner = null" @saved="editingPartner = null; fetchRecords(true)" @deleted="editingPartner = null; fetchRecords(true)" />
+    <PartnersPartnerSearchAssign
+      v-if="partnerToAssign"
+      :preselected-partner="{
+        id: partnerToAssign.id,
+        canonicalName: partnerToAssign.canonicalName,
+        industry: String(partnerToAssign.payload.industry ?? ''),
+        size: String(partnerToAssign.payload.size ?? ''),
+        website: String(partnerToAssign.payload.website ?? ''),
+        hasInteractionsInProject: false
+      }"
+      @close="partnerToAssign = null"
+      @assigned="partnerToAssign = null; fetchRecords(true)"
+    />
     <PartnersPartnerImportModal v-if="showImportModal" :prefill="importPrefill" @close="onImportClose" @saved="onImportSaved" />
 
   </div>

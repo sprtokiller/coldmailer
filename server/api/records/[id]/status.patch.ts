@@ -5,11 +5,11 @@ import { updateRelevanceStatus } from '~/server/utils/global-record'
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
   const recordId = getRouterParam(event, 'id')!
-  const { status, pipelineRunId } = await readBody<{ status: string; pipelineRunId?: string }>(event)
+  const { status } = await readBody<{ status: string }>(event)
 
   const record = await prisma.globalRecord.findUnique({ where: { id: recordId } })
   if (!record) throw createError({ statusCode: 404, message: 'Record not found' })
 
-  await updateRelevanceStatus(recordId, status as never, user.id, pipelineRunId)
+  await updateRelevanceStatus(recordId, status as never, user.id)
   return { id: recordId, relevanceStatus: status }
 })

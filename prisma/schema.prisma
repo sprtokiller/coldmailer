@@ -25,21 +25,19 @@ model User {
   sellingPoints SellingPoint[]
   emailDrafts   EmailDraft[]
   signatures    Signature[]
-  pipelineRuns  PipelineRun[]
-  stepsRun      PipelineStep[] @relation("StepRunner")
   budget        UserBudget?
 
   globalRecords GlobalRecord[]
-  inputSources  InputSource[]
-  addedRefs     PipelineRecordRef[]
   recordEvents  RecordEvent[]
   usageEvents   UsageEvent[]
 
   interactionsCreated    Interaction[]         @relation("InteractionCreator")
   interactionAssignments InteractionAssignee[]
   projectRoles           UserProjectRole[]
-  assignedRefs           PipelineRecordRef[]   @relation("RefAssignee")
-  coAssignedRefs         PipelineRecordRef[]   @relation("RefCoAssignees")
+
+  partnerAlignments    PartnerAlignment[]
+  outreachDraftsSaved  PartnerOutreachDraft[] @relation("OutreachDraftSavedBy")
+  outreachDraftsSent   PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
 }
 
 model Group {
@@ -64,14 +62,15 @@ model Project {
   group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
-  systemPrompts  SystemPrompt[]
-  contextParts   ContextPart[]
-  sellingPoints  SellingPoint[]
-  emailDrafts    EmailDraft[]
-  pipelineRuns   PipelineRun[]
-  interactions   Interaction[]
-  projectRoles   ProjectRole[]
-  projectRecords ProjectRecord[]
+  systemPrompts      SystemPrompt[]
+  contextParts       ContextPart[]
+  sellingPoints      SellingPoint[]
+  emailDrafts        EmailDraft[]
+  interactions       Interaction[]
+  projectRoles       ProjectRole[]
+  projectRecords     ProjectRecord[]
+  partnerAlignments  PartnerAlignment[]
+  outreachDrafts     PartnerOutreachDraft[]
 
   @@unique([groupId, name])
   @@index([groupId])
@@ -109,16 +108,8 @@ enum StepType {
   MARKET_SCANNING
   PARTNER_IDENTIFICATION
   PARTNER_PROFILING
-
   VALUE_ALIGNMENT
   OUTREACH_PREPARATION
-}
-
-enum StepStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
 }
 
 model SystemPrompt {
@@ -138,7 +129,6 @@ model SystemPrompt {
   derivedFromId String?
   derivedFrom   SystemPrompt?  @relation("PromptLineage", fields: [derivedFromId], references: [id])
   derived       SystemPrompt[] @relation("PromptLineage")
-  steps         PipelineStep[]
 }
 
 model ContextPart {
@@ -172,7 +162,6 @@ model SellingPoint {
   derivedFromId String?
   derivedFrom   SellingPoint?  @relation("SellingLineage", fields: [derivedFromId], references: [id])
   derived       SellingPoint[] @relation("SellingLineage")
-  steps         PipelineStep[]
 }
 
 model EmailDraft {
@@ -190,52 +179,6 @@ model EmailDraft {
   derivedFromId String?
   derivedFrom   EmailDraft?    @relation("DraftLineage", fields: [derivedFromId], references: [id])
   derived       EmailDraft[]   @relation("DraftLineage")
-  steps         PipelineStep[]
-}
-
-model PipelineRun {
-  id           String              @id @default(cuid())
-  name         String
-  mode         String              @default("full")
-  visibility   String              @default("private")
-  authorId     String
-  author       User                @relation(fields: [authorId], references: [id])
-  projectId    String
-  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt    DateTime            @default(now())
-  steps        PipelineStep[]
-  inputSources InputSource[]
-  recordRefs   PipelineRecordRef[]
-
-  @@index([projectId])
-}
-
-model PipelineStep {
-  id                String              @id @default(cuid())
-  pipelineRunId     String
-  pipelineRun       PipelineRun         @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
-  stepType          StepType
-  status            StepStatus          @default(PENDING)
-  systemPromptId    String?
-  systemPrompt      SystemPrompt?       @relation(fields: [systemPromptId], references: [id])
-  contextPartIds    String[]
-  sellingPointId    String?
-  sellingPoint      SellingPoint?       @relation(fields: [sellingPointId], references: [id])
-  emailDraftId      String?
-  emailDraft        EmailDraft?         @relation(fields: [emailDraftId], references: [id])
-  inputData         Json?
-  outputData        Json?
-  selectionData     Json?
-  errorMessage      String?
-  progress          Json?
-  runnerId          String
-  runner            User                @relation("StepRunner", fields: [runnerId], references: [id])
-  createdAt         DateTime            @default(now())
-  completedAt       DateTime?
-  candidatePartners CandidatePartner[]
-  inputSources      InputSource[]
-  recordRefs        PipelineRecordRef[]
-  usageEvents       UsageEvent[]
 }
 
 model Partner {
@@ -248,19 +191,6 @@ model Partner {
   createdAt      DateTime @default(now())
   globalRecordId String?
 
-  candidateRelations CandidatePartner[]
-}
-
-model CandidatePartner {
-  id                  String       @id @default(cuid())
-  itemName            String
-  itemUrl             String?
-  partnerId           String
-  partner             Partner      @relation(fields: [partnerId], references: [id])
-  pipelineStepId      String
-  step                PipelineStep @relation(fields: [pipelineStepId], references: [id])
-  createdAt           DateTime     @default(now())
-  pipelineRecordRefId String?
 }
 
 // ── Global Record System ─────────────────────────────────────────────────────
@@ -282,13 +212,6 @@ enum AddMethod {
   INHERITED
 }
 
-enum InputSourceType {
-  MINI_DEEP_RESEARCH
-  AI_IMPORT
-  MANUAL_ADD
-  GLOBAL_DB_SELECT
-}
-
 model GlobalRecord {
   id             String         @id @default(cuid())
   type           RecordType
@@ -304,11 +227,12 @@ model GlobalRecord {
   duplicateOf    GlobalRecord?  @relation("Duplicates", fields: [duplicateOfId], references: [id])
   duplicates     GlobalRecord[] @relation("Duplicates")
 
-  pipelineRefs   PipelineRecordRef[]
-  events         RecordEvent[]
-  contacts       PartnerContact[]
-  interactions   Interaction[]
-  projectRecords ProjectRecord[]
+  events            RecordEvent[]
+  contacts          PartnerContact[]
+  interactions      Interaction[]
+  projectRecords    ProjectRecord[]
+  partnerAlignments PartnerAlignment[]
+  outreachDrafts    PartnerOutreachDraft[]
 
   @@unique([normalizedName, type])
 }
@@ -331,9 +255,7 @@ model UsageEvent {
   costUsd      Float          @default(0)
   generationId String? // OpenRouter generation ID for AI calls
 
-  pipelineStepId String?
-  step           PipelineStep? @relation(fields: [pipelineStepId], references: [id], onDelete: SetNull)
-  stepType       String? // e.g. "MARKET_SCANNING"
+  stepType       String? // e.g. "VALUE_ALIGNMENT"
 
   @@index([userId, createdAt])
   @@index([userId, eventType])
@@ -348,55 +270,10 @@ model SystemConfig {
   updatedBy String?
 }
 
-model InputSource {
-  id            String          @id @default(cuid())
-  type          InputSourceType
-  pipelineRunId String
-  pipelineRun   PipelineRun     @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
-  stepId        String?
-  step          PipelineStep?   @relation(fields: [stepId], references: [id])
-  label         String
-  createdBy     String
-  creator       User            @relation(fields: [createdBy], references: [id])
-  createdAt     DateTime        @default(now())
-  metadata      Json?
-
-  recordRefs PipelineRecordRef[]
-}
-
-model PipelineRecordRef {
-  id                      String       @id @default(cuid())
-  pipelineRunId           String
-  pipelineRun             PipelineRun  @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
-  stepId                  String
-  step                    PipelineStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  globalRecordId          String
-  globalRecord            GlobalRecord @relation(fields: [globalRecordId], references: [id])
-  inputSourceId           String?
-  inputSource             InputSource? @relation(fields: [inputSourceId], references: [id])
-  addedBy                 String
-  adder                   User         @relation(fields: [addedBy], references: [id])
-  addedAt                 DateTime     @default(now())
-  isSelectedForProcessing Boolean      @default(true)
-  addMethod               AddMethod
-  localNote               String?
-
-  assigneeId   String?
-  assignee     User?         @relation("RefAssignee", fields: [assigneeId], references: [id])
-  coAssignees  User[]        @relation("RefCoAssignees")
-  actionStatus ActionStatus?
-  dealStage    DealStage?
-
-  @@unique([pipelineRunId, stepId, globalRecordId])
-  @@index([stepId, isSelectedForProcessing])
-}
-
 model RecordEvent {
   id             String       @id @default(cuid())
   globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id])
-  pipelineRunId  String?
-  stepId         String?
   userId         String
   user           User         @relation(fields: [userId], references: [id])
   eventType      String
@@ -545,3 +422,56 @@ model ProjectRecord {
   @@unique([projectId, globalRecordId])
   @@index([globalRecordId])
 }
+
+// ── Standalone Outreach (nezávislé na PipelineRun) ───────────────────────────
+
+// Výsledek analýzy strategické shody (VALUE_ALIGNMENT) pro konkrétního partnera
+// v rámci projektu. Nahrazuje ukládání do PipelineStep.outputData.
+model PartnerAlignment {
+  id              String       @id @default(cuid())
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId  String
+  globalRecord    GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  outputData      Json         // Objekt s výsledkem VALUE_ALIGNMENT pro tohoto partnera
+  systemPromptId  String?
+  contextPartIds  String[]
+  sellingPointId  String?
+  profileSnapshot Json?        // Snapshot profilovacích dat použitých jako vstup pro AI
+  authorId        String
+  author          User         @relation(fields: [authorId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([projectId, globalRecordId])
+  @@index([projectId])
+}
+
+// Připravený e-mail (OUTREACH_PREPARATION) pro konkrétního partnera v projektu.
+// Nahrazuje ukládání do PipelineStep.outputData / outreach-save.ts logiku.
+model PartnerOutreachDraft {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  toAddress      String       @default("")
+  subject        String       @default("")
+  body           String       @default("") // HTML
+  systemPromptId String?
+  emailDraftId   String?
+  config         Json? // { signatureId, selectedArgumentIds, contextPartIds, ... }
+  savedById      String
+  savedBy        User         @relation("OutreachDraftSavedBy", fields: [savedById], references: [id])
+  savedAt        DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sentAt         DateTime?
+  sentById       String?
+  sentBy         User?        @relation("OutreachDraftSentBy", fields: [sentById], references: [id])
+  sendError      String?
+  gmailId        String?
+
+  @@unique([projectId, globalRecordId])
+  @@index([projectId])
+}
+

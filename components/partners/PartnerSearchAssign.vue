@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const props = defineProps<{
+  preselectedPartner?: SearchResult
+}>()
+
 const emit = defineEmits<{ close: []; assigned: [{ partnerId: string }] }>()
 
 interface SearchResult {
@@ -11,7 +15,7 @@ interface AppUser { id: string; name: string; image: string | null; email: strin
 const query = ref('')
 const results = ref<SearchResult[]>([])
 const searching = ref(false)
-const selectedPartner = ref<SearchResult | null>(null)
+const selectedPartner = ref<SearchResult | null>(props.preselectedPartner ?? null)
 const assigneeIds = ref<string[]>([])
 const assigning = ref(false)
 const error = ref('')
@@ -19,17 +23,23 @@ const error = ref('')
 const { data: allUsers } = useFetch<AppUser[]>('/api/users')
 
 let debounceTimer: ReturnType<typeof setTimeout>
+
+async function performSearch(val: string) {
+  searching.value = true
+  try {
+    results.value = await $fetch<SearchResult[]>('/api/partners/search', { query: { search: val.trim() } })
+  } catch { results.value = [] }
+  finally { searching.value = false }
+}
+
+onMounted(() => {
+  if (!selectedPartner.value) performSearch('')
+})
+
 watch(query, (val) => {
   clearTimeout(debounceTimer)
   selectedPartner.value = null
-  if (val.trim().length < 2) { results.value = []; return }
-  debounceTimer = setTimeout(async () => {
-    searching.value = true
-    try {
-      results.value = await $fetch<SearchResult[]>('/api/partners/search', { query: { search: val.trim() } })
-    } catch { results.value = [] }
-    finally { searching.value = false }
-  }, 300)
+  debounceTimer = setTimeout(() => performSearch(val), 300)
 })
 
 function selectPartner(p: SearchResult) {
@@ -91,7 +101,7 @@ const SIZE_LABELS: Record<string, string> = {
           <!-- Results -->
           <div v-if="!selectedPartner">
             <div v-if="searching" class="text-xs text-gray-400 py-3 text-center">Hledám...</div>
-            <div v-else-if="query.trim().length >= 2 && results.length === 0" class="py-4 text-center">
+            <div v-else-if="results.length === 0" class="py-4 text-center">
               <p class="text-xs text-gray-400">Žádní partneři nenalezeni</p>
               <button
                 class="mt-2 text-sm font-medium text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg hover:bg-indigo-50 transition-colors"
