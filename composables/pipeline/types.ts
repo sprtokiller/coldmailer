@@ -23,6 +23,8 @@ export interface PipelineRunResponse {
   author: { name: string }
   createdAt: string
   steps: RunStepResult[]
+  userPermissions?: string[]
+  userIsAdmin?: boolean
 }
 
 export interface StepConfigState {

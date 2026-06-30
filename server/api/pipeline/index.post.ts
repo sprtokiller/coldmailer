@@ -1,6 +1,7 @@
 ﻿import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { requireProjectAccess } from '~/server/utils/permissions'
+import { requirePipelineManage } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await requireProjectAccess(event, body.projectId)
+  await requirePipelineManage(event, body.projectId)
 
   const mode = body.mode === 'short' ? 'short' : 'full'
 

@@ -7,6 +7,7 @@ import { findOrCreateGlobalRecord } from '~/server/utils/global-record'
 import { trackAIUsage } from '~/server/utils/usage-tracker'
 import { mergeOutputData } from '~/server/utils/merge-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
+import { requirePipelineManage } from '~/server/utils/projectPermissions'
 
 interface ImportBody {
   stepType: string
@@ -82,6 +83,7 @@ export default defineEventHandler(async (event) => {
     include: { project: true },
   })
   if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
+  await requirePipelineManage(event, run.projectId)
   const scopeFilter = libraryScopeForProject(run.project)
 
   const [customPrompt, dbSystemPrompt, existingStep] = await Promise.all([

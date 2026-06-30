@@ -4,7 +4,7 @@ const props = defineProps<{
   partner?: { id: string; canonicalName: string; payload: Record<string, unknown> }
   duplicateBehavior?: 'show-error' | 'use-existing'
 }>()
-const emit = defineEmits<{ close: []; saved: [{ id: string }] }>()
+const emit = defineEmits<{ close: []; saved: [{ id: string }]; deleted: [] }>()
 
 interface ContactEntry {
   firstName: string; lastName: string; role: string; email: string
@@ -60,6 +60,7 @@ const assigneeIds = ref<string[]>([])
 const { data: allUsers } = useFetch<{ id: string; name: string; image: string | null; email: string }[]>('/api/users')
 
 const saving = ref(false)
+const deleting = ref(false)
 const error = ref('')
 const duplicateLink = ref('')
 
@@ -67,6 +68,21 @@ const canSubmit = computed(() => {
   if (props.mode === 'create') return form.canonicalName.trim().length > 0
   return true
 })
+
+async function deletePartner() {
+  if (!props.partner || deleting.value) return
+  deleting.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/partners/${props.partner.id}`, { method: 'DELETE' })
+    emit('deleted')
+    emit('close')
+  } catch (e: any) {
+    error.value = e.data?.message ?? e.statusMessage ?? 'Nepodařilo se smazat.'
+  } finally {
+    deleting.value = false
+  }
+}
 
 async function save() {
   if (!canSubmit.value || saving.value) return
@@ -278,15 +294,25 @@ async function save() {
         </div>
 
         <!-- Footer -->
-        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-          <button class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2" @click="emit('close')">Zrušit</button>
+        <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100">
           <button
-            class="text-sm font-medium text-white bg-primary px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-            :disabled="!canSubmit || saving"
-            @click="save"
+            v-if="mode === 'edit'"
+            class="text-sm text-red-600 hover:text-red-800 px-4 py-2 transition-colors disabled:opacity-50"
+            :disabled="deleting || saving"
+            @click="deletePartner"
           >
-            {{ saving ? 'Ukládám...' : mode === 'create' ? 'Vytvořit' : 'Uložit' }}
+            {{ deleting ? 'Mazání...' : 'Smazat partnera' }}
           </button>
+          <div class="flex items-center gap-3 ml-auto">
+            <button class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2" @click="emit('close')">Zrušit</button>
+            <button
+              class="text-sm font-medium text-white bg-primary px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+              :disabled="!canSubmit || saving"
+              @click="save"
+            >
+              {{ saving ? 'Ukládám...' : mode === 'create' ? 'Vytvořit' : 'Uložit' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

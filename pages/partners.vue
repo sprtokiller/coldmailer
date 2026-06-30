@@ -7,6 +7,11 @@ const router = useRouter()
 const SIZE_LABELS: Record<string, string> = {
   micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
 }
+const CONTACT_TYPE_COLORS: Record<string, string> = {
+  PR: 'bg-blue-100 text-blue-700', HR: 'bg-purple-100 text-purple-700',
+  Marketing: 'bg-orange-100 text-orange-700', CEO: 'bg-red-100 text-red-700',
+  General: 'bg-gray-100 text-gray-600',
+}
 const STEP_LABELS: Record<string, string> = {
   MARKET_SCANNING: 'Market Scanning', PARTNER_IDENTIFICATION: 'Identifikace partnerů',
   PARTNER_PROFILING: 'Profilování', VALUE_ALIGNMENT: 'Value Alignment',
@@ -76,37 +81,21 @@ function getArr(rec: GlobalRecord, key: string): string[] {
 
 // ── Client-side filters ───────────────────────────────────────────────────────
 
-const search          = ref('')
-const filterIndustry  = ref('')
-const filterProfile   = ref<'' | 'profiled' | 'unprofiled'>('')
+const search     = ref('')
+const filterSize = ref('')
 
-function resetFilters() {
-  search.value = ''; filterIndustry.value = ''; filterProfile.value = ''
-}
-
-const availableIndustries = computed(() => [...new Set(records.value.map(r => String(r.payload.industry || r.payload.type || '')).filter(Boolean))].sort())
-
-function distinctPipelineCount(rec: GlobalRecord): number {
-  return new Set(rec.pipelineRefs.map(r => r.pipelineRun.id)).size || rec._count.pipelineRefs
-}
-
-const profiledCount = computed(() => records.value.filter(isProfiled).length)
+const availableSizes = computed(() =>
+  Object.keys(SIZE_LABELS).filter(s => records.value.some(r => String(r.payload.size ?? '') === s)),
+)
 
 const filteredRecords = computed(() => {
   const q = search.value.toLowerCase()
   return records.value.filter(rec => {
-    const p = rec.payload
     if (q && !rec.canonicalName.toLowerCase().includes(q)) return false
-    if (filterIndustry.value && String(p.industry || p.type || '') !== filterIndustry.value) return false
-    if (filterProfile.value === 'profiled' && !isProfiled(rec)) return false
-    if (filterProfile.value === 'unprofiled' && isProfiled(rec)) return false
+    if (filterSize.value && String(rec.payload.size ?? '') !== filterSize.value) return false
     return true
   })
 })
-
-const activeFilterCount = computed(() =>
-  [filterIndustry.value, filterProfile.value].filter(Boolean).length
-)
 
 // ── Expand ────────────────────────────────────────────────────────────────────
 
@@ -117,10 +106,15 @@ function toggleExpand(id: string) {
   expandedIds.value = s
 }
 
+const editingPartner = ref<GlobalRecord | null>(null)
+
 // ── Permissions ─────────────────────────────────────────────────────────────
 
 const canCreatePartner = ref(true)
 const showCreatePartnerModal = ref(false)
+const showImportModal = ref(false)
+const importPrefill = ref<string | undefined>(undefined)
+const showNewDropdown = ref(false)
 
 if (route.query.create === '1' && canCreatePartner.value) {
   activeTab.value = 'PARTNER'
@@ -132,6 +126,36 @@ function onPartnerCreated() {
   showCreatePartnerModal.value = false
   if (activeTab.value === 'PARTNER') fetchRecords(true)
 }
+
+function openTextImport(prefill?: string) {
+  importPrefill.value = prefill
+  showImportModal.value = true
+  showNewDropdown.value = false
+}
+
+function openJsonFilePicker() {
+  showNewDropdown.value = false
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json,.txt,application/json,text/plain'
+  input.addEventListener('change', () => {
+    const file = input.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => openTextImport(String(e.target?.result ?? ''))
+    reader.readAsText(file)
+  })
+  input.click()
+}
+
+function onImportSaved() {
+  showImportModal.value = false
+  fetchRecords(true)
+}
+
+function onImportClose() {
+  showImportModal.value = false
+}
 </script>
 
 <template>
@@ -141,16 +165,34 @@ function onPartnerCreated() {
         <h1 class="text-2xl font-semibold text-gray-800">Partneři</h1>
         <p class="text-sm text-gray-400 mt-1">Globální databáze partnerů</p>
       </div>
-      <button
-        v-if="canCreatePartner"
-        class="text-sm font-medium text-white bg-primary px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-        @click="showCreatePartnerModal = true"
-      >
-        Nový partner
-      </button>
+      <div v-if="canCreatePartner" class="relative flex items-stretch">
+        <button
+          class="text-sm font-medium text-white bg-primary px-4 py-2 rounded-l-lg hover:opacity-90 transition-opacity"
+          @click="showCreatePartnerModal = true"
+        >Nový partner</button>
+        <button
+          class="text-sm font-medium text-white bg-primary px-2 py-2 rounded-r-lg border-l border-white/20 hover:opacity-90 transition-opacity"
+          @click="showNewDropdown = !showNewDropdown"
+          aria-label="Další možnosti"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div v-show="showNewDropdown" class="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20 min-w-44">
+          <button
+            class="w-full text-left text-sm px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="openJsonFilePicker"
+          >Nahrát JSON</button>
+          <button
+            class="w-full text-left text-sm px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="openTextImport()"
+          >Vložit text</button>
+        </div>
+        <div v-show="showNewDropdown" class="fixed inset-0 z-10" @click="showNewDropdown = false" />
+      </div>
     </div>
 
-    <!-- Search + filters -->
     <div class="mb-4 space-y-2.5">
       <input
         v-model="search"
@@ -158,41 +200,18 @@ function onPartnerCreated() {
         placeholder="Hledat podle názvu..."
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
-
-      <template>
-        <!-- Profile status filter -->
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-gray-400 font-medium w-16 flex-shrink-0">Průzkum</span>
-          <button
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterProfile === 'profiled' ? 'bg-green-100 border-green-300 text-green-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterProfile = filterProfile === 'profiled' ? '' : 'profiled'"
-          >Profilovaní ({{ profiledCount }})</button>
-          <button
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterProfile === 'unprofiled' ? 'bg-gray-200 border-gray-300 text-gray-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterProfile = filterProfile === 'unprofiled' ? '' : 'unprofiled'"
-          >Neprofilovaní ({{ records.length - profiledCount }})</button>
-        </div>
-
-        <!-- Industry chips -->
-        <div v-if="availableIndustries.length" class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs text-gray-400 font-medium w-16 flex-shrink-0">Odvětví</span>
-          <button
-            v-for="ind in availableIndustries" :key="ind"
-            :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterIndustry === ind ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-            @click="filterIndustry = filterIndustry === ind ? '' : ind"
-          >{{ ind }}</button>
-        </div>
-
-        <div v-if="activeFilterCount > 0" class="flex items-center gap-2">
-          <span class="text-xs text-gray-400">{{ filteredRecords.length }} z {{ records.length }} partnerů</span>
-          <button class="text-xs text-indigo-500 hover:underline" @click="filterIndustry = ''; filterProfile = ''">Zrušit filtry</button>
-        </div>
-      </template>
+      <div v-if="availableSizes.length" class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-gray-400 font-medium w-16 flex-shrink-0">Velikost</span>
+        <button
+          v-for="s in availableSizes" :key="s"
+          :class="['text-xs px-2.5 py-1 rounded-full border transition-colors', filterSize === s ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300']"
+          @click="filterSize = filterSize === s ? '' : s"
+        >{{ SIZE_LABELS[s] }}</button>
+        <button v-if="filterSize" class="text-xs text-indigo-500 hover:underline ml-1" @click="filterSize = ''">Zrušit</button>
+      </div>
     </div>
 
-    <!-- ── PARTNER table ── -->
-    <template>
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-gray-100 bg-gray-50 text-left">
@@ -200,8 +219,8 @@ function onPartnerCreated() {
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Pipeline</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přidal</th>
+              <th class="px-4 py-3 w-10" />
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
@@ -232,18 +251,21 @@ function onPartnerCreated() {
                     <span v-if="isProfiled(rec)" class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-700 font-medium">Profilován</span>
                     <span v-else class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400">Identifikován</span>
                   </td>
-                  <td class="px-4 py-3 text-center">
-                    <span class="text-xs font-semibold text-gray-700">{{ distinctPipelineCount(rec) }}</span>
-                  </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-1.5">
                       <img v-if="rec.creator.image" :src="rec.creator.image" :alt="rec.creator.name" class="w-5 h-5 rounded-full flex-shrink-0" referrerpolicy="no-referrer" />
                       <span class="text-xs text-gray-500 truncate max-w-28">{{ rec.creator.name }}</span>
                     </div>
                   </td>
+                  <td class="px-4 py-3">
+                    <button class="text-gray-400 hover:text-gray-600 transition-colors" title="Upravit partnera" @click.stop="editingPartner = rec">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
 
-                <!-- Expanded detail row -->
                 <tr v-if="expandedIds.has(rec.id)" class="bg-indigo-50/20">
                   <td />
                   <td colspan="5" class="px-4 py-4 space-y-3">
@@ -278,9 +300,11 @@ function onPartnerCreated() {
                         <p class="text-xs font-medium text-gray-500 mb-1">Kontakty</p>
                         <div class="space-y-1">
                           <div v-for="(c, i) in getContacts(rec)" :key="i" class="flex items-center gap-2 text-xs text-gray-600">
-                            <span class="font-medium">{{ c.firstName ?? '' }} {{ c.lastName ?? c.name ?? '' }}</span>
-                            <span v-if="c.position" class="text-gray-400">{{ c.position }}</span>
-                            <a v-if="c.email" :href="`mailto:${c.email}`" class="text-indigo-500 hover:underline" @click.stop>{{ c.email }}</a>
+                            <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[String(c.type || '')] ?? 'bg-gray-100 text-gray-500']">{{ c.type || 'kontakt' }}</span>
+                            <span class="font-medium">{{ [String(c.firstName || ''), String(c.lastName || c.name || '')].filter(Boolean).join(' ') || 'generický' }}</span>
+                            <span v-if="(c.role || c.position) && (c.firstName || c.lastName || c.name)" class="text-gray-400">{{ c.role || c.position }}</span>
+                            <a v-if="c.email" :href="`mailto:${c.email}`" class="text-indigo-500 hover:underline ml-auto" @click.stop>{{ c.email }}</a>
+                            <span v-else-if="c.firstName || c.lastName || c.name" class="text-red-400 ml-auto italic">chybí e-mail</span>
                           </div>
                         </div>
                       </div>
@@ -318,7 +342,6 @@ function onPartnerCreated() {
           </tbody>
         </table>
       </div>
-    </template>
 
     <div v-if="hasMore" class="mt-4 text-center">
       <button :disabled="loading" class="text-sm px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors" @click="loadMore()">
@@ -327,5 +350,8 @@ function onPartnerCreated() {
     </div>
 
     <PartnersPartnerFormModal v-if="showCreatePartnerModal" mode="create" @close="showCreatePartnerModal = false" @saved="onPartnerCreated" />
+    <PartnersPartnerFormModal v-if="editingPartner" mode="edit" :partner="editingPartner" @close="editingPartner = null" @saved="editingPartner = null; fetchRecords(true)" @deleted="editingPartner = null; fetchRecords(true)" />
+    <PartnersPartnerImportModal v-if="showImportModal" :prefill="importPrefill" @close="onImportClose" @saved="onImportSaved" />
+
   </div>
 </template>

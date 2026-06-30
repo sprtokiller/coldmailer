@@ -124,6 +124,20 @@ async function logout() {
 
         <template v-if="loggedIn">
           <NuxtLink
+            to="/partners"
+            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            active-class="text-gray-800 font-medium"
+          >
+            Partneři
+          </NuxtLink>
+          <NuxtLink
+            to="/outreach"
+            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            active-class="text-gray-800 font-medium"
+          >
+            Oslovení
+          </NuxtLink>
+          <NuxtLink
             to="/negotiations"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"
@@ -131,25 +145,11 @@ async function logout() {
             Jednání
           </NuxtLink>
           <NuxtLink
-            to="/"
-            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-            active-class="text-gray-800 font-medium"
-          >
-            Pipelines
-          </NuxtLink>
-          <NuxtLink
             to="/library"
             class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             active-class="text-gray-800 font-medium"
           >
-            Knihovna
-          </NuxtLink>
-          <NuxtLink
-            to="/partners"
-            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-            active-class="text-gray-800 font-medium"
-          >
-            Partneři
+            Databáze
           </NuxtLink>
           <NuxtLink
             to="/settings"

@@ -33,10 +33,11 @@ const { stepType, ppProfiles, vaAlignments, opEmails, expandedCardIdx, toggleCar
           <div class="text-xs font-medium text-gray-400 mb-1">Kontakty</div>
           <div class="space-y-1">
             <div v-for="(contact, ci) in getArr(profile, 'contacts').slice(0, 50)" :key="ci" class="flex items-center gap-1.5 text-xs">
-              <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[getStr(contact, 'type')] ?? 'bg-gray-100 text-gray-500']">{{ getStr(contact, 'type') }}</span>
-              <span class="font-medium text-gray-700 truncate">{{ [getStr(contact, 'firstName'), getStr(contact, 'lastName')].filter(Boolean).join(' ') || getStr(contact, 'role') }}</span>
+              <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[getStr(contact, 'type')] ?? 'bg-gray-100 text-gray-500']">{{ getStr(contact, 'type') || 'kontakt' }}</span>
+              <span class="font-medium text-gray-700 truncate">{{ [getStr(contact, 'firstName'), getStr(contact, 'lastName')].filter(Boolean).join(' ') || getStr(contact, 'role') || 'generický' }}</span>
               <span v-if="getStr(contact, 'role') && (getStr(contact, 'firstName') || getStr(contact, 'lastName'))" class="text-gray-400 truncate">{{ getStr(contact, 'role') }}</span>
               <a v-if="getStr(contact, 'email')" :href="`mailto:${getStr(contact, 'email')}`" class="text-indigo-500 hover:underline ml-auto flex-shrink-0">{{ getStr(contact, 'email') }}</a>
+              <span v-else-if="getStr(contact, 'firstName') || getStr(contact, 'lastName')" class="text-red-400 ml-auto flex-shrink-0 italic">chybí e-mail</span>
               <span :class="['flex-shrink-0', CONFIDENCE_COLORS[getStr(contact, 'confidence')] ?? 'text-gray-400']">{{ getStr(contact, 'confidence') }}</span>
             </div>
           </div>

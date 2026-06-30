@@ -3,6 +3,17 @@ definePageMeta({ middleware: 'auth' })
 
 const { data: runs, refresh } = await useFetch('/api/pipeline', { default: () => [] })
 const { projects, activeProject, activeGroup } = useActiveProject()
+const { session } = useUserSession()
+const isAdmin = computed(() => session.value?.user?.isAdmin ?? false)
+
+const { data: me } = await useFetch('/api/settings/me', { key: 'index-page-me' })
+const canManagePipelinesForProject = computed(() => {
+  if (isAdmin.value) return true
+  if (!activeProject.value) return false
+  return (me.value?.projectRoles ?? [])
+    .filter((r: any) => r.project?.id === activeProject.value?.id)
+    .some((r: any) => (r.permissions as string[]).includes('project.pipeline.manage'))
+})
 
 const showCreateModal = ref(false)
 const creating = ref(false)
@@ -56,6 +67,24 @@ const STAT_DEFS: { key: keyof RunStats; label: string; tooltip: string }[] = [
   { key: 'alignments',   label: 'alignmentů',  tooltip: 'Partneři s Value Alignmentem' },
   { key: 'outreach',     label: 'e-mailů',     tooltip: 'Připravené návrhy e-mailů k oslovení' },
 ]
+
+// ── Kebab menu ────────────────────────────────────────────────────────────────
+const openMenuId = ref<string | null>(null)
+
+function toggleMenu(id: string, e: Event) {
+  e.preventDefault()
+  e.stopPropagation()
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+
+function closeAllMenus() {
+  openMenuId.value = null
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeAllMenus)
+  onUnmounted(() => document.removeEventListener('click', closeAllMenus))
+})
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
 const editingRun = ref<{ id: string; name: string; visibility: string } | null>(null)
@@ -138,6 +167,7 @@ async function deleteRun() {
         <p class="text-sm text-gray-400 mt-1">Vytvořte si vlastní AI pipeline či využijte některou z nabídky. </p>
       </div>
       <button
+        v-if="canManagePipelinesForProject"
         type="button"
         :disabled="!activeProject"
         class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -178,15 +208,37 @@ async function deleteRun() {
             <span class="text-xs text-gray-400 whitespace-nowrap mt-0.5">
               {{ new Date(run.createdAt).toLocaleDateString('cs-CZ') }}
             </span>
-            <button
-              class="text-gray-300 hover:text-gray-500 transition-colors p-0.5 rounded"
-              title="Upravit pipeline"
-              @click="openEdit(run, $event)"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </button>
+            <!-- Three-dot kebab menu -->
+            <div class="relative">
+              <button
+                class="text-gray-300 hover:text-gray-500 transition-colors p-0.5 rounded"
+                title="Možnosti"
+                @click="toggleMenu(run.id, $event)"
+              >
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+                </svg>
+              </button>
+              <div
+                v-if="openMenuId === run.id"
+                class="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px]"
+                @click.stop
+              >
+                <button
+                  class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  @click="openEdit(run, $event); openMenuId = null"
+                >
+                  Upravit pipeline
+                </button>
+                <button
+                  v-if="isAdmin"
+                  class="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors"
+                  @click="navigateTo(`/pipeline/${run.id}?as=team`); openMenuId = null"
+                >
+                  Zobrazit jako obchodní tým
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

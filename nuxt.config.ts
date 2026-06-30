@@ -9,9 +9,10 @@ export default defineNuxtConfig({
     '@nuxtjs/tailwindcss',
     '@nuxtjs/google-fonts',
   ],
-
-  
-
+  sourcemap: {
+    server: true,
+    client: true,
+  },
   app: {
     head: {
       title: 'Coldmailer - AI-Powered Email Outreach',
@@ -101,6 +102,9 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    build: {
+      sourcemap: true,
+    },
     server: {
       allowedHosts: ['coldmailer.scg.cz', 'localhost'],
       ...(proxyOrigin

@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
     projectRoles: user.projectRoles.map(upr => ({
       id: upr.projectRole.id,
       name: upr.projectRole.name,
+      permissions: upr.projectRole.permissions as string[],
       project: upr.projectRole.project,
     })),
   }

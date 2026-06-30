@@ -3,6 +3,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 export const PROJECT_PERMISSIONS = [
+  'project.pipeline.manage',
   'project.interactions.view_all',
   'project.interactions.edit_all',
 ] as const
@@ -10,18 +11,19 @@ export const PROJECT_PERMISSIONS = [
 export type ProjectPermissionKey = typeof PROJECT_PERMISSIONS[number]
 
 export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
-  'project.interactions.view_all': 'VidĂ­ vĹˇechna jednĂˇnĂ­ v projektu',
-  'project.interactions.edit_all': 'Edituje vĹˇechna jednĂˇnĂ­ v projektu',
+  'project.pipeline.manage': 'Spravuje pipeline (vytváření, spouštění kroků, import dat)',
+  'project.interactions.view_all': 'Vidí všechna jednání v projektu',
+  'project.interactions.edit_all': 'Edituje všechna jednání v projektu',
 }
 
 export const DEFAULT_PROJECT_ROLES = [
   {
-    name: 'VedenĂ­ obchodu',
-    permissions: ['project.interactions.view_all', 'project.interactions.edit_all'] as string[],
+    name: 'Vedení obchodu',
+    permissions: ['project.pipeline.manage', 'project.interactions.view_all', 'project.interactions.edit_all'] as string[],
     isSystem: true,
   },
   {
-    name: 'ObchodnĂ­ tĂ˝m',
+    name: 'Obchodní tým',
     permissions: ['project.interactions.view_all'] as string[],
     isSystem: true,
   },
@@ -32,7 +34,7 @@ export async function ensureDefaultProjectRoles(projectId: string) {
     await prisma.projectRole.upsert({
       where: { projectId_name: { projectId, name: role.name } },
       create: { projectId, name: role.name, permissions: role.permissions, isSystem: role.isSystem },
-      update: {},
+      update: { permissions: role.permissions },
     })
   }
 }
@@ -61,6 +63,17 @@ export async function getInteractionAccess(userId: string, projectId: string) {
     canEditAll: perms.includes('project.interactions.edit_all'),
     isAdmin: false,
   }
+}
+
+export async function requirePipelineManage(event: H3Event, projectId: string) {
+  const session = await requireAuth(event)
+  const user = await prisma.user.findUnique({ where: { id: session.id }, select: { isAdmin: true } })
+  if (user?.isAdmin) return session
+  const perms = await getProjectPermissions(session.id, projectId)
+  if (!perms.includes('project.pipeline.manage')) {
+    throw createError({ statusCode: 403, message: 'Pro tuto akci potřebujete oprávnění vedení obchodu.' })
+  }
+  return session
 }
 
 export async function requireInteractionAccess(

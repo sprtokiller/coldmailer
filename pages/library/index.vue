@@ -55,11 +55,11 @@ const { data: contextParts, refresh: refreshContext } = await useFetch('/api/lib
 const { data: sellingPoints, refresh: refreshSelling } = await useFetch('/api/library/selling-points', { default: () => [] })
 const { data: emailDrafts, refresh: refreshDrafts } = await useFetch('/api/library/email-drafts', { default: () => [] })
 const { data: sigData, refresh: refreshSignatures } = await useFetch<SignaturesResponse>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
-const { data: me } = await useFetch<{ user: { isAdmin: boolean } }>('/api/settings/me', { default: () => ({ user: { isAdmin: false } }) })
+const { session } = useUserSession()
 
 const signatureTemplates = computed(() => sigData.value?.templates ?? [])
 const signaturePersonal = computed(() => sigData.value?.personal ?? [])
-const canEditSystemSignatures = computed(() => me.value?.user.isAdmin ?? false)
+const canEditSystemSignatures = computed(() => session.value?.user?.isAdmin ?? false)
 
 function safeHtml(html: string): string {
   return sanitizeHtml(html)
@@ -390,18 +390,21 @@ watch(activeProject, (project) => {
   if (!editingId.value && project) form.value.scope = `project:${project.id}`
 }, { immediate: true })
 
-const tabs = computed(() => {
-  const items: { key: Tab; label: string }[] = [
-    { key: 'prompts', label: 'Systémové prompty' },
-    { key: 'context', label: 'Kontextové části' },
-    { key: 'selling', label: 'Prodejní argumenty' },
-    { key: 'drafts', label: 'E-mailové šablony' },
-  ]
-  if (canEditSystemSignatures.value) {
-    items.push({ key: 'signatures', label: 'Podpisové šablony' })
+const tabs: { key: Tab; label: string }[] = [
+  { key: 'prompts', label: 'Systémové prompty' },
+  { key: 'context', label: 'Kontextové části' },
+  { key: 'selling', label: 'Prodejní argumenty' },
+  { key: 'drafts', label: 'E-mailové šablony' },
+]
+
+function handleNew() {
+  if (tab.value === 'signatures' && canEditSystemSignatures.value) {
+    startNewSignature(true)
   }
-  return items
-})
+  else {
+    showForm.value = !showForm.value
+  }
+}
 </script>
 
 <template>
@@ -411,18 +414,9 @@ const tabs = computed(() => {
         <h1 class="text-2xl font-semibold text-gray-800">Knihovna</h1>
         <p class="text-sm text-gray-400 mt-1">Sdílené prompty, kontext, prodejní argumenty a šablony.</p>
       </div>
-      <div v-if="tab === 'signatures' && canEditSystemSignatures">
-        <button
-          class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-          @click="startNewSignature(true)"
-        >
-          + Nový
-        </button>
-      </div>
       <button
-        v-else
         class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-        @click="showForm = !showForm"
+        @click="handleNew"
       >
         + Nový
       </button>
@@ -437,6 +431,15 @@ const tabs = computed(() => {
       >
         {{ t.label }}
       </button>
+      <ClientOnly>
+        <button
+          v-if="canEditSystemSignatures"
+          :class="['px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors', tab === 'signatures' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']"
+          @click="tab = 'signatures'; showForm = false; showNewSignatureMenu = false"
+        >
+          Podpisové šablony
+        </button>
+      </ClientOnly>
     </div>
 
     <div v-if="showForm" class="bg-white border border-primary/30 rounded-xl p-5 mb-6">

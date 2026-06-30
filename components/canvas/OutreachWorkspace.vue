@@ -5,10 +5,12 @@ import { STEP_MODEL, MODEL_BADGE } from '~/config/pipeline'
 import { outreachWorkspaceKey, outreachActionsKey, type PartnerDbContact } from '~/composables/canvas/useOutreachWorkspace'
 import { normalizeKey } from '~/composables/pipeline/useSelectionState'
 
+const props = defineProps<{ standalone?: boolean }>()
+
 const canvas = inject(canvasKey)!
 const pipeline = inject(pipelineRunKey) as PipelineRunContext
 
-const isOpen = computed(() => canvas.activeOverlayNode.value?.stepType === 'OUTREACH_PREPARATION')
+const isOpen = computed(() => props.standalone || canvas.activeOverlayNode.value?.stepType === 'OUTREACH_PREPARATION')
 
 const modelBadge = computed(() => {
   const model = STEP_MODEL['OUTREACH_PREPARATION']
@@ -287,7 +289,32 @@ provide(outreachActionsKey, {
 </script>
 
 <template>
-  <Transition name="workspace">
+  <!-- Standalone mode: full-height block, no modal wrapper -->
+  <div v-if="standalone && isOpen" class="flex flex-col h-full overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center gap-2.5 px-5 py-3 border-b border-gray-100 shrink-0">
+      <h2 class="text-sm font-semibold text-gray-800">Příprava oslovení</h2>
+      <span
+        v-if="modelBadge"
+        :class="['text-xs px-2 py-0.5 rounded-full font-medium shrink-0', modelBadge.cls]"
+      >{{ modelBadge.label }}</span>
+    </div>
+    <!-- Body: three columns -->
+    <div class="flex-1 flex overflow-hidden min-h-0">
+      <div class="w-72 border-r border-gray-100 flex flex-col shrink-0">
+        <CanvasOutreachPartnerList />
+      </div>
+      <div class="w-80 border-r border-gray-100 shrink-0 flex flex-col overflow-hidden">
+        <CanvasOutreachPartnerDetail />
+      </div>
+      <div class="flex-1 flex flex-col min-w-0">
+        <CanvasOutreachWorkspaceConfig />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal mode (default) -->
+  <Transition v-else name="workspace">
     <div
       v-if="isOpen"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/20"
@@ -315,22 +342,16 @@ provide(outreachActionsKey, {
 
         <!-- Body: three columns -->
         <div class="flex-1 flex overflow-hidden min-h-0">
-          <!-- Left: partner list -->
           <div class="w-72 border-r border-gray-100 flex flex-col shrink-0">
             <CanvasOutreachPartnerList />
           </div>
-
-          <!-- Middle: partner detail -->
           <div class="w-80 border-r border-gray-100 shrink-0 flex flex-col overflow-hidden">
             <CanvasOutreachPartnerDetail />
           </div>
-
-          <!-- Right: config + editor -->
           <div class="flex-1 flex flex-col min-w-0">
             <CanvasOutreachWorkspaceConfig />
           </div>
         </div>
-
       </div>
     </div>
   </Transition>

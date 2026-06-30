@@ -197,8 +197,10 @@ function readTdaFile(filename: string) {
 }
 
 async function seedTdaContent() {
-  const kriz = await prisma.user.findFirst({ where: { isAdmin: true, googleId: { not: 'system' } } })
-  if (!kriz) { console.log('  ⚠ No admin user found, skipping TdA content'); return }
+  const kriz =
+    (await prisma.user.findFirst({ where: { isAdmin: true, googleId: { not: 'system' } } })) ??
+    (await prisma.user.findUnique({ where: { googleId: 'system' } }))
+  if (!kriz) { console.log('  ⚠ System user not found, skipping TdA content'); return }
 
   const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
   if (!tdaGroup) { console.log('  ⚠ TdA group not found, skipping TdA content'); return }

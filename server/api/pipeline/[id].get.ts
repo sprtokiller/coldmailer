@@ -1,8 +1,9 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { getProjectPermissions } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const session = await requireAuth(event)
   const id = getRouterParam(event, 'id')!
 
   const run = await prisma.pipelineRun.findUnique({
@@ -22,5 +23,9 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
-  return run
+
+  const user = await prisma.user.findUnique({ where: { id: session.id }, select: { isAdmin: true } })
+  const userPermissions = user?.isAdmin ? [] : await getProjectPermissions(session.id, run.projectId)
+
+  return { ...run, userPermissions, userIsAdmin: user?.isAdmin ?? false }
 })

@@ -91,8 +91,8 @@ const visibleNav = computed(() =>
         <p class="text-sm text-gray-400 mt-0.5">Přehled účtu a konfigurace integrace.</p>
       </div>
 
-      <!-- Credits widget -->
-      <div class="w-68 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 shrink-0">
+      <!-- Credits widget – admin only -->
+      <div v-if="isAdmin" class="w-68 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 shrink-0">
         <div class="flex items-center justify-between mb-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">OpenRouter kredity</span>
           <button
@@ -128,8 +128,7 @@ const visibleNav = computed(() =>
           <div class="w-full bg-gray-100 rounded-full h-1.5 mb-2 overflow-hidden">
             <div class="h-1.5 rounded-full transition-all duration-700" :class="barColor" :style="`width: ${remainingPct}%`" />
           </div>
-          <div class="flex justify-between text-[11px] text-gray-400">
-            <span>Celkem ${{ fmt(credits.totalCredits) }}</span>
+          <div class="text-[11px] text-gray-400">
             <span>Využito ${{ fmt(credits.usedCredits) }}</span>
           </div>
         </template>

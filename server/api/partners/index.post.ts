@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 
   const name = body.canonicalName?.trim()
   if (!name) {
-    throw createError({ statusCode: 400, message: 'NĂˇzev partnera je povinnĂ˝.' })
+    throw createError({ statusCode: 400, message: 'Název partnera je povinný.' })
   }
 
   const normalized = normalizeName(name)
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   if (existing) {
     throw createError({
       statusCode: 409,
-      message: `Partner "${existing.canonicalName}" jiĹľ existuje.`,
+      message: `Partner "${existing.canonicalName}" již existuje.`,
       data: { existingId: existing.id, existingName: existing.canonicalName },
     })
   }

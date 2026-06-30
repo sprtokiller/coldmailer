@@ -9,6 +9,7 @@ import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
 import { registerJob, cleanupJob } from '~/server/utils/job-registry'
 import { COPY_PROMPT_STEPS } from '~/server/utils/ai'
+import { requirePipelineManage } from '~/server/utils/projectPermissions'
 // STEP_SYSTEM_PROMPTS kept only as fallback for steps not yet seeded in DB.
 import { STEP_SYSTEM_PROMPTS, GROUP_FONTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
 
@@ -52,6 +53,11 @@ export default defineEventHandler(async (event) => {
     include: { project: { include: { group: true } } },
   })
   if (!run) throw createError({ statusCode: 404, message: 'Pipeline run not found' })
+
+  const MANAGE_REQUIRED_STEPS = ['PARTNER_IDENTIFICATION']
+  if (MANAGE_REQUIRED_STEPS.includes(body.stepType)) {
+    await requirePipelineManage(event, run.projectId)
+  }
 
   if (run.mode === 'short' && (body.stepType === 'MARKET_SCANNING' || body.stepType === 'PARTNER_IDENTIFICATION')) {
     throw createError({ statusCode: 400, message: 'Zkrácená pipeline nepodporuje tento krok.' })
@@ -146,21 +152,10 @@ export default defineEventHandler(async (event) => {
     ? rawPromptText.replace('<[[SCHEMA]]>', formatSchemaForPrompt(outputSchema))
     : rawPromptText
 
-  // Inject canonical partner industry tags for PARTNER_PROFILING
-  let industryTagsContext: string[] = []
-  if (body.stepType === 'PARTNER_PROFILING') {
-    const tagRow = await prisma.systemConfig.findUnique({ where: { key: 'tags.partnerIndustry' } })
-    const tags = Array.isArray(tagRow?.value) ? tagRow!.value as string[] : []
-    if (tags.length > 0) {
-      industryTagsContext = [`Povolené hodnoty pro pole "industry" (vyber JEDNU z tohoto seznamu):\n${tags.join(', ')}`]
-    }
-  }
-
   const allContextParts = [
     ...contextParts.map(c => `${c.name}:\n${c.content}`),
     ...(sellingPoint ? [`Prodejní argumenty (${sellingPoint.name}):\n${sellingPoint.content}`] : []),
     ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
-    ...industryTagsContext,
   ]
 
   const step = await prisma.pipelineStep.create({
