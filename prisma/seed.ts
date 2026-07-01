@@ -274,7 +274,7 @@ async function seedTdaContent() {
     console.log(`  ✓ ContextPart: ${cp.name}`)
   }
 
-  // ── Signature: Tour de App (systémová – vidí všichni) ────────────────────
+  // ── Signature: Tour de App (šablona pro typ projektu TdA) ───────────────
   const sigContent = readTdaFile('Tour de App - Podpis Template.txt')
   await prisma.signature.upsert({
     where: { id: 'tda-signature-template' },
@@ -282,13 +282,13 @@ async function seedTdaContent() {
       id: 'tda-signature-template',
       name: 'Tour de App',
       content: sigContent,
-      isSystem: true,
-      isDefault: false,
+      isTemplate: true,
+      groupId: tdaGroup.id,
       authorId: kriz.id,
     },
-    update: { content: sigContent },
+    update: { content: sigContent, isTemplate: true, groupId: tdaGroup.id },
   })
-  console.log('  ✓ Signature: Tour de App (systémová)')
+  console.log('  ✓ Signature: Tour de App (šablona)')
 }
 
 main()

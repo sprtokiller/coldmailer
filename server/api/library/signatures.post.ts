@@ -1,37 +1,27 @@
-﻿import { prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import { requireAdmin } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ name: string; content: string; isDefault?: boolean; isSystem?: boolean }>(event)
+  const body = await readBody<{ name: string; content: string; groupId: string; isTemplate?: boolean }>(event)
 
-  if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
-    throw createError({ statusCode: 400, message: 'NĂˇzev podpisu je povinnĂ˝' })
-  }
-  if (!body.content || typeof body.content !== 'string' || !body.content.trim()) {
-    throw createError({ statusCode: 400, message: 'Obsah podpisu je povinnĂ˝' })
-  }
+  if (!body.name?.trim()) throw createError({ statusCode: 400, message: 'Název podpisu je povinný' })
+  if (!body.content?.trim()) throw createError({ statusCode: 400, message: 'Obsah podpisu je povinný' })
+  if (!body.groupId) throw createError({ statusCode: 400, message: 'Typ projektu je povinný' })
 
-  const isSystem = body.isSystem ?? false
-  const isDefault = isSystem ? false : (body.isDefault ?? false)
+  const isTemplate = body.isTemplate ?? false
+  const user = isTemplate ? await requireAdmin(event) : await requireAuth(event)
 
-  const user = isSystem ? await requireAdmin(event) : await requireAuth(event)
-
-  if (isDefault) {
-    await prisma.signature.updateMany({
-      where: { authorId: user.id, isSystem: false, isDefault: true },
-      data: { isDefault: false },
-    })
-  }
+  const group = await prisma.group.findUnique({ where: { id: body.groupId } })
+  if (!group) throw createError({ statusCode: 400, message: 'Neplatný typ projektu' })
 
   return prisma.signature.create({
     data: {
-      name: body.name,
+      name: body.name.trim(),
       content: body.content,
-      isDefault,
-      isSystem,
+      isTemplate,
+      groupId: body.groupId,
       authorId: user.id,
     },
   })
 })
-

@@ -4,29 +4,30 @@ interface SignatureItem {
   id: string
   name: string
   content: string
-  isDefault: boolean
-  isSystem: boolean
+  isTemplate: boolean
+  groupId: string
+  group: { id: string; name: string; color: string }
   author?: { id: string; name: string; image: string | null }
 }
 
-const { groupFont } = useActiveProject()
-const { data: signatures, refresh } = await useFetch<SignatureItem[]>('/api/library/signatures', { default: () => [] })
+const { groupFont, groups } = useActiveProject()
+const { data: sigData, refresh } = await useFetch<{ templates: SignatureItem[]; personal: SignatureItem[] }>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
 
-const templates = computed(() => signatures.value.filter(s => s.isSystem))
-const personal = computed(() => signatures.value.filter(s => !s.isSystem))
+const templates = computed(() => sigData.value?.templates ?? [])
+const personal = computed(() => sigData.value?.personal ?? [])
 
 const editing = ref(false)
 const editingId = ref<string | null>(null)
 const formName = ref('')
 const formContent = ref('')
-const formIsDefault = ref(false)
+const formGroupId = ref('')
 const saving = ref(false)
 
 function startNew() {
   editingId.value = null
   formName.value = ''
   formContent.value = ''
-  formIsDefault.value = false
+  formGroupId.value = groups.value[0]?.id ?? ''
   editing.value = true
 }
 
@@ -34,7 +35,7 @@ function startFromTemplate(t: SignatureItem) {
   editingId.value = null
   formName.value = t.name + ' (moje kopie)'
   formContent.value = t.content
-  formIsDefault.value = false
+  formGroupId.value = t.groupId
   editing.value = true
 }
 
@@ -42,7 +43,7 @@ function startEdit(s: SignatureItem) {
   editingId.value = s.id
   formName.value = s.name
   formContent.value = s.content
-  formIsDefault.value = s.isDefault
+  formGroupId.value = s.groupId
   editing.value = true
 }
 
@@ -51,18 +52,18 @@ function cancel() {
 }
 
 async function save() {
-  if (!formName.value.trim() || saving.value) return
+  if (!formName.value.trim() || !formGroupId.value || saving.value) return
   saving.value = true
   try {
     if (editingId.value) {
       await $fetch(`/api/library/signatures/${editingId.value}`, {
         method: 'PATCH',
-        body: { name: formName.value.trim(), content: formContent.value, isDefault: formIsDefault.value },
+        body: { name: formName.value.trim(), content: formContent.value, groupId: formGroupId.value },
       })
     } else {
       await $fetch('/api/library/signatures', {
         method: 'POST',
-        body: { name: formName.value.trim(), content: formContent.value, isDefault: formIsDefault.value },
+        body: { name: formName.value.trim(), content: formContent.value, groupId: formGroupId.value },
       })
     }
     editing.value = false
@@ -71,18 +72,6 @@ async function save() {
     alert(err?.data?.message || err?.message || 'Nepodařilo se uložit podpis.')
   } finally {
     saving.value = false
-  }
-}
-
-async function setDefault(id: string) {
-  try {
-    await $fetch(`/api/library/signatures/${id}`, {
-      method: 'PATCH',
-      body: { isDefault: true },
-    })
-    await refresh()
-  } catch (err: any) {
-    alert(err?.data?.message || err?.message || 'Nepodařilo se nastavit výchozí podpis.')
   }
 }
 
@@ -95,6 +84,15 @@ async function deleteSignature(id: string) {
     alert(err?.data?.message || err?.message || 'Nepodařilo se smazat podpis.')
   }
 }
+
+const personalByGroup = computed(() => {
+  const map = new Map<string, { group: SignatureItem['group']; sigs: SignatureItem[] }>()
+  for (const s of personal.value) {
+    if (!map.has(s.groupId)) map.set(s.groupId, { group: s.group, sigs: [] })
+    map.get(s.groupId)!.sigs.push(s)
+  }
+  return [...map.values()]
+})
 </script>
 
 <template>
@@ -123,21 +121,23 @@ async function deleteSignature(id: string) {
         placeholder="Např. Profesionální podpis"
       />
 
+      <label class="block text-xs font-medium text-gray-500 mb-1">Typ projektu</label>
+      <select
+        v-model="formGroupId"
+        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 mb-3"
+      >
+        <option value="">— vyberte typ projektu —</option>
+        <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+      </select>
+
       <label class="block text-xs font-medium text-gray-500 mb-1">Obsah podpisu</label>
       <RichTextEditor v-model="formContent" :default-font="groupFont" />
-
-      <div class="flex items-center gap-4 mt-3">
-        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-          <input v-model="formIsDefault" type="checkbox" class="accent-primary" />
-          Nastavit jako výchozí
-        </label>
-      </div>
 
       <div class="flex gap-2 mt-4 justify-end">
         <button class="text-sm text-gray-400 hover:text-gray-600 px-4 py-2" @click="cancel">Zrušit</button>
         <button
           class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-          :disabled="!formName.trim() || saving"
+          :disabled="!formName.trim() || !formGroupId || saving"
           @click="save"
         >{{ saving ? 'Ukládám…' : editingId ? 'Uložit' : 'Vytvořit' }}</button>
       </div>
@@ -155,7 +155,11 @@ async function deleteSignature(id: string) {
           <div class="flex items-start justify-between mb-2">
             <div>
               <span class="text-sm font-medium text-gray-800">{{ t.name }}</span>
-              <span v-if="t.author" class="text-[10px] text-gray-400 ml-2">{{ t.author.name }}</span>
+              <span
+                v-if="t.group"
+                class="text-[10px] px-1.5 py-0.5 rounded-full ml-2 font-medium"
+                :style="{ background: t.group.color + '22', color: t.group.color }"
+              >{{ t.group.name }}</span>
             </div>
             <button
               class="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors font-medium shrink-0"
@@ -167,42 +171,44 @@ async function deleteSignature(id: string) {
       </div>
     </div>
 
-    <!-- Personal signatures -->
+    <!-- Personal signatures grouped by project type -->
     <div v-if="!editing">
       <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moje podpisy</h3>
       <div v-if="personal.length === 0" class="text-sm text-gray-400 py-4">
         Zatím nemáte žádný vlastní podpis. Vytvořte si nový nebo použijte šablonu výše.
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div v-for="bucket in personalByGroup" :key="bucket.group.id" class="mb-4">
         <div
-          v-for="s in personal"
-          :key="s.id"
-          class="bg-white rounded-xl border shadow-sm p-4"
-          :class="s.isDefault ? 'border-primary/30 ring-1 ring-primary/20' : 'border-gray-100'"
+          class="text-[11px] font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"
+          :style="{ color: bucket.group.color }"
         >
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2">
+          <span
+            class="inline-block w-2 h-2 rounded-full"
+            :style="{ background: bucket.group.color }"
+          />
+          {{ bucket.group.name }}
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div
+            v-for="s in bucket.sigs"
+            :key="s.id"
+            class="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+          >
+            <div class="flex items-start justify-between mb-2">
               <span class="text-sm font-medium text-gray-800">{{ s.name }}</span>
-              <span v-if="s.isDefault" class="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">výchozí</span>
+              <div class="flex items-center gap-1">
+                <button
+                  class="text-[10px] text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
+                  @click="startEdit(s)"
+                >Upravit</button>
+                <button
+                  class="text-[10px] text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded transition-colors"
+                  @click="deleteSignature(s.id)"
+                >Smazat</button>
+              </div>
             </div>
-            <div class="flex items-center gap-1">
-              <button
-                v-if="!s.isDefault"
-                class="text-[10px] text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
-                title="Nastavit jako výchozí"
-                @click="setDefault(s.id)"
-              >⭐</button>
-              <button
-                class="text-[10px] text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
-                @click="startEdit(s)"
-              >Upravit</button>
-              <button
-                class="text-[10px] text-gray-400 hover:text-red-500 px-1.5 py-0.5 rounded transition-colors"
-                @click="deleteSignature(s.id)"
-              >Smazat</button>
-            </div>
+            <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(s.content)" /></ClientOnly>
           </div>
-          <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(s.content)" /></ClientOnly>
         </div>
       </div>
     </div>

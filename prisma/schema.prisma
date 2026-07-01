@@ -54,6 +54,7 @@ model Group {
   contextParts  ContextPart[]
   sellingPoints SellingPoint[]
   emailDrafts   EmailDraft[]
+  signatures    Signature[]
 }
 
 model Project {
@@ -96,15 +97,18 @@ model UserBudget {
 }
 
 model Signature {
-  id        String   @id @default(cuid())
-  name      String
-  content   String
-  isDefault Boolean  @default(false)
-  isSystem  Boolean  @default(false)
-  author    User     @relation(fields: [authorId], references: [id])
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  content    String
+  isTemplate Boolean  @default(false)
+  groupId    String
+  group      Group    @relation(fields: [groupId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id])
+  authorId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([groupId])
 }
 
 enum StepType {

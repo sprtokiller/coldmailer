@@ -49,7 +49,7 @@ export interface ProjectOutreachContext {
   contextParts: Ref<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>
   sellingPoints: Ref<Array<{ id: string; name: string; content: string }>>
   emailDrafts: Ref<Array<{ id: string; name: string; subject: string; body: string }>>
-  signatures: Ref<Array<{ id: string; name: string; content: string; isDefault: boolean }>>
+  signatures: Ref<Array<{ id: string; name: string; content: string; groupId: string }>>
   vaConfig: Ref<OutreachConfig>
   opConfig: Ref<OutreachConfig>
   executing: Ref<'alignment' | 'draft' | null>
@@ -161,9 +161,9 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
       $fetch<typeof contextParts.value>('/api/library/context-parts', { query: { projectId: pid } }),
       $fetch<typeof sellingPoints.value>('/api/library/selling-points', { query: { projectId: pid } }),
       $fetch<typeof emailDrafts.value>('/api/library/email-drafts', { query: { projectId: pid } }),
-      $fetch<typeof signatures.value>('/api/library/signatures'),
+      $fetch<{ templates: unknown[]; personal: typeof signatures.value }>('/api/library/signatures', { query: { projectId: pid } }),
     ])
-    prompts.value = p; contextParts.value = cp; sellingPoints.value = sp; emailDrafts.value = ed; signatures.value = sig
+    prompts.value = p; contextParts.value = cp; sellingPoints.value = sp; emailDrafts.value = ed; signatures.value = sig.personal
 
     // Auto-select system prompts
     const vaPrompt = p.find(x => x.stepType === 'VALUE_ALIGNMENT' && x.isSystem)

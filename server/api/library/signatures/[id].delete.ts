@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const sig = await prisma.signature.findUnique({ where: { id } })
   if (!sig) throw createError({ statusCode: 404, message: 'Podpis nenalezen' })
 
-  if (sig.isSystem) {
+  if (sig.isTemplate) {
     await requireAdmin(event)
   } else {
     if (sig.authorId !== user.id) throw createError({ statusCode: 403, message: 'Nemáte oprávnění smazat tento podpis' })

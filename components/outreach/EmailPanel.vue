@@ -75,7 +75,7 @@ watch(selectedContactIdx, () => {
 })
 
 watch(sigs, (val) => {
-  if (!selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val.find(s => s.isDefault)?.id ?? val[0]?.id ?? ''
+  if (!selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0]?.id ?? ''
 }, { immediate: true })
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -226,15 +226,18 @@ function relTime(iso: string | null | undefined) {
           <div class="field-group">
             <label class="field-label">Podpis</label>
             <select
+              v-if="sigs.length > 0"
               v-model="selectedSignatureId"
               class="field-select"
               :class="selectedSignatureId ? '' : 'field-select--warn'"
             >
-              <option value="">— bez podpisu —</option>
-              <option v-for="sig in sigs" :key="sig.id" :value="sig.id">
-                {{ sig.name }}{{ sig.isDefault ? ' (výchozí)' : '' }}
-              </option>
+              <option value="">— vyberte —</option>
+              <option v-for="sig in sigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
             </select>
+            <div v-else class="no-sig">
+              Nemáte podpis pro tento typ projektu.
+              <NuxtLink to="/settings?tab=signatures" class="no-sig-link">Vytvořit v Nastavení</NuxtLink>
+            </div>
           </div>
         </div>
 
@@ -357,7 +360,7 @@ function relTime(iso: string | null | undefined) {
             Uložit
           </button>
           <button
-            :disabled="!emailTo.trim() || !emailSubject.trim() || saving || hasPendingSend"
+            :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend"
             class="btn-primary"
             @click="handleSendClick"
           >
@@ -498,6 +501,21 @@ function relTime(iso: string | null | undefined) {
   border: 1px solid #fecaca;
   background: #fef2f2;
   border-radius: 7px;
+}
+
+.no-sig {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 7px;
+}
+
+.no-sig-link {
+  color: #b45309;
+  text-decoration: underline;
+  margin-left: 4px;
 }
 
 /* ── Argument chips ──────────────────────────────────────── */

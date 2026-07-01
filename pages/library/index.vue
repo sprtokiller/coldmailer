@@ -13,8 +13,7 @@ type LibraryItem = {
   subject?: string
   stepType?: string
   stepKeys?: string[]
-  isSystem?: boolean
-  isDefault?: boolean
+  isTemplate?: boolean
   author?: Author
   groupId?: string | null
   group?: { id: string; name: string; color: string } | null
@@ -28,8 +27,9 @@ type SignatureItem = {
   id: string
   name: string
   content: string
-  isDefault: boolean
-  isSystem: boolean
+  isTemplate: boolean
+  groupId: string
+  group: { id: string; name: string; color: string }
   authorId: string
   author?: { id: string; name: string; image: string | null }
   createdAt: string | Date
@@ -145,8 +145,7 @@ const form = ref({
   subject: '',
   body: '',
   signatureContent: '',
-  signatureIsDefault: false,
-  signatureIsSystem: false,
+  signatureGroupId: '',
   scope: '',
 })
 
@@ -161,8 +160,7 @@ function resetForm() {
     subject: '',
     body: '',
     signatureContent: '',
-    signatureIsDefault: false,
-    signatureIsSystem: false,
+    signatureGroupId: activeProject.value?.groupId ?? groups.value[0]?.id ?? '',
     scope: activeProject.value ? `project:${activeProject.value.id}` : '',
   }
   editingId.value = null
@@ -204,8 +202,7 @@ function startEdit(item: LibraryItem) {
   form.value.stepType = item.stepType ?? 'MARKET_SCANNING'
   form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
   form.value.signatureContent = item.content ?? ''
-  form.value.signatureIsDefault = item.isDefault ?? false
-  form.value.signatureIsSystem = item.isSystem ?? false
+  form.value.signatureGroupId = (item as unknown as SignatureItem).groupId ?? ''
   form.value.scope = item.projectId
     ? `project:${item.projectId}`
     : item.groupId
@@ -234,10 +231,9 @@ function toggleStepKey(key: string) {
   }
 }
 
-function startNewSignature(isSystem: boolean) {
+function startNewSignature() {
   resetForm()
   tab.value = 'signatures'
-  form.value.signatureIsSystem = isSystem
   showForm.value = true
   showNewSignatureMenu.value = false
 }
@@ -246,7 +242,7 @@ function useTemplateAsBase(sig: SignatureItem) {
   resetForm()
   form.value.name = sig.name + ' (kopie)'
   form.value.signatureContent = sig.content
-  form.value.signatureIsSystem = false
+  form.value.signatureGroupId = sig.groupId
   showForm.value = true
 }
 
@@ -294,9 +290,9 @@ async function save() {
     } else {
       const cleanContent = sanitizeAndNormalizeHtml(form.value.signatureContent)
       if (editingId.value) {
-        await $fetch(`/api/library/signatures/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: cleanContent, isDefault: form.value.signatureIsDefault } })
+        await $fetch(`/api/library/signatures/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: cleanContent, groupId: form.value.signatureGroupId } })
       } else {
-        await $fetch('/api/library/signatures', { method: 'POST', body: { name: form.value.name, content: cleanContent, isDefault: form.value.signatureIsDefault, isSystem: form.value.signatureIsSystem } })
+        await $fetch('/api/library/signatures', { method: 'POST', body: { name: form.value.name, content: cleanContent, groupId: form.value.signatureGroupId, isTemplate: true } })
       }
       await refreshSignatures()
     }
@@ -319,14 +315,6 @@ async function deleteSignature(id: string) {
   } finally {
     deletingSignatureId.value = null
   }
-}
-
-async function setDefaultSignature(id: string) {
-  await $fetch(`/api/library/signatures/${id}`, {
-    method: 'PATCH',
-    body: { isDefault: true },
-  })
-  await refreshSignatures()
 }
 
 // ── Filters ──────────────────────────────────────────────────────────────────
@@ -399,7 +387,7 @@ const tabs: { key: Tab; label: string }[] = [
 
 function handleNew() {
   if (tab.value === 'signatures' && canEditSystemSignatures.value) {
-    startNewSignature(true)
+    startNewSignature()
   }
   else {
     showForm.value = !showForm.value
@@ -445,7 +433,7 @@ function handleNew() {
     <div v-if="showForm" class="bg-white border border-primary/30 rounded-xl p-5 mb-6">
       <h3 class="font-medium text-gray-800 mb-4">
         {{ editingId ? 'Upravit' : 'Nový' }}
-        <template v-if="tab === 'signatures'">{{ form.signatureIsSystem ? 'podpisová šablona' : 'vlastní podpis' }}</template>
+        <template v-if="tab === 'signatures'">podpisová šablona</template>
         <template v-else>{{ tabs.find(t => t.key === tab)?.label }}</template>
       </h3>
       <form class="space-y-3" @submit.prevent="save">
@@ -501,12 +489,19 @@ function handleNew() {
 
         <template v-if="tab === 'signatures'">
           <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Typ projektu</label>
+            <select
+              v-model="form.signatureGroupId"
+              required
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="" disabled>Vyberte typ projektu</option>
+              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+            </select>
+          </div>
+          <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Obsah podpisu (WYSIWYG)</label>
             <RichTextEditor v-model="form.signatureContent" :default-font="groupFont" />
-          </div>
-          <div v-if="!form.signatureIsSystem" class="flex items-center gap-2">
-            <input id="sig-default" v-model="form.signatureIsDefault" type="checkbox" class="accent-primary" />
-            <label for="sig-default" class="text-sm text-gray-600 cursor-pointer select-none">Nastavit jako výchozí</label>
           </div>
         </template>
 
@@ -648,6 +643,11 @@ function handleNew() {
               <div class="flex items-start gap-2 min-w-0 mb-2">
                 <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ sig.name }}</h3>
                 <span class="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0">šablona</span>
+                <span
+                  v-if="sig.group"
+                  class="text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0 font-medium"
+                  :style="{ background: sig.group.color + '22', color: sig.group.color }"
+                >{{ sig.group.name }}</span>
               </div>
               <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
                 <img v-if="sig.author?.image" :src="sig.author.image" :alt="sig.author.name" class="w-4 h-4 rounded-full shrink-0" referrerpolicy="no-referrer" />
@@ -664,7 +664,7 @@ function handleNew() {
                 <template v-if="canEditSystemSignatures">
                   <button
                     class="text-xs text-primary border border-primary/30 px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
-                    @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isDefault: sig.isDefault, isSystem: true, createdAt: sig.createdAt, derivedFromId: null })"
+                    @click="startEdit({ id: sig.id, name: sig.name, content: sig.content, isTemplate: true, groupId: sig.groupId, group: sig.group, authorId: sig.authorId ?? '', createdAt: sig.createdAt, derivedFromId: null })"
                   >Upravit</button>
                   <button
                     class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors ml-auto"
