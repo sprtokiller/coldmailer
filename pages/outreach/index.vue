@@ -63,7 +63,7 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
       <aside class="outreach-col outreach-col--partners">
         <div class="col-header">
           <h2 class="col-title">Partneři</h2>
-          <span v-if="ctx.partners.value.length" class="col-badge">{{ ctx.partners.value.length }}</span>
+          <span v-if="ctx.visiblePartnerCount.value" class="col-badge">{{ ctx.visiblePartnerCount.value }}</span>
         </div>
         <OutreachPartnerSidebar class="col-body" />
       </aside>

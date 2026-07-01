@@ -6,6 +6,7 @@
  * VALUE_ALIGNMENT / OUTREACH_PREPARATION pro konkrétního partnera.
  */
 import type { InjectionKey } from 'vue'
+import { useUserSession } from '#imports'
 
 export interface OutreachAssignment {
   assigneeId: string
@@ -35,6 +36,7 @@ export interface OutreachConfig {
 }
 
 export interface ProjectOutreachContext {
+  visiblePartnerCount: ComputedRef<number>
   projectId: Ref<string | null>
   partners: Ref<OutreachPartner[]>
   loadingPartners: Ref<boolean>
@@ -108,6 +110,11 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   })
 
   const canRunAI = computed(() => canManageAll.value || isAssignedToMe.value)
+
+  const visiblePartnerCount = computed(() => {
+    if (canManageAll.value) return partners.value.length
+    return partners.value.filter(p => !p.assignment || p.assignment.assigneeId === currentUserId.value).length
+  })
 
   function promptsForStep(step: string) {
     return prompts.value.filter(p => p.stepType === step)
@@ -274,6 +281,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     canManageAll,
     isSubstituting,
     canRunAI,
+    visiblePartnerCount,
     selectPartner,
     refreshPartners,
     refreshDetail,

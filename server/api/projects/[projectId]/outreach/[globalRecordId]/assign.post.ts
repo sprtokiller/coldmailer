@@ -6,7 +6,8 @@
  */
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requireProjectAccess, getUserScopeAccess } from '~/server/utils/permissions'
+import { requireProjectAccess } from '~/server/utils/permissions'
+import { getInteractionAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -14,9 +15,9 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
-  const access = await getUserScopeAccess(session.id)
-  if (!access.isAdmin) {
-    throw createError({ statusCode: 403, message: 'Pouze administrátoři mohou přiřazovat partnery.' })
+  const access = await getInteractionAccess(session.id, projectId)
+  if (!access.isAdmin && !access.canEditAll) {
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění přiřazovat partnery.' })
   }
 
   const { userId } = await readBody<{ userId: string | null }>(event)

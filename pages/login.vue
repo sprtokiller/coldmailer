@@ -11,6 +11,13 @@ const errorMessage = computed(() => {
   }
   return null
 })
+
+const isDev = import.meta.dev
+
+async function devLogin(role: 'obchodni-tym' | 'vedeni-obchodu' = 'obchodni-tym') {
+  await $fetch('/api/auth/dev-login', { method: 'POST', body: { role } })
+  await navigateTo('/')
+}
 </script>
 
 <template>
@@ -46,6 +53,21 @@ const errorMessage = computed(() => {
       </a>
 
       <p class="mt-5 text-xs text-gray-400">Pouze účty @scg.cz</p>
+
+      <div v-if="isDev" class="mt-6 pt-5 border-t border-gray-100 flex gap-4 justify-center">
+        <button
+          class="text-[11px] text-gray-300 hover:text-gray-500 transition-colors cursor-pointer"
+          @click="devLogin('obchodni-tym')"
+        >
+          ⚙ Obchodní tým
+        </button>
+        <button
+          class="text-[11px] text-gray-300 hover:text-gray-500 transition-colors cursor-pointer"
+          @click="devLogin('vedeni-obchodu')"
+        >
+          ⚙ Vedení obchodu
+        </button>
+      </div>
     </div>
   </div>
 </template>

@@ -20,12 +20,14 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(user.id, projectId)
   const canManageAll = access.isAdmin || access.canEditAll
 
-  const projectRecords = await prisma.projectRecord.findMany({
-    where: { projectId },
-    select: { globalRecordId: true },
-  })
+  const [projectRecords, interactionRecords] = await Promise.all([
+    prisma.projectRecord.findMany({ where: { projectId }, select: { globalRecordId: true } }),
+    prisma.interaction.findMany({ where: { projectId }, select: { globalRecordId: true } }),
+  ])
 
-  const globalRecordIds = [...new Set(projectRecords.map(r => r.globalRecordId))]
+  const globalRecordIds = [...new Set(
+    [...projectRecords, ...interactionRecords].map(r => r.globalRecordId),
+  )]
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }
 

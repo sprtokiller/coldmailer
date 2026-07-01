@@ -78,5 +78,22 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  // When adding a partner to a project (FULFILLMENT), also ensure they're visible
+  // in the outreach sidebar and optionally pre-assign them.
+  if (body.type === 'FULFILLMENT') {
+    await prisma.projectRecord.upsert({
+      where: { projectId_globalRecordId: { projectId, globalRecordId } },
+      create: { projectId, globalRecordId },
+      update: {},
+    })
+    if (assigneeIds.length === 1) {
+      await prisma.outreachAssignment.upsert({
+        where: { projectId_globalRecordId: { projectId, globalRecordId } },
+        create: { projectId, globalRecordId, assigneeId: assigneeIds[0], assignedById: session.id },
+        update: { assigneeId: assigneeIds[0], assignedById: session.id },
+      })
+    }
+  }
+
   return interaction
 })
