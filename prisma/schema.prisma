@@ -420,8 +420,10 @@ model ProjectRecord {
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
 
   // Moved from deprecated PartnerFulfillment
-  contactBlacklist Json?
-  emailDisplayMode String @default("text")
+  contactBlacklist    Json?
+  emailDisplayMode    String   @default("text")
+  additionalAddresses Json?    // String[] – project-specific email addresses not in global PartnerContact
+  autoIncludeDomain   Boolean? // null = auto-detect from contacts; true/false = explicit user override
 
   @@unique([projectId, globalRecordId])
   @@index([globalRecordId])

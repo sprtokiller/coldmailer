@@ -12,35 +12,22 @@ export default defineEventHandler(async (event) => {
     where: { id },
     include: {
       contacts: { orderBy: [{ isPrimary: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }] },
-      pipelineRefs: {
-        where: projectId ? { pipelineRun: { projectId } } : undefined,
-        orderBy: { addedAt: 'desc' },
-        take: 1,
-        include: {
-          assignee: { select: { id: true, name: true, image: true } },
-          coAssignees: { select: { id: true, name: true, image: true } }
-        }
-      }
+      outreachAssignments: {
+        where: projectId ? { projectId } : undefined,
+        include: { assignee: { select: { id: true, name: true, image: true } } },
+      },
     },
   })
 
   if (!record) throw createError({ statusCode: 404, message: 'Not found' })
 
-  const currentRef = record.pipelineRefs[0]
-
-  const solutionAssignees = []
-  if (currentRef?.assignee) solutionAssignees.push(currentRef.assignee)
-  if (currentRef?.coAssignees) {
-    for (const ca of currentRef.coAssignees) {
-      if (ca.id !== currentRef.assignee?.id) solutionAssignees.push(ca)
-    }
-  }
+  const assignees = record.outreachAssignments.map(a => a.assignee)
 
   return {
     ...record,
-    pipelineRefId: currentRef?.id ?? null,
-    actionStatus: currentRef?.actionStatus ?? null,
-    dealStage: currentRef?.dealStage ?? null,
-    assignees: solutionAssignees,
+    pipelineRefId: null,
+    actionStatus: null,
+    dealStage: null,
+    assignees,
   }
 })

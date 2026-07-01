@@ -36,6 +36,7 @@ type PartnerDomainContext = {
   knownEmails: Set<string>
   blacklistedEmails: Set<string>
   projectId: string
+  autoIncludeDomain: boolean
 }
 
 async function buildDomainContext(
@@ -49,7 +50,9 @@ async function buildDomainContext(
       id: true,
       payload: true,
       contacts: { select: { address: true } },
-      projectRecords: { select: { contactBlacklist: true } },
+      projectRecords: {
+        select: { contactBlacklist: true, additionalAddresses: true, autoIncludeDomain: true },
+      },
     },
   })
 
@@ -78,15 +81,27 @@ async function buildDomainContext(
       }
     }
 
-    for (const f of rec.projectRecords) {
-      if (Array.isArray(f.contactBlacklist)) {
-        for (const email of f.contactBlacklist) {
+    for (const pr of rec.projectRecords) {
+      if (Array.isArray(pr.contactBlacklist)) {
+        for (const email of pr.contactBlacklist) {
           if (typeof email === 'string') blacklistedEmails.add(email.toLowerCase())
+        }
+      }
+      // Include project-specific addresses as known so they don't get auto-promoted to global contacts
+      if (Array.isArray(pr.additionalAddresses)) {
+        for (const email of pr.additionalAddresses) {
+          if (typeof email === 'string') knownEmails.add(email.toLowerCase())
         }
       }
     }
 
-    result.set(rec.id, { domains, knownEmails, blacklistedEmails, projectId: '' })
+    const hasCompanyDomain = domains.size > 0
+    // null stored value → default to true when a company domain exists (backward-compat)
+    const autoIncludeDomain = rec.projectRecords.some(
+      pr => pr.autoIncludeDomain === true || (pr.autoIncludeDomain === null && hasCompanyDomain),
+    ) || (rec.projectRecords.length === 0 && hasCompanyDomain)
+
+    result.set(rec.id, { domains, knownEmails, blacklistedEmails, projectId: '', autoIncludeDomain })
   }
 
   return result
@@ -289,11 +304,25 @@ export async function syncGmailForPartnerEmail(
 
 type PartnerEmailEntry = { globalRecordId: string; projectId: string }
 
+function addToMap(
+  map: Map<string, PartnerEmailEntry[]>,
+  email: string,
+  entry: PartnerEmailEntry,
+) {
+  const existing = map.get(email) ?? []
+  if (!existing.some(e => e.globalRecordId === entry.globalRecordId && e.projectId === entry.projectId)) {
+    existing.push(entry)
+  }
+  map.set(email, existing)
+}
+
 async function collectPartnerEmails(
   userId: string,
-  isAdmin: boolean,
+  _isAdmin: boolean,
 ): Promise<Map<string, PartnerEmailEntry[]>> {
-  // Find GlobalRecords where the user is primary assignee or co-assignee
+  const map = new Map<string, PartnerEmailEntry[]>()
+
+  // 1. Pipeline-based assignments (legacy)
   const globalRecords = await prisma.globalRecord.findMany({
     where: {
       pipelineRefs: {
@@ -322,17 +351,42 @@ async function collectPartnerEmails(
     },
   })
 
-  const map = new Map<string, PartnerEmailEntry[]>()
-
   for (const record of globalRecords) {
     const projectId = record.pipelineRefs[0]?.pipelineRun.projectId
     if (!projectId) continue
-
+    const entry: PartnerEmailEntry = { globalRecordId: record.id, projectId }
     for (const contact of record.contacts) {
-      const email = contact.address.toLowerCase()
-      const existing = map.get(email) ?? []
-      existing.push({ globalRecordId: record.id, projectId })
-      map.set(email, existing)
+      addToMap(map, contact.address.toLowerCase(), entry)
+    }
+  }
+
+  // 2. Outreach-based assignments (new module) + additionalAddresses
+  const outreachAssigned = await prisma.outreachAssignment.findMany({
+    where: { assigneeId: userId },
+    select: {
+      globalRecordId: true,
+      projectId: true,
+      globalRecord: {
+        select: {
+          contacts: { select: { address: true } },
+          projectRecords: {
+            select: { projectId: true, additionalAddresses: true },
+          },
+        },
+      },
+    },
+  })
+
+  for (const assign of outreachAssigned) {
+    const entry: PartnerEmailEntry = { globalRecordId: assign.globalRecordId, projectId: assign.projectId }
+    for (const contact of assign.globalRecord.contacts) {
+      addToMap(map, contact.address.toLowerCase(), entry)
+    }
+    const projRecord = assign.globalRecord.projectRecords.find(pr => pr.projectId === assign.projectId)
+    if (projRecord && Array.isArray(projRecord.additionalAddresses)) {
+      for (const addr of projRecord.additionalAddresses) {
+        if (typeof addr === 'string') addToMap(map, addr.toLowerCase(), entry)
+      }
     }
   }
 
@@ -380,7 +434,7 @@ async function processMessage(
       const domain = getDomainFromEmail(addr)
       if (domain) {
         for (const [globalRecordId, ctx] of domainCtx.entries()) {
-          if (ctx.domains.has(domain) && !ctx.blacklistedEmails.has(addr)) {
+          if (ctx.autoIncludeDomain && ctx.domains.has(domain) && !ctx.blacklistedEmails.has(addr)) {
             if (!seenRecords.has(globalRecordId)) {
               seenRecords.add(globalRecordId)
               matchedEntries.push({ globalRecordId, projectId: ctx.projectId })
