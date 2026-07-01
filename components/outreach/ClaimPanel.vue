@@ -3,6 +3,9 @@ import { projectOutreachKey } from '~/composables/useProjectOutreach'
 
 const ctx = inject(projectOutreachKey)!
 
+const assignment = computed(() => ctx.selectedPartner.value?.assignment ?? null)
+const isAssignedToOther = computed(() => !!assignment.value)
+
 const claiming = ref(false)
 const error = ref('')
 
@@ -28,6 +31,22 @@ async function claim() {
       <span>Vyberte partnera ze seznamu</span>
     </div>
 
+    <!-- Partner assigned to someone else — read-only info -->
+    <div v-else-if="isAssignedToOther" class="claim-content">
+      <div class="claim-icon-wrap claim-icon-wrap--gray">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="claim-icon claim-icon--gray">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+      <h2 class="claim-title">Partner je přiřazen</h2>
+      <p class="claim-partner-name">{{ ctx.selectedPartner.value?.canonicalName }}</p>
+      <p class="claim-desc">
+        Tímto partnerem se zabývá <strong>{{ assignment!.assignee.name }}</strong>.
+        Kontaktujte vedení obchodu, pokud potřebujete přístup ke zpracování.
+      </p>
+    </div>
+
+    <!-- Partner unassigned — show claim button -->
     <div v-else class="claim-content">
       <div class="claim-icon-wrap">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="claim-icon">
@@ -50,7 +69,7 @@ async function claim() {
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-        <span>{{ claiming ? 'Zapisuji…' : `Zapsat se k partnerovi ${ctx.selectedPartner.value?.canonicalName ?? ''}` }}</span>
+        <span>{{ claiming ? 'Zapisuji…' : `Vzít si ${ctx.selectedPartner.value?.canonicalName ?? ''} na starosti` }}</span>
       </button>
 
       <p v-if="error" class="claim-error">{{ error }}</p>
@@ -115,6 +134,14 @@ async function claim() {
   font-weight: 600;
   color: #7c3aed;
   margin: 0;
+}
+
+.claim-icon-wrap--gray {
+  background: #f3f4f6;
+}
+
+.claim-icon--gray {
+  color: #9ca3af;
 }
 
 .claim-desc {

@@ -1,7 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
-import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { canEditNegotiation } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -41,9 +41,9 @@ export default defineEventHandler(async (event) => {
     if (!body.direction) throw createError({ statusCode: 400, message: 'Směr je povinný.' })
   }
 
-  const access = await getInteractionAccess(session.id, projectId)
-  if (!access.isAdmin && !access.canEditAll) {
-    throw createError({ statusCode: 403, message: 'Nemáte oprávnění vytvořit záznam jednání v tomto projektu.' })
+  const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+  if (!canEdit) {
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění vytvořit záznam jednání. Nejste přiřazeni k tomuto partnerovi.' })
   }
   const assigneeIds = body.assigneeIds ?? []
 

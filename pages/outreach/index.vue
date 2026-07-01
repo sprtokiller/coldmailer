@@ -10,8 +10,19 @@ const ctx = useProjectOutreach(projectId)
 provide(projectOutreachKey, ctx)
 
 const { syncError } = useGmailSync()
-const { user: sessionUser } = useUserSession()
-const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+
+const unclaiming = ref(false)
+async function doUnclaim() {
+  if (!confirm('Opravdu chcete odstoupit od tohoto partnera? Ztratíte přístup k jeho zpracování.')) return
+  unclaiming.value = true
+  try {
+    await ctx.unclaimPartner()
+  } catch (err) {
+    alert(err instanceof Error ? err.message : String(err))
+  } finally {
+    unclaiming.value = false
+  }
+}
 
 const showClaimView = computed(() => {
   if (!ctx.selectedPartnerId.value) return false
@@ -85,7 +96,13 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
             <span class="col-step-pill col-step-pill--violet">1</span>
             <h2 class="col-title">Value Alignment</h2>
             <ClientOnly>
-              <div v-if="isAdmin && ctx.selectedPartnerId.value" class="assignment-ctrl" @click.stop>
+              <button
+                v-if="ctx.isAssignedToMe.value && !ctx.canManageAll.value && ctx.selectedPartnerId.value"
+                class="unclaim-btn"
+                :disabled="unclaiming"
+                @click="doUnclaim"
+              >{{ unclaiming ? 'Odstupuji…' : 'Odstoupit' }}</button>
+              <div v-if="ctx.canManageAll.value && ctx.selectedPartnerId.value" class="assignment-ctrl" @click.stop>
                 <button class="assignment-ctrl-btn" @click="openAssignDropdown">
                   <span v-if="ctx.selectedPartner.value?.assignment">
                     {{ ctx.selectedPartner.value.assignment.assignee.name.split(' ')[0] }}
@@ -212,6 +229,21 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
 
 .col-step-pill--violet { background: #ede9fe; color: #7c3aed; }
 .col-step-pill--indigo { background: #e0e7ff; color: #4338ca; }
+
+.unclaim-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.unclaim-btn:hover:not(:disabled) { background: #fef2f2; }
+.unclaim-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .assignment-ctrl { position: relative; margin-left: auto; }
 

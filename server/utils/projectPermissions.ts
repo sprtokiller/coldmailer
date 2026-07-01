@@ -65,6 +65,20 @@ export async function getInteractionAccess(userId: string, projectId: string) {
   }
 }
 
+// Returns true if user can create/edit interactions and update status for this partner.
+// Allowed for: Admin, Vedení obchodu (canEditAll), or OutreachAssignment holder for this partner.
+export async function canEditNegotiation(userId: string, projectId: string, globalRecordId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } })
+  if (user?.isAdmin) return true
+  const perms = await getProjectPermissions(userId, projectId)
+  if (perms.includes('project.interactions.edit_all')) return true
+  const assignment = await prisma.outreachAssignment.findUnique({
+    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    select: { assigneeId: true },
+  })
+  return assignment?.assigneeId === userId
+}
+
 export async function requirePipelineManage(event: H3Event, projectId: string) {
   const session = await requireAuth(event)
   const user = await prisma.user.findUnique({ where: { id: session.id }, select: { isAdmin: true } })
@@ -91,27 +105,27 @@ export async function requireInteractionAccess(
   })
 
   if (!interaction) {
-    throw createError({ statusCode: 404, message: 'JednĂˇnĂ­ nebylo nalezeno.' })
+    throw createError({ statusCode: 404, message: 'Jednání nebylo nalezeno.' })
   }
 
   const access = await getInteractionAccess(session.id, interaction.projectId)
 
-  if (!access.isAdmin && !access.canViewAll && !access.canEditAll) {
-    throw createError({ statusCode: 403, message: 'K tomuto projektu nemĂˇte pĹ™Ă­stup.' })
+  if (!access.isAdmin && !access.canViewAll) {
+    throw createError({ statusCode: 403, message: 'K tomuto projektu nemáte přístup.' })
+  }
+
+  if (mode === 'edit' && !access.isAdmin && !access.canEditAll) {
+    const assignment = await prisma.outreachAssignment.findUnique({
+      where: { projectId_globalRecordId: { projectId: interaction.projectId, globalRecordId: interaction.globalRecordId } },
+      select: { assigneeId: true },
+    })
+    if (assignment?.assigneeId !== session.id) {
+      throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat toto jednání. Nejste přiřazeni k tomuto partnerovi.' })
+    }
   }
 
   const isAssignee = interaction.assignees.some(a => a.userId === session.id)
   const isCreator = interaction.createdBy === session.id
-
-  if (mode === 'view') {
-    if (!access.canViewAll && !isAssignee && !isCreator && !access.isAdmin) {
-      throw createError({ statusCode: 403, message: 'K tomuto jednĂˇnĂ­ nemĂˇte pĹ™Ă­stup.' })
-    }
-  } else {
-    if (!access.canEditAll && !isAssignee && !isCreator && !access.isAdmin) {
-      throw createError({ statusCode: 403, message: 'NemĂˇte oprĂˇvnÄ›nĂ­ editovat toto jednĂˇnĂ­.' })
-    }
-  }
 
   return { session, interaction, access, isAssignee, isCreator }
 }

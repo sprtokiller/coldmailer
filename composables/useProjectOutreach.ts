@@ -67,6 +67,7 @@ export interface ProjectOutreachContext {
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
   sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
   claimPartner: () => Promise<void>
+  unclaimPartner: () => Promise<void>
   assignPartner: (userId: string | null) => Promise<void>
   promptsForStep: (step: string) => Array<{ id: string; name: string; content: string; stepType: string; isSystem: boolean; author: { name: string } }>
 }
@@ -260,6 +261,13 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     await refreshPartners(); await refreshDetail()
   }
 
+  async function unclaimPartner() {
+    const pid = projectIdRef.value; const gid = selectedPartnerId.value
+    if (!pid || !gid) return
+    await $fetch(`/api/projects/${pid}/outreach/${gid}/unclaim`, { method: 'POST' })
+    await refreshPartners(); await refreshDetail()
+  }
+
   async function assignPartner(userId: string | null) {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) return
@@ -306,6 +314,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     saveDraft,
     sendDraft,
     claimPartner,
+    unclaimPartner,
     assignPartner,
     promptsForStep,
   } as ProjectOutreachContext

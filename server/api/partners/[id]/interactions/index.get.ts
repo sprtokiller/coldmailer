@@ -48,6 +48,13 @@ export default defineEventHandler(async (event) => {
 
   const access = await getInteractionAccess(session.id, projectId)
 
+  const outreachAssignment = await prisma.outreachAssignment.findUnique({
+    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    select: { assigneeId: true },
+  })
+  const isOutreachAssignee = outreachAssignment?.assigneeId === session.id
+  const effectiveCanEdit = access.canEditAll || access.isAdmin || isOutreachAssignee
+
   let items
   if (access.canViewAll || access.isAdmin) {
     items = await prisma.interaction.findMany({
@@ -55,7 +62,7 @@ export default defineEventHandler(async (event) => {
       select: FULL_SELECT,
       orderBy: [{ sentAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
-    items = items.map(i => ({ ...i, canEdit: access.canEditAll || access.isAdmin || i.assignees.some(a => a.userId === session.id) }))
+    items = items.map(i => ({ ...i, canEdit: effectiveCanEdit }))
   } else {
     const all = await prisma.interaction.findMany({
       where: { globalRecordId, projectId },
@@ -63,8 +70,7 @@ export default defineEventHandler(async (event) => {
       orderBy: [{ sentAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
     items = all.map((i) => {
-      const isAssignee = i.assignees.some(a => a.userId === session.id)
-      if (isAssignee) return { ...i, canEdit: true }
+      if (effectiveCanEdit) return { ...i, canEdit: true }
       return {
         id: i.id,
         type: i.type,
@@ -155,6 +161,11 @@ export default defineEventHandler(async (event) => {
   return {
     items,
     crossProjectSummary,
-    access: { canViewAll: access.canViewAll || access.isAdmin, canEditAll: access.canEditAll || access.isAdmin },
+    access: {
+      canViewAll: access.canViewAll || access.isAdmin,
+      canEditAll: access.canEditAll || access.isAdmin,
+      canEdit: effectiveCanEdit,
+      canManageAssignees: access.canEditAll || access.isAdmin,
+    },
   }
 })

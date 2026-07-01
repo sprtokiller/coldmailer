@@ -1,7 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
-import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { getInteractionAccess, canEditNegotiation } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -13,20 +13,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No active project context' })
   }
 
-  const access = await getInteractionAccess(session.id, projectId)
-  if (!access.canEditAll && !access.isAdmin) {
-    throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat tohoto partnera.' })
-  }
-
   const body = await readBody(event)
   const { actionStatus, dealStage, addAssigneeId, removeAssigneeId } = body
 
   if (actionStatus !== undefined || dealStage !== undefined) {
+    const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+    if (!canEdit) {
+      throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat stav tohoto partnera. Nejste přiřazeni k tomuto partnerovi.' })
+    }
     await prisma.projectRecord.upsert({
       where: { projectId_globalRecordId: { projectId, globalRecordId } },
       create: { projectId, globalRecordId, ...(actionStatus !== undefined && { actionStatus }), ...(dealStage !== undefined && { dealStage }) },
       update: { ...(actionStatus !== undefined && { actionStatus }), ...(dealStage !== undefined && { dealStage }) },
     })
+  }
+
+  if (addAssigneeId !== undefined || (removeAssigneeId !== undefined && removeAssigneeId !== session.id)) {
+    const access = await getInteractionAccess(session.id, projectId)
+    if (!access.canEditAll && !access.isAdmin) {
+      throw createError({ statusCode: 403, message: 'Přiřazování partnerů je vyhrazeno pro vedení obchodu.' })
+    }
   }
 
   if (addAssigneeId) {

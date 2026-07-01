@@ -11,50 +11,36 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Not available in production.' })
   }
 
-  const body = await readBody<{ role?: 'obchodni-tym' | 'vedeni-obchodu' }>(event).catch(() => ({}))
-  const role = body?.role ?? 'obchodni-tym'
+  const body = await readBody<{ role: 'obchodni-tym' | 'vedeni-obchodu' }>(event).catch(() => ({ role: 'obchodni-tym' as const }))
+  const role = body.role ?? 'obchodni-tym'
 
-  if (role === 'vedeni-obchodu') {
-    const testUser = await prisma.user.upsert({
-      where: { email: 'test-vedeni-obchodu@dev.local' },
-      create: {
-        googleId: 'dev-vedeni-obchodu',
-        email: 'test-vedeni-obchodu@dev.local',
-        name: 'Test – Vedení obchodu',
-        isAdmin: false,
-      },
-      update: {},
-      select: { id: true, email: true, name: true, image: true, isAdmin: true },
-    })
-    const roles = await prisma.projectRole.findMany({ where: { name: 'Vedení obchodu' } })
-    await Promise.all(
-      roles.map(r =>
-        prisma.userProjectRole.upsert({
-          where: { userId_projectRoleId: { userId: testUser.id, projectRoleId: r.id } },
-          create: { userId: testUser.id, projectRoleId: r.id },
-          update: {},
-        }),
-      ),
-    )
-    await setUserSession(event, { user: testUser })
-    return sendRedirect(event, '/')
+  const configs = {
+    'vedeni-obchodu': {
+      email: 'test-vedeni-obchodu@dev.local',
+      googleId: 'dev-vedeni-obchodu',
+      name: 'Test – Vedení obchodu',
+      roleName: 'Vedení obchodu',
+    },
+    'obchodni-tym': {
+      email: 'test-obchodni-tym@dev.local',
+      googleId: 'dev-obchodni-tym',
+      name: 'Test – Obchodní tým',
+      roleName: 'Obchodní tým',
+    },
   }
 
-  // Default: Obchodní tým
+  const cfg = configs[role] ?? configs['obchodni-tym']
+
   const testUser = await prisma.user.upsert({
-    where: { email: 'test-obchodni-tym@dev.local' },
-    create: {
-      googleId: 'dev-obchodni-tym',
-      email: 'test-obchodni-tym@dev.local',
-      name: 'Test – Obchodní tým',
-      isAdmin: false,
-    },
+    where: { email: cfg.email },
+    create: { googleId: cfg.googleId, email: cfg.email, name: cfg.name, isAdmin: false },
     update: {},
     select: { id: true, email: true, name: true, image: true, isAdmin: true },
   })
-  const roles = await prisma.projectRole.findMany({ where: { name: 'Obchodní tým' } })
+
+  const projectRoles = await prisma.projectRole.findMany({ where: { name: cfg.roleName } })
   await Promise.all(
-    roles.map(r =>
+    projectRoles.map(r =>
       prisma.userProjectRole.upsert({
         where: { userId_projectRoleId: { userId: testUser.id, projectRoleId: r.id } },
         create: { userId: testUser.id, projectRoleId: r.id },
@@ -62,6 +48,7 @@ export default defineEventHandler(async (event) => {
       }),
     ),
   )
+
   await setUserSession(event, { user: testUser })
-  return sendRedirect(event, '/')
+  return { ok: true }
 })

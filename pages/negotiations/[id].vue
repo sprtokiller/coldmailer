@@ -44,7 +44,7 @@ interface CrossProjectMeta {
 interface InteractionsResponse {
   items: Interaction[]
   crossProjectSummary: CrossProjectMeta[]
-  access: { canViewAll: boolean; canEditAll: boolean }
+  access: { canViewAll: boolean; canEditAll: boolean; canEdit: boolean; canManageAssignees: boolean }
 }
 interface Partner {
   id: string; canonicalName: string; payload: Record<string, string>
@@ -69,7 +69,9 @@ const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{
 }>(`/api/partners/${id}/blacklist`)
 const { data: allUsers } = await useFetch<AppUser[]>('/api/users')
 const { user: me } = useUserSession()
-const canEditPartner = ref(true)
+
+const canEdit = computed(() => interactionsData.value?.access.canEdit ?? false)
+const canManageAssignees = computed(() => interactionsData.value?.access.canManageAssignees ?? false)
 
 async function refresh() {
   await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist()])
@@ -554,7 +556,7 @@ const TYPE_COLORS: Record<string, string> = {
             Profil
           </button>
           <button
-            v-if="canEditPartner"
+            v-if="canManageAssignees"
             class="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
             @click="showEditModal = true"
           >
@@ -564,11 +566,11 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
 
       <!-- Partner Status (Pipeline) -->
-      <div v-if="canEditPartner || partner.dealStage || partner.actionStatus" class="mt-4 flex items-center gap-4 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
+      <div v-if="canEdit || partner.dealStage || partner.actionStatus" class="mt-4 flex items-center gap-4 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
         <div class="flex items-center gap-2">
           <span class="text-xs text-gray-500 font-medium">Fáze:</span>
           <select
-            v-if="canEditPartner"
+            v-if="canEdit"
             :value="partner.dealStage ?? ''"
             class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
             @change="updateStatus('dealStage', ($event.target as HTMLSelectElement).value || null)"
@@ -581,7 +583,7 @@ const TYPE_COLORS: Record<string, string> = {
         <div class="flex items-center gap-2">
           <span class="text-xs text-gray-500 font-medium">Stav:</span>
           <select
-            v-if="canEditPartner"
+            v-if="canEdit"
             :value="partner.actionStatus ?? ''"
             class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
             @change="updateStatus('actionStatus', ($event.target as HTMLSelectElement).value || null)"
@@ -594,12 +596,12 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
 
       <!-- Souhrnné přiřazení -->
-      <div v-if="partner.assignees.length || canEditPartner" class="mt-4 flex items-center gap-3 flex-wrap">
+      <div v-if="partner.assignees.length || canManageAssignees" class="mt-4 flex items-center gap-3 flex-wrap">
         <span class="text-xs text-gray-400 font-medium">Přiřazeni:</span>
         <div class="flex items-center gap-1">
           <template v-for="a in partner.assignees" :key="a.id">
             <button
-              v-if="canEditPartner"
+              v-if="canManageAssignees"
               class="group relative"
               :title="a.name"
               @click="removeSolutionAssignee(a.id)"
@@ -614,7 +616,7 @@ const TYPE_COLORS: Record<string, string> = {
             </span>
           </template>
           <button
-            v-if="canEditPartner && !showAddAssignee"
+            v-if="canManageAssignees && !showAddAssignee"
             class="w-7 h-7 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:border-indigo-300 text-xs transition-colors ml-1"
             @click="showAddAssignee = true"
           >+</button>
@@ -645,7 +647,7 @@ const TYPE_COLORS: Record<string, string> = {
 
       <div class="flex items-center gap-2 ml-auto">
         <button
-          v-if="typeFilter === 'NOTE'"
+          v-if="typeFilter === 'NOTE' && canEdit"
           class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors"
           @click="newMode = newMode === 'NOTE' ? null : 'NOTE'"
         >{{ newMode === 'NOTE' ? 'Zrušit' : '+ Poznámka' }}</button>
@@ -868,7 +870,7 @@ const TYPE_COLORS: Record<string, string> = {
                 @keydown.escape="fulfillmentEditingField = null"
               />
             </div>
-            <div v-else class="bg-blue-50 rounded-lg p-3 min-h-[3rem] cursor-text" @click="startFulfillmentEdit(i, 'myToThem')">
+            <div v-else :class="['bg-blue-50 rounded-lg p-3 min-h-[3rem]', i.canEdit ? 'cursor-text' : 'cursor-default']" @click="i.canEdit && startFulfillmentEdit(i, 'myToThem')">
               <ul v-if="i.myToThem" class="list-disc list-inside space-y-0.5">
                 <li v-for="(line, li) in toLines(i.myToThem)" :key="li" class="text-sm text-gray-700">{{ line }}</li>
               </ul>
@@ -889,7 +891,7 @@ const TYPE_COLORS: Record<string, string> = {
                 @keydown.escape="fulfillmentEditingField = null"
               />
             </div>
-            <div v-else class="bg-green-50 rounded-lg p-3 min-h-[3rem] cursor-text" @click="startFulfillmentEdit(i, 'themToUs')">
+            <div v-else :class="['bg-green-50 rounded-lg p-3 min-h-[3rem]', i.canEdit ? 'cursor-text' : 'cursor-default']" @click="i.canEdit && startFulfillmentEdit(i, 'themToUs')">
               <ul v-if="i.themToUs" class="list-disc list-inside space-y-0.5">
                 <li v-for="(line, li) in toLines(i.themToUs)" :key="li" class="text-sm text-gray-700">{{ line }}</li>
               </ul>
