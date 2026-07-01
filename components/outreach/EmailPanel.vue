@@ -6,6 +6,7 @@ const ctx = inject(projectOutreachKey)!
 const { notifications: sendNotifs, add: notifAdd, markSent: notifMarkSent, markError: notifMarkError } = useSendNotifications()
 
 // ── State ─────────────────────────────────────────────────────────────────────
+const showSenderConfirmModal = ref(false)
 const emailTo = ref('')
 const emailSubject = ref('')
 const emailBody = ref('')
@@ -105,7 +106,18 @@ async function doSave() {
   } finally { saving.value = false }
 }
 
+function handleSendClick() {
+  const draftSavedById = (draft.value as any)?.savedById as string | undefined
+  const myId = ctx.currentUserId.value
+  if (draftSavedById && myId && draftSavedById !== myId && ctx.canManageAll.value) {
+    showSenderConfirmModal.value = true
+  } else {
+    doSend()
+  }
+}
+
 async function doSend() {
+  showSenderConfirmModal.value = false
   saving.value = true
   try {
     const sig = sigs.value.find(s => s.id === selectedSignatureId.value)
@@ -347,7 +359,7 @@ function relTime(iso: string | null | undefined) {
           <button
             :disabled="!emailTo.trim() || !emailSubject.trim() || saving || hasPendingSend"
             class="btn-primary"
-            @click="doSend"
+            @click="handleSendClick"
           >
             Uložit a odeslat
           </button>
@@ -355,6 +367,35 @@ function relTime(iso: string | null | undefined) {
       </div>
     </template>
   </div>
+
+  <!-- Sender confirmation modal -->
+  <Teleport to="body">
+    <div v-if="showSenderConfirmModal" class="modal-backdrop" @click.self="showSenderConfirmModal = false">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title">Odeslat cizí e-mail</h2>
+          <button class="modal-close" @click="showSenderConfirmModal = false">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">
+            Tento e-mail připravil jiný uživatel. Zkontrolovali jste, zda v textu nebo podpisu nezůstalo jméno původního autora?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showSenderConfirmModal = false">
+            Zpět k úpravám
+          </button>
+          <button class="btn-primary" @click="doSend">
+            Potvrdit a odeslat
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -779,4 +820,72 @@ function relTime(iso: string | null | undefined) {
 
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+/* ── Sender confirmation modal ──────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 420px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.modal-close {
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+
+.modal-close:hover { color: #374151; }
+
+.modal-body {
+  padding: 18px 20px;
+}
+
+.modal-text {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid #f3f4f6;
+}
 </style>

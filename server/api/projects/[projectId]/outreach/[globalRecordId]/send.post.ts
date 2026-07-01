@@ -7,6 +7,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { requireProjectAccess } from '~/server/utils/permissions'
+import { getProjectPermissions } from '~/server/utils/projectPermissions'
 import { sendGmailMessage, refreshAccessToken } from '~/server/utils/google'
 import { scheduleOutreachSend } from '~/server/utils/outreach-scheduler'
 
@@ -32,11 +33,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'toAddress, subject a body jsou povinné.' })
   }
 
-  // Uložit draft před odesláním
+  // If the draft was prepared by a different user, require pipeline.manage permission
+  const existingDraft = await prisma.partnerOutreachDraft.findUnique({
+    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    select: { savedById: true },
+  })
+  if (existingDraft && existingDraft.savedById !== user.id) {
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { isAdmin: true } })
+    if (!dbUser?.isAdmin) {
+      const perms = await getProjectPermissions(user.id, projectId)
+      if (!perms.includes('project.pipeline.manage')) {
+        throw createError({ statusCode: 403, message: 'Nemáte oprávnění odeslat e-mail připravený jiným uživatelem.' })
+      }
+    }
+  }
+
+  // Save draft before sending; preserve savedById/savedAt of original author
   await prisma.partnerOutreachDraft.upsert({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
     create: { projectId, globalRecordId, toAddress: body.toAddress, subject: body.subject, body: body.body, savedById: user.id },
-    update: { toAddress: body.toAddress, subject: body.subject, body: body.body, savedById: user.id, savedAt: new Date() },
+    update: { toAddress: body.toAddress, subject: body.subject, body: body.body },
   })
 
   const scheduledId = `project:${projectId}:${globalRecordId}`

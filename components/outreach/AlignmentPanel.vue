@@ -42,6 +42,9 @@ const selectedContextNames = computed(() => ctx.vaConfig.value.contextPartIds.ma
 const isRegeneration = computed(() => !!alignment.value)
 const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value)
 const showConfirm = ref(false)
+const showCancelConfirm = ref(false)
+
+const isExecuting = computed(() => ctx.executing.value !== null)
 
 function onRunClick() {
   if (needsConfirm.value) { showConfirm.value = true; return }
@@ -55,6 +58,15 @@ function confirmAndRun() {
 
 async function runAnalysis() {
   try { await ctx.runAlignment() } catch (err) { alert(`Chyba: ${err instanceof Error ? err.message : String(err)}`) }
+}
+
+function onCancelClick() {
+  showCancelConfirm.value = true
+}
+
+function confirmCancel() {
+  showCancelConfirm.value = false
+  ctx.cancelAlignment()
 }
 
 function relTime(iso: string | null | undefined): string {
@@ -85,7 +97,7 @@ function relTime(iso: string | null | undefined): string {
         <!-- System prompt -->
         <div class="field-group">
           <label class="field-label">Systémový prompt</label>
-          <select v-model="ctx.vaConfig.value.systemPromptId" class="field-select">
+          <select v-model="ctx.vaConfig.value.systemPromptId" class="field-select" :disabled="isExecuting">
             <option v-for="p in vaPrompts" :key="p.id" :value="p.id">{{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}</option>
           </select>
         </div>
@@ -93,7 +105,7 @@ function relTime(iso: string | null | undefined): string {
         <!-- Selling point -->
         <div class="field-group">
           <label class="field-label">Prodejní argumenty</label>
-          <select v-model="ctx.vaConfig.value.sellingPointId" class="field-select">
+          <select v-model="ctx.vaConfig.value.sellingPointId" class="field-select" :disabled="isExecuting">
             <option value="">— vyberte —</option>
             <option v-for="sp in vaSellingPoints" :key="sp.id" :value="sp.id">{{ sp.name }}</option>
           </select>
@@ -105,7 +117,7 @@ function relTime(iso: string | null | undefined): string {
           <div v-if="selectedContextNames.length" class="tag-list">
             <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
               {{ cp.name }}
-              <button type="button" class="tag-remove" @click="removeContext(cp.id)">✕</button>
+              <button type="button" class="tag-remove" :disabled="isExecuting" @click="removeContext(cp.id)">✕</button>
             </span>
           </div>
           <div class="relative">
@@ -114,6 +126,7 @@ function relTime(iso: string | null | undefined): string {
               type="text"
               placeholder="Přidat z knihovny…"
               class="field-input"
+              :disabled="isExecuting"
               @focus="showContextDropdown = true"
               @blur="hideContextDropdown"
             />
@@ -137,20 +150,28 @@ function relTime(iso: string | null | undefined): string {
             rows="2"
             class="field-input field-textarea"
             placeholder="Zadejte vlastní kontext…"
+            :disabled="isExecuting"
           />
         </div>
 
-        <!-- Run button -->
+        <!-- Run / Stop button -->
         <button
-          :disabled="ctx.executing.value !== null || !ctx.canRunAI.value"
+          v-if="ctx.executing.value === 'alignment'"
+          class="btn-run btn-run--stop"
+          @click="onCancelClick"
+        >
+          <svg class="btn-stop-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="2" stroke-width="2" fill="currentColor" stroke="none" />
+          </svg>
+          Zastavit analýzu
+        </button>
+        <button
+          v-else
+          :disabled="isExecuting || !ctx.canRunAI.value"
           class="btn-run btn-run--violet"
           @click="onRunClick"
         >
-          <svg v-if="ctx.executing.value === 'alignment'" class="btn-spinner" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ ctx.executing.value === 'alignment' ? 'Analyzuji…' : alignment ? 'Znovu analyzovat' : 'Spustit analýzu' }}
+          {{ alignment ? 'Znovu analyzovat' : 'Spustit analýzu' }}
         </button>
       </div>
 
@@ -193,7 +214,28 @@ function relTime(iso: string | null | undefined): string {
     </template>
   </div>
 
-  <!-- Confirmation modal -->
+  <!-- Cancel confirmation modal -->
+  <Teleport to="body">
+    <div v-if="showCancelConfirm" class="confirm-overlay" @click.self="showCancelConfirm = false">
+      <div class="confirm-modal">
+        <div class="confirm-header">
+          <h3 class="confirm-title">Zastavit analýzu?</h3>
+          <button class="confirm-close" @click="showCancelConfirm = false">✕</button>
+        </div>
+        <div class="confirm-body">
+          <p class="confirm-warn confirm-warn--red">
+            Probíhající analýza bude přerušena. Výsledky nebudou uloženy.
+          </p>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-btn--cancel" @click="showCancelConfirm = false">Pokračovat v analýze</button>
+          <button class="confirm-btn confirm-btn--stop" @click="confirmCancel">Zastavit</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Run confirmation modal -->
   <Teleport to="body">
     <div v-if="showConfirm" class="confirm-overlay" @click.self="showConfirm = false">
       <div class="confirm-modal">
@@ -404,6 +446,17 @@ function relTime(iso: string | null | undefined): string {
 .btn-run--violet {
   background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
   color: #fff;
+}
+
+.btn-run--stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.btn-stop-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .btn-spinner {
@@ -627,4 +680,16 @@ function relTime(iso: string | null | undefined): string {
 }
 
 .confirm-btn--confirm:hover { opacity: 0.9; }
+
+.confirm-btn--stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.confirm-btn--stop:hover { opacity: 0.9; }
+
+.confirm-warn--red {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
 </style>

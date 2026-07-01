@@ -37,6 +37,7 @@ export interface OutreachConfig {
 
 export interface ProjectOutreachContext {
   visiblePartnerCount: ComputedRef<number>
+  currentUserId: ComputedRef<string | undefined>
   projectId: Ref<string | null>
   partners: Ref<OutreachPartner[]>
   loadingPartners: Ref<boolean>
@@ -61,6 +62,7 @@ export interface ProjectOutreachContext {
   refreshPartners: () => Promise<void>
   refreshDetail: () => Promise<void>
   runAlignment: () => Promise<void>
+  cancelAlignment: () => void
   runDraft: (opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) => Promise<void>
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
   sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
@@ -79,6 +81,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const loadingDetail = ref(false)
   const executing = ref<'alignment' | 'draft' | null>(null)
   const streamOutput = ref('')
+  const alignmentAbort = ref<AbortController | null>(null)
 
   const prompts = ref<ProjectOutreachContext['prompts']['value']>([])
   const contextParts = ref<ProjectOutreachContext['contextParts']['value']>([])
@@ -174,19 +177,27 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     await Promise.all([refreshPartners(), loadLibrary(pid)])
   }, { immediate: true })
 
+  function cancelAlignment() {
+    alignmentAbort.value?.abort()
+  }
+
   async function runAlignment() {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) return
+    const ctrl = new AbortController()
+    alignmentAbort.value = ctrl
     executing.value = 'alignment'; streamOutput.value = ''
     try {
       const resp = await fetch(`/api/projects/${pid}/outreach/${gid}/alignment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
         body: JSON.stringify({ systemPromptId: vaConfig.value.systemPromptId || undefined, contextPartIds: vaConfig.value.contextPartIds, sellingPointId: vaConfig.value.sellingPointId || undefined, manualContext: vaConfig.value.manualContext || undefined, profileData: partnerDetail.value?.profileData ?? undefined }),
       })
       const reader = resp.body?.getReader(); if (!reader) throw new Error('No stream')
       const dec = new TextDecoder()
       while (true) {
+        if (ctrl.signal.aborted) { reader.cancel(); break }
         const { done, value } = await reader.read(); if (done) break
         for (const line of dec.decode(value).split('\n')) {
           if (!line.startsWith('data:')) continue
@@ -197,7 +208,10 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
           } catch { /* skip parse errors */ }
         }
       }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) throw err
     } finally {
+      alignmentAbort.value = null
       executing.value = null
       await refreshDetail(); await refreshPartners()
     }
@@ -262,6 +276,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
 
   return {
     projectId: projectIdRef,
+    currentUserId,
     partners,
     loadingPartners,
     selectedPartnerId,
@@ -286,6 +301,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     refreshPartners,
     refreshDetail,
     runAlignment,
+    cancelAlignment,
     runDraft,
     saveDraft,
     sendDraft,
