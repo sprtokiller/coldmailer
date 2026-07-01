@@ -1,6 +1,4 @@
 <script setup lang="ts">
-defineProps<{ fullWidth?: boolean }>()
-
 const { user, loggedIn, clear } = useUserSession()
 const { groups, activeProject, activeGroup, setProject } = useActiveProject()
 
@@ -40,7 +38,7 @@ async function logout() {
 
 <template>
   <nav class="bg-white border-b border-gray-100 shadow-sm shrink-0">
-    <div :class="[fullWidth ? 'w-full px-5' : 'container mx-auto max-w-6xl px-4', 'h-16 flex items-center justify-between']">
+    <div class="w-full px-5 h-16 flex items-center justify-between">
       <div class="flex items-center gap-6">
         <NuxtLink to="/" class="text-lg font-semibold tracking-tight">
           <span class="text-primary">S</span><span class="text-success">C</span><span class="text-danger">G</span> ColdMailer

@@ -53,7 +53,7 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
 <template>
   <div class="outreach-root">
     <!-- Top nav (reused) -->
-    <AppNav full-width />
+    <AppNav />
 
     <!-- Auth error banner -->
     <div v-if="syncError === 'auth-error'" class="auth-error-banner">

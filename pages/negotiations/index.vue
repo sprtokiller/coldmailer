@@ -18,13 +18,6 @@ interface Partner {
 const search = ref('')
 const { data: allPartners, pending, refresh: refreshPartners } = await useFetch<Partner[]>('/api/partners')
 
-const showSearchAssign = ref(false)
-
-function onAssigned() {
-  showSearchAssign.value = false
-  refreshPartners()
-}
-
 const partners = computed(() => {
   const q = search.value.toLowerCase().trim()
   if (!q) return allPartners.value ?? []
@@ -76,17 +69,9 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
 
 <template>
   <div>
-    <div class="mb-6 flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-800">Oslovení partneři</h1>
-        <p class="text-sm text-gray-400 mt-1">Partneři s probíhající komunikací</p>
-      </div>
-      <button
-        class="text-sm font-medium text-white bg-primary px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-        @click="showSearchAssign = true"
-      >
-        Přidat partnera do projektu
-      </button>
+    <div class="mb-6">
+      <h1 class="text-2xl font-semibold text-gray-800">Oslovení partneři</h1>
+      <p class="text-sm text-gray-400 mt-1">Partneři s probíhající komunikací</p>
     </div>
 
     <div class="mb-4">
@@ -200,6 +185,5 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
       </table>
     </div>
 
-    <PartnersPartnerSearchAssign v-if="showSearchAssign" @close="showSearchAssign = false" @assigned="onAssigned" />
   </div>
 </template>

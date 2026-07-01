@@ -89,7 +89,12 @@ async function syncNow(lookbackDays?: number) {
     const body = lookbackDays ? { lookbackDays } : {}
     const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST', body })
     if (res.skipped) {
-      toast.show('Sync přeskočen', 'info')
+      const reason = res.skipped === 'debounced' ? 'Počkej 30 sekund mezi syncy'
+        : res.skipped === 'no-token' ? 'Chybí Google token — přihlas se znovu'
+        : res.skipped === 'auth-error' ? 'Chyba autorizace Google'
+        : res.skipped === 'error' ? 'Chyba při načítání Gmailu'
+        : res.skipped
+      toast.show(`Sync přeskočen: ${reason}`, 'info')
     } else {
       const n = res.synced
       const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'

@@ -25,16 +25,9 @@ export default defineEventHandler(async (event) => {
         orderBy: { sentAt: 'desc' },
         take: 1,
       },
-      pipelineRefs: {
-        where: projectId ? { pipelineRun: { projectId } } : undefined,
-        orderBy: { addedAt: 'desc' },
-        take: 1,
-        select: {
-          dealStage: true,
-          actionStatus: true,
-          assignee: { select: { id: true, name: true, image: true } },
-          coAssignees: { select: { id: true, name: true, image: true } }
-        },
+      outreachAssignments: {
+        where: projectId ? { projectId } : undefined,
+        select: { assignee: { select: { id: true, name: true, image: true } } },
       },
       _count: {
         select: {
@@ -47,17 +40,6 @@ export default defineEventHandler(async (event) => {
 
   return records.map((r) => {
     const lastInteraction = r.interactions[0] ?? null
-    const currentRef = r.pipelineRefs[0] ?? null
-    
-    const assigneesMap = new Map<string, { id: string; name: string; image: string | null }>()
-    if (currentRef?.assignee) {
-      assigneesMap.set(currentRef.assignee.id, currentRef.assignee)
-    }
-    if (currentRef?.coAssignees) {
-      for (const ca of currentRef.coAssignees) {
-        assigneesMap.set(ca.id, ca)
-      }
-    }
 
     return {
       id: r.id,
@@ -66,11 +48,11 @@ export default defineEventHandler(async (event) => {
       normalizedName: r.normalizedName,
       payload: r.payload,
       contacts: r.contacts,
-      assignees: Array.from(assigneesMap.values()),
+      assignees: r.outreachAssignments.map(a => a.assignee),
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
-      dealStage: currentRef?.dealStage ?? null,
-      actionStatus: currentRef?.actionStatus ?? null,
+      dealStage: null,
+      actionStatus: null,
     }
   })
 })
