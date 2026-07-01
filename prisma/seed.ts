@@ -275,6 +275,10 @@ async function seedTdaContent() {
   }
 
   // ── Signature: Tour de App (systémová – vidí všichni) ────────────────────
+  // isSystem/isDefault se reasertují i v update větvi, aby reseed vždy
+  // obnovil chráněný stav šablony (isSystem chrání před smazáním v
+  // signatures/[id].delete.ts, isDefault musí zůstat false dle pravidla
+  // v signatures.post.ts / [id].patch.ts).
   const sigContent = readTdaFile('Tour de App - Podpis Template.txt')
   await prisma.signature.upsert({
     where: { id: 'tda-signature-template' },
@@ -286,7 +290,12 @@ async function seedTdaContent() {
       isDefault: false,
       authorId: kriz.id,
     },
-    update: { content: sigContent },
+    update: {
+      name: 'Tour de App',
+      content: sigContent,
+      isSystem: true,
+      isDefault: false,
+    },
   })
   console.log('  ✓ Signature: Tour de App (systémová)')
 }
