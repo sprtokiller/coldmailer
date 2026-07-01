@@ -54,6 +54,12 @@ const draft = computed(() => {
   return d
 })
 
+const recommendations = computed<string[]>(() => {
+  const d = draft.value
+  if (!d) return []
+  return Array.isArray(d.recommendations) ? d.recommendations.map(String) : []
+})
+
 // Sync form fields from stored draft when partner changes
 watch(() => ctx.partnerDetail.value, (detail) => {
   const d = detail?.draft as Record<string, unknown> | null
@@ -301,6 +307,19 @@ function relTime(iso: string | null | undefined) {
       <!-- ── Rich text editor ─────────────────────────────────── -->
       <div class="editor-area">
         <RichTextEditor v-model="emailBody" placeholder="Vygenerovaný e-mail se zobrazí zde..." :default-font="defaultFont" />
+      </div>
+
+      <!-- ── Recommendations ───────────────────────────────────── -->
+      <div v-if="recommendations.length" class="recommendations-panel">
+        <div class="recommendations-header">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="rec-icon">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Doporučení
+        </div>
+        <ul class="recommendations-list">
+          <li v-for="(rec, i) in recommendations" :key="i" class="recommendations-item">{{ rec }}</li>
+        </ul>
       </div>
 
       <!-- ── Footer ───────────────────────────────────────────── -->
@@ -643,6 +662,57 @@ function relTime(iso: string | null | undefined) {
   min-height: 0;
   padding: 16px;
   overflow-y: auto;
+}
+
+/* ── Recommendations ────────────────────────────────────── */
+.recommendations-panel {
+  border-top: 1px solid #e9eaec;
+  padding: 10px 16px 12px;
+  flex-shrink: 0;
+  background: #f9fafb;
+}
+
+.recommendations-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.rec-icon {
+  width: 13px;
+  height: 13px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.recommendations-item {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+  padding-left: 14px;
+  position: relative;
+}
+
+.recommendations-item::before {
+  content: '·';
+  position: absolute;
+  left: 3px;
+  color: #9ca3af;
 }
 
 /* ── Footer ──────────────────────────────────────────────── */

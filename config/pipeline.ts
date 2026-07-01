@@ -85,6 +85,7 @@ export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
     to: 'string – e-mailová adresa příjemce; prázdný řetězec pokud není k dispozici',
     subject: 'string',
     body: 'HTML string – formátovaný dle sekce HTML formátování',
+    recommendations: ['string – konkrétní doporučení, tip nebo upozornění pro uživatele (3–4 položky)'],
     selfCheck: {
       opensWithPersonalization: true,
       topArgumentPresent: true,

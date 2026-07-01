@@ -141,14 +141,15 @@ export default defineEventHandler(async (event) => {
           const toAddress = String(emailData.to ?? contactInfo?.address ?? '')
           const subject = String(emailData.subject ?? '')
           const bodyHtml = String(emailData.body ?? output)
+          const recommendations = Array.isArray(emailData.recommendations) ? emailData.recommendations.map(String) : []
 
           const saved = await prisma.partnerOutreachDraft.upsert({
             where: { projectId_globalRecordId: { projectId, globalRecordId } },
-            create: { projectId, globalRecordId, toAddress, subject, body: bodyHtml, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id },
-            update: { toAddress, subject, body: bodyHtml, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id, savedAt: new Date(), sentAt: null, sendError: null },
+            create: { projectId, globalRecordId, toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id },
+            update: { toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id, savedAt: new Date(), sentAt: null, sendError: null },
           })
 
-          write({ done: true, draft: { id: saved.id, toAddress: saved.toAddress, subject: saved.subject, body: saved.body } })
+          write({ done: true, draft: { id: saved.id, toAddress: saved.toAddress, subject: saved.subject, body: saved.body, recommendations: saved.recommendations } })
         } catch (err) {
           write({ error: err instanceof Error ? err.message : String(err), done: true })
         } finally {

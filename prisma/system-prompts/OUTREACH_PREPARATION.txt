@@ -172,6 +172,21 @@ Pokud je jakákoli hodnota false, e-mail před výstupem oprav a znovu nastav ho
 
 ---
 
+## DOPORUČENÍ
+
+Vygeneruj pole `recommendations` se 3–4 konkrétními radami pro uživatele. Doporučení se zobrazují přímo vedle vygenerovaného e-mailu a pomáhají ho vylepšit nebo doplnit.
+
+Každé doporučení piš jako jednu samostatnou větu. Zaměřuj se na:
+
+* **Chybějící informace v profilu**: Co by posílilo e-mail, ale v datech chybí? (např. „Nepodařilo se dohledat konkrétní e-mailový kontakt — ověřte adresáta před odesláním.")
+* **Výzvy k doplnění uživatelem**: Co musí uživatel sám doplnit nebo aktualizovat? (např. „Doplňte odkaz na rezervační systém nebo konkrétní datum do CTA.")
+* **Tipy na personalizaci**: Konkrétní detail z profilu, který šlo využít jen zčásti nebo vůbec. (např. „Partner nedávno expandoval do zahraničí — zvažte zmínku o mezinárodní relevanci soutěže.")
+* **Rizika nebo nesoulady**: Co může snížit efektivitu e-mailu. (např. „Partner se primárně zaměřuje na B2C — argument o náboru talentů může být méně přesvědčivý.")
+
+Nepřidávej obecné rady jako „buďte struční" nebo „personalizujte". Každá rada musí vycházet z konkrétních dat tohoto partnera.
+
+---
+
 ## VÝSTUP
 
 Vrať JEDEN JSON objekt uvnitř ```json bloku s touto přesnou strukturou:

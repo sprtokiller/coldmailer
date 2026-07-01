@@ -465,6 +465,7 @@ model PartnerOutreachDraft {
   systemPromptId String?
   emailDraftId   String?
   config         Json? // { signatureId, selectedArgumentIds, contextPartIds, ... }
+  recommendations Json? // string[] – doporučení z OUTREACH_PREPARATION
   savedById      String
   savedBy        User         @relation("OutreachDraftSavedBy", fields: [savedById], references: [id])
   savedAt        DateTime     @default(now())
