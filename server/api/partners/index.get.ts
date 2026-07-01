@@ -29,6 +29,10 @@ export default defineEventHandler(async (event) => {
         where: projectId ? { projectId } : undefined,
         select: { assignee: { select: { id: true, name: true, image: true } } },
       },
+      projectRecords: {
+        where: projectId ? { projectId } : undefined,
+        select: { dealStage: true, actionStatus: true },
+      },
       _count: {
         select: {
           interactions: projectId ? { where: { projectId } } : true,
@@ -40,6 +44,7 @@ export default defineEventHandler(async (event) => {
 
   return records.map((r) => {
     const lastInteraction = r.interactions[0] ?? null
+    const projectRecord = r.projectRecords[0] ?? null
 
     return {
       id: r.id,
@@ -51,8 +56,8 @@ export default defineEventHandler(async (event) => {
       assignees: r.outreachAssignments.map(a => a.assignee),
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
-      dealStage: null,
-      actionStatus: null,
+      dealStage: projectRecord?.dealStage ?? null,
+      actionStatus: projectRecord?.actionStatus ?? null,
     }
   })
 })

@@ -419,6 +419,9 @@ model ProjectRecord {
   globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
 
+  dealStage    DealStage?
+  actionStatus ActionStatus?
+
   // Moved from deprecated PartnerFulfillment
   contactBlacklist    Json?
   emailDisplayMode    String   @default("text")

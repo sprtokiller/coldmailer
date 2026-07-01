@@ -396,7 +396,7 @@ async function saveFulfillmentField(interactionId: string) {
 }
 
 async function updateStatus(field: 'actionStatus' | 'dealStage', value: string | null) {
-  await $fetch(`/api/partners/${id}/pipeline-ref`, {
+  await $fetch(`/api/partners/${id}/status`, {
     method: 'PATCH',
     body: { [field]: value },
   })
@@ -414,9 +414,9 @@ const showAddAssignee = ref(false)
 
 async function addSolutionAssignee() {
   if (!addAssigneeUserId.value) return
-  await $fetch(`/api/partners/${id}/pipeline-ref`, {
+  await $fetch(`/api/partners/${id}/status`, {
     method: 'PATCH',
-    body: { addCoAssigneeId: addAssigneeUserId.value },
+    body: { addAssigneeId: addAssigneeUserId.value },
   })
   addAssigneeUserId.value = ''
   showAddAssignee.value = false
@@ -425,9 +425,9 @@ async function addSolutionAssignee() {
 
 async function removeSolutionAssignee(userId: string) {
   if (!confirm('Odstranit tohoto uživatele z řešitelů partnera?')) return
-  await $fetch(`/api/partners/${id}/pipeline-ref`, {
+  await $fetch(`/api/partners/${id}/status`, {
     method: 'PATCH',
-    body: { removeCoAssigneeId: userId },
+    body: { removeAssigneeId: userId },
   })
   await refreshPartner()
 }

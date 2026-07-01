@@ -16,18 +16,22 @@ export default defineEventHandler(async (event) => {
         where: projectId ? { projectId } : undefined,
         include: { assignee: { select: { id: true, name: true, image: true } } },
       },
+      projectRecords: {
+        where: projectId ? { projectId } : undefined,
+        select: { dealStage: true, actionStatus: true },
+      },
     },
   })
 
   if (!record) throw createError({ statusCode: 404, message: 'Not found' })
 
+  const projectRecord = record.projectRecords[0] ?? null
   const assignees = record.outreachAssignments.map(a => a.assignee)
 
   return {
     ...record,
-    pipelineRefId: null,
-    actionStatus: null,
-    dealStage: null,
+    actionStatus: projectRecord?.actionStatus ?? null,
+    dealStage: projectRecord?.dealStage ?? null,
     assignees,
   }
 })

@@ -15,23 +15,11 @@ const CONTACT_TYPE_COLORS: Record<string, string> = {
   Marketing: 'bg-orange-100 text-orange-700', CEO: 'bg-red-100 text-red-700',
   General: 'bg-gray-100 text-gray-600',
 }
-const STEP_LABELS: Record<string, string> = {
-  MARKET_SCANNING: 'Market Scanning', PARTNER_IDENTIFICATION: 'Identifikace partnerů',
-  PARTNER_PROFILING: 'Profilování', VALUE_ALIGNMENT: 'Value Alignment',
-  OUTREACH_PREPARATION: 'Příprava oslovení',
-}
-
-interface PipelineRef {
-  id: string; addedAt: string
-  pipelineRun: { id: string; name: string }
-  step: { stepType: string }
-}
 interface GlobalRecord {
   id: string; type: string; canonicalName: string; createdAt: string
   payload: Record<string, unknown>
   creator: { id: string; name: string; image: string | null }
-  _count: { pipelineRefs: number }
-  pipelineRefs: PipelineRef[]
+  _count: { events: number }
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -330,22 +318,6 @@ function onImportClose() {
                       <p v-else class="text-xs text-gray-400">Tento partner zatím nebyl profilován.</p>
                     </template>
 
-                    <!-- Pipeline links (always) -->
-                    <div v-if="rec.pipelineRefs.length > 0" class="flex flex-wrap gap-2 pt-1 border-t border-gray-100">
-                      <NuxtLink
-                        v-for="ref in rec.pipelineRefs" :key="ref.id"
-                        :to="`/pipeline/${ref.pipelineRun.id}`"
-                        class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                      >
-                        <span>{{ ref.pipelineRun.name }}</span>
-                        <span class="text-gray-300">·</span>
-                        <span class="text-gray-400">{{ STEP_LABELS[ref.step.stepType] ?? ref.step.stepType }}</span>
-                      </NuxtLink>
-                      <span v-if="rec._count.pipelineRefs > rec.pipelineRefs.length" class="text-xs text-gray-400 self-center">
-                        + {{ rec._count.pipelineRefs - rec.pipelineRefs.length }} dalších
-                      </span>
-                    </div>
-                    <p v-else class="text-xs text-gray-400">Nepoužito v žádné pipeline</p>
                   </td>
                 </tr>
               </template>

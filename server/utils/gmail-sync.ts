@@ -247,13 +247,10 @@ export async function syncGmailForPartnerEmail(
     where: { id: globalRecordId },
     select: {
       interactions: { orderBy: { createdAt: 'desc' }, take: 1, select: { projectId: true } },
-      pipelineRefs: { orderBy: { addedAt: 'desc' }, take: 1, select: { pipelineRun: { select: { projectId: true } } } },
     },
   })
 
-  const projectId =
-    record?.interactions[0]?.projectId
-    ?? record?.pipelineRefs[0]?.pipelineRun.projectId
+  const projectId = record?.interactions[0]?.projectId
 
   if (!projectId) return { synced: 0 }
 
@@ -322,45 +319,7 @@ async function collectPartnerEmails(
 ): Promise<Map<string, PartnerEmailEntry[]>> {
   const map = new Map<string, PartnerEmailEntry[]>()
 
-  // 1. Pipeline-based assignments (legacy)
-  const globalRecords = await prisma.globalRecord.findMany({
-    where: {
-      pipelineRefs: {
-        some: {
-          OR: [
-            { assigneeId: userId },
-            { coAssignees: { some: { id: userId } } },
-          ],
-        },
-      },
-    },
-    select: {
-      id: true,
-      contacts: { select: { address: true } },
-      pipelineRefs: {
-        where: {
-          OR: [
-            { assigneeId: userId },
-            { coAssignees: { some: { id: userId } } },
-          ],
-        },
-        orderBy: { addedAt: 'desc' },
-        take: 1,
-        select: { pipelineRun: { select: { projectId: true } } },
-      },
-    },
-  })
-
-  for (const record of globalRecords) {
-    const projectId = record.pipelineRefs[0]?.pipelineRun.projectId
-    if (!projectId) continue
-    const entry: PartnerEmailEntry = { globalRecordId: record.id, projectId }
-    for (const contact of record.contacts) {
-      addToMap(map, contact.address.toLowerCase(), entry)
-    }
-  }
-
-  // 2. Outreach-based assignments (new module) + additionalAddresses
+  // Outreach-based assignments + additionalAddresses
   const outreachAssigned = await prisma.outreachAssignment.findMany({
     where: { assigneeId: userId },
     select: {
@@ -497,10 +456,10 @@ async function processMessage(
       created++
 
       const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
-      await prisma.pipelineRecordRef.updateMany({
+      await prisma.projectRecord.updateMany({
         where: {
           globalRecordId: entry.globalRecordId,
-          pipelineRun: { projectId: entry.projectId },
+          projectId: entry.projectId,
           OR: [
             { actionStatus: null },
             { actionStatus: { notIn: ['BEFORE_MEETING', 'NONE'] } },
