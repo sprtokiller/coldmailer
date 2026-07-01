@@ -7,7 +7,8 @@
 import { sendStream, setResponseHeaders } from 'h3'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { requireProjectAccess, getUserScopeAccess } from '~/server/utils/permissions'
+import { requireProjectAccess } from '~/server/utils/permissions'
+import { getInteractionAccess } from '~/server/utils/projectPermissions'
 import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
@@ -30,8 +31,9 @@ export default defineEventHandler(async (event) => {
 
   const { project } = await requireProjectAccess(event, projectId)
 
-  const access = await getUserScopeAccess(user.id)
-  if (!access.isAdmin) {
+  const access = await getInteractionAccess(user.id, projectId)
+  const canManageAll = access.isAdmin || access.canEditAll
+  if (!canManageAll) {
     const assignment = await prisma.outreachAssignment.findUnique({
       where: { projectId_globalRecordId: { projectId, globalRecordId } },
       select: { assigneeId: true },

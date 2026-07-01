@@ -52,6 +52,8 @@ export interface ProjectOutreachContext {
   executing: Ref<'alignment' | 'draft' | null>
   streamOutput: Ref<string>
   isAssignedToMe: ComputedRef<boolean>
+  canManageAll: Ref<boolean>
+  isSubstituting: ComputedRef<boolean>
   canRunAI: ComputedRef<boolean>
   selectPartner: (id: string | null) => Promise<void>
   refreshPartners: () => Promise<void>
@@ -89,6 +91,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
   const currentUserId = computed(() => (sessionUser.value as any)?.id as string | undefined)
 
+  const canManageAll = ref(false)
+
   const selectedPartner = computed(() => partners.value.find(p => p.id === selectedPartnerId.value) ?? null)
 
   const isAssignedToMe = computed(() => {
@@ -96,7 +100,14 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     return !!a && a.assigneeId === currentUserId.value
   })
 
-  const canRunAI = computed(() => isAdmin.value || isAssignedToMe.value)
+  const isSubstituting = computed(() => {
+    if (!canManageAll.value) return false
+    const assignment = partnerDetail.value?.assignment
+    if (!assignment) return false
+    return assignment.assigneeId !== currentUserId.value
+  })
+
+  const canRunAI = computed(() => canManageAll.value || isAssignedToMe.value)
 
   function promptsForStep(step: string) {
     return prompts.value.filter(p => p.stepType === step)
@@ -107,7 +118,9 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     if (!pid) return
     loadingPartners.value = true
     try {
-      partners.value = await $fetch<OutreachPartner[]>(`/api/projects/${pid}/outreach/partners`)
+      const resp = await $fetch<{ partners: OutreachPartner[]; canManageAll: boolean }>(`/api/projects/${pid}/outreach/partners`)
+      partners.value = resp.partners
+      canManageAll.value = resp.canManageAll
     } finally {
       loadingPartners.value = false
     }
@@ -258,6 +271,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     executing,
     streamOutput,
     isAssignedToMe,
+    canManageAll,
+    isSubstituting,
     canRunAI,
     selectPartner,
     refreshPartners,

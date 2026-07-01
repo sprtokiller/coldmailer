@@ -14,7 +14,7 @@ const filtered = computed(() => {
   const q = search.value.toLowerCase()
   const all = ctx.partners.value.filter(p => !q || p.canonicalName.toLowerCase().includes(q))
 
-  if (isAdmin.value) {
+  if (ctx.canManageAll.value) {
     return [...all].sort((a, b) => {
       const aScore = !a.assignment ? 1 : a.assignment.assigneeId === myId.value ? 0 : 2
       const bScore = !b.assignment ? 1 : b.assignment.assigneeId === myId.value ? 0 : 2
@@ -22,7 +22,7 @@ const filtered = computed(() => {
     })
   }
 
-  // Non-admins: only see partners assigned to me or unassigned
+  // Obchodní tým: vidí jen partnery přiřazené mně nebo nepřiřazené
   return [...all]
     .filter(p => !p.assignment || p.assignment.assigneeId === myId.value)
     .sort((a, b) => {
