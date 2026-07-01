@@ -30,6 +30,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (addAssigneeId) {
+    const assigneeExists = await prisma.user.findUnique({ where: { id: addAssigneeId }, select: { id: true } })
+    if (!assigneeExists) throw createError({ statusCode: 400, message: 'Uživatel nenalezen.' })
+
     await prisma.outreachAssignment.upsert({
       where: { projectId_globalRecordId: { projectId, globalRecordId } },
       create: { projectId, globalRecordId, assigneeId: addAssigneeId, assignedById: session.id },

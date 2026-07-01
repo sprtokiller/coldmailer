@@ -227,6 +227,7 @@ export async function syncGmailForPartnerEmail(
   globalRecordId: string,
   emailAddress: string,
   lookbackDays: number,
+  knownProjectId?: string,
 ): Promise<{ synced: number }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -243,14 +244,16 @@ export async function syncGmailForPartnerEmail(
 
   const accessToken = await ensureFreshToken(user)
 
-  const record = await prisma.globalRecord.findUnique({
-    where: { id: globalRecordId },
-    select: {
-      interactions: { orderBy: { createdAt: 'desc' }, take: 1, select: { projectId: true } },
-    },
-  })
-
-  const projectId = record?.interactions[0]?.projectId
+  let projectId = knownProjectId
+  if (!projectId) {
+    const record = await prisma.globalRecord.findUnique({
+      where: { id: globalRecordId },
+      select: {
+        interactions: { orderBy: { createdAt: 'desc' }, take: 1, select: { projectId: true } },
+      },
+    })
+    projectId = record?.interactions[0]?.projectId
+  }
 
   if (!projectId) return { synced: 0 }
 
@@ -456,6 +459,11 @@ async function processMessage(
       created++
 
       const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
+      await prisma.projectRecord.upsert({
+        where: { projectId_globalRecordId: { projectId: entry.projectId, globalRecordId: entry.globalRecordId } },
+        create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, actionStatus: newStatus },
+        update: {},
+      })
       await prisma.projectRecord.updateMany({
         where: {
           globalRecordId: entry.globalRecordId,

@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   if (existing.type !== 'PARTNER') throw createError({ statusCode: 400, message: 'Záznam není typu PARTNER.' })
 
   await prisma.$transaction([
+    prisma.recordEvent.deleteMany({ where: { globalRecordId: id } }),
     prisma.partnerContact.deleteMany({ where: { globalRecordId: id } }),
     prisma.globalRecord.delete({ where: { id } }),
   ])

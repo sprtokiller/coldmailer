@@ -27,9 +27,10 @@ export default defineEventHandler(async (event) => {
 
   const projectRecord = record.projectRecords[0] ?? null
   const assignees = record.outreachAssignments.map(a => a.assignee)
+  const { projectRecords: _, outreachAssignments: __, ...rest } = record
 
   return {
-    ...record,
+    ...rest,
     actionStatus: projectRecord?.actionStatus ?? null,
     dealStage: projectRecord?.dealStage ?? null,
     assignees,

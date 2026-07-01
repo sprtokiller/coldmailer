@@ -102,9 +102,10 @@ export default defineEventHandler(async (event) => {
   }
 
   if (emailContacts.length > 0) {
+    const syncProjectId = interaction?.projectId ?? undefined
     getEmailSyncHistoryDays().then(historyDays => {
       for (const c of emailContacts) {
-        syncGmailForPartnerEmail(session.id, record.id, c.email.trim(), historyDays)
+        syncGmailForPartnerEmail(session.id, record.id, c.email.trim(), historyDays, syncProjectId)
           .catch(err => console.warn('[gmail-sync] Targeted sync failed:', err.message ?? err))
       }
     })
