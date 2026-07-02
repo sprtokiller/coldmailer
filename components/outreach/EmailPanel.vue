@@ -35,6 +35,8 @@ const opPrompts = computed(() => ctx.promptsForStep('OUTREACH_PREPARATION'))
 const opDrafts = computed(() => ctx.emailDrafts.value)
 const sigs = computed(() => ctx.signatures.value)
 const isExecuting = computed(() => ctx.executing.value !== null)
+const isExecutingHere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value === ctx.selectedPartnerId.value)
+const isExecutingElsewhere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value !== ctx.selectedPartnerId.value)
 const opContextParts = computed(() => ctx.contextParts.value.filter(cp => cp.stepKeys.includes('OUTREACH_PREPARATION')))
 const selectedContextNames = computed(() => ctx.opConfig.value.contextPartIds.map(id => opContextParts.value.find(c => c.id === id)).filter(Boolean) as Array<{ id: string; name: string }>)
 const contextSearch = ref('')
@@ -50,6 +52,8 @@ const defaultFont = computed(() => GROUP_FONTS[groupSlug.value] ?? '')
 const hasPendingSend = computed(() =>
   sendNotifs.value.some(n => n.status === 'pending' && n.partnerName === ctx.selectedPartner.value?.canonicalName),
 )
+
+const canGenerate = computed(() => !!ctx.opConfig.value.emailDraftId || selectedArgumentIds.value.size > 0)
 
 const draft = computed(() => {
   const d = ctx.partnerDetail.value?.draft as Record<string, unknown> | null
@@ -265,7 +269,7 @@ function relTime(iso: string | null | undefined) {
           <div v-if="selectedContextNames.length" class="tag-list">
             <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
               {{ cp.name }}
-              <button type="button" class="tag-remove" :disabled="isExecuting" @click="removeContext(cp.id)">✕</button>
+              <button type="button" class="tag-remove" :disabled="isExecutingHere" @click="removeContext(cp.id)">✕</button>
             </span>
           </div>
           <div class="relative">
@@ -274,7 +278,7 @@ function relTime(iso: string | null | undefined) {
               type="text"
               placeholder="Přidat kontext…"
               class="field-input"
-              :disabled="isExecuting"
+              :disabled="isExecutingHere"
               @focus="showContextDropdown = true"
               @blur="hideContextDropdown"
             />
@@ -292,16 +296,19 @@ function relTime(iso: string | null | undefined) {
 
         <!-- Generate button -->
         <button
-          :disabled="ctx.executing.value !== null"
+          :disabled="isExecuting || !canGenerate"
           class="btn-run btn-run--indigo"
           @click="generate"
         >
-          <svg v-if="ctx.executing.value === 'draft'" class="btn-spinner" fill="none" viewBox="0 0 24 24">
+          <svg v-if="ctx.executing.value === 'draft' && isExecutingHere" class="btn-spinner" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {{ ctx.executing.value === 'draft' ? 'Generuji…' : 'Generovat e-mail' }}
+          {{ ctx.executing.value === 'draft' && isExecutingHere ? 'Generuji…' : 'Generovat e-mail' }}
         </button>
+        <p v-if="isExecutingElsewhere" class="busy-hint">
+          Právě běží {{ ctx.executing.value === 'alignment' ? 'Value Alignment' : 'generování e-mailu' }} pro jiného partnera — počkejte, než skončí.
+        </p>
       </div>
 
       <!-- ── Email fields ──────────────────────────────────────── -->
@@ -317,7 +324,7 @@ function relTime(iso: string | null | undefined) {
       </div>
 
       <!-- ── Stream output ─────────────────────────────────────── -->
-      <div v-if="ctx.executing.value === 'draft' && ctx.streamOutput.value" class="stream-box">
+      <div v-if="ctx.executing.value === 'draft' && isExecutingHere && ctx.streamOutput.value" class="stream-box">
         <pre class="stream-text">{{ ctx.streamOutput.value }}</pre>
       </div>
 
@@ -641,6 +648,13 @@ function relTime(iso: string | null | undefined) {
 .btn-run--indigo {
   background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
   color: #fff;
+}
+
+.busy-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .btn-spinner {

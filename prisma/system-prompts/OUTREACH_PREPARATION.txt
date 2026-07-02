@@ -145,12 +145,12 @@ Dodrž tato pravidla:
 * Zachovej HTML formátování, které je součástí šablony, pokud není v rozporu s těmito pravidly.
 * Výsledné HTML musí být použitelné jako tělo e-mailu.
 
-Ukázka pro font „Inter Tight“:
+Ukázka pro font „sans-serif“:
 
-<p><span style="font-family: 'Inter Tight', sans-serif;">Dobrý den, pane Nováku,</span></p>
-<p><span style="font-family: 'Inter Tight', sans-serif;">všiml jsem si, že vaše firma XY nedávno spustila program pro školy. V Tour de App propojujeme středoškoláky s technologickými firmami prostřednictvím 48hodinového hackathonu.</span></p>
-<p><span style="font-family: 'Inter Tight', sans-serif;">Vaše zaměření na vzdělávání a rozvoj juniorních talentů se přirozeně propojuje s tím, co děláme — účastníci řeší reálné zadání a firmy získávají přístup k motivovaným studentům.</span></p>
-<p><span style="font-family: 'Inter Tight', sans-serif;">Dává smysl probrat krátký hovor příští týden?</span></p>
+<p><span style="font-family: sans-serif;">Dobrý den, pane Nováku,</span></p>
+<p><span style="font-family: sans-serif;">všiml jsem si, že vaše firma XY nedávno spustila program pro školy. V Tour de App propojujeme středoškoláky s technologickými firmami prostřednictvím 48hodinového hackathonu.</span></p>
+<p><span style="font-family: sans-serif;">Vaše zaměření na vzdělávání a rozvoj juniorních talentů se přirozeně propojuje s tím, co děláme — účastníci řeší reálné zadání a firmy získávají přístup k motivovaným studentům.</span></p>
+<p><span style="font-family: sans-serif;">Dává smysl probrat krátký hovor příští týden?</span></p>
 
 ---
 

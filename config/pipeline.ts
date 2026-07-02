@@ -21,7 +21,7 @@ export const MODELS = {
 
 // ── Group → font mapping (used in outreach email generation) ─────────────────
 export const GROUP_FONTS: Record<string, string> = {
-  tda: 'Inter Tight',
+  tda: 'sans-serif',
   xo:  'Dosis',
   ppt: 'Figtree',
 }

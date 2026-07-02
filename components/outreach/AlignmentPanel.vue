@@ -45,6 +45,8 @@ const showConfirm = ref(false)
 const showCancelConfirm = ref(false)
 
 const isExecuting = computed(() => ctx.executing.value !== null)
+const isExecutingHere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value === ctx.selectedPartnerId.value)
+const isExecutingElsewhere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value !== ctx.selectedPartnerId.value)
 
 function onRunClick() {
   if (needsConfirm.value) { showConfirm.value = true; return }
@@ -97,7 +99,7 @@ function relTime(iso: string | null | undefined): string {
         <!-- System prompt -->
         <div class="field-group">
           <label class="field-label">Systémový prompt</label>
-          <select v-model="ctx.vaConfig.value.systemPromptId" class="field-select" :disabled="isExecuting">
+          <select v-model="ctx.vaConfig.value.systemPromptId" class="field-select" :disabled="isExecutingHere">
             <option v-for="p in vaPrompts" :key="p.id" :value="p.id">{{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}</option>
           </select>
         </div>
@@ -105,7 +107,7 @@ function relTime(iso: string | null | undefined): string {
         <!-- Selling point -->
         <div class="field-group">
           <label class="field-label">Prodejní argumenty</label>
-          <select v-model="ctx.vaConfig.value.sellingPointId" class="field-select" :disabled="isExecuting">
+          <select v-model="ctx.vaConfig.value.sellingPointId" class="field-select" :disabled="isExecutingHere">
             <option value="">— vyberte —</option>
             <option v-for="sp in vaSellingPoints" :key="sp.id" :value="sp.id">{{ sp.name }}</option>
           </select>
@@ -117,7 +119,7 @@ function relTime(iso: string | null | undefined): string {
           <div v-if="selectedContextNames.length" class="tag-list">
             <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
               {{ cp.name }}
-              <button type="button" class="tag-remove" :disabled="isExecuting" @click="removeContext(cp.id)">✕</button>
+              <button type="button" class="tag-remove" :disabled="isExecutingHere" @click="removeContext(cp.id)">✕</button>
             </span>
           </div>
           <div class="relative">
@@ -126,7 +128,7 @@ function relTime(iso: string | null | undefined): string {
               type="text"
               placeholder="Přidat z knihovny…"
               class="field-input"
-              :disabled="isExecuting"
+              :disabled="isExecutingHere"
               @focus="showContextDropdown = true"
               @blur="hideContextDropdown"
             />
@@ -150,13 +152,13 @@ function relTime(iso: string | null | undefined): string {
             rows="2"
             class="field-input field-textarea"
             placeholder="Zadejte vlastní kontext…"
-            :disabled="isExecuting"
+            :disabled="isExecutingHere"
           />
         </div>
 
         <!-- Run / Stop button -->
         <button
-          v-if="ctx.executing.value === 'alignment'"
+          v-if="ctx.executing.value === 'alignment' && isExecutingHere"
           class="btn-run btn-run--stop"
           @click="onCancelClick"
         >
@@ -173,10 +175,13 @@ function relTime(iso: string | null | undefined): string {
         >
           {{ alignment ? 'Znovu analyzovat' : 'Spustit analýzu' }}
         </button>
+        <p v-if="isExecutingElsewhere" class="busy-hint">
+          Právě běží {{ ctx.executing.value === 'alignment' ? 'Value Alignment' : 'generování e-mailu' }} pro jiného partnera — počkejte, než skončí.
+        </p>
       </div>
 
       <!-- Streaming output -->
-      <div v-if="ctx.executing.value === 'alignment' && ctx.streamOutput.value" class="stream-box">
+      <div v-if="ctx.executing.value === 'alignment' && isExecutingHere && ctx.streamOutput.value" class="stream-box">
         <pre class="stream-text">{{ ctx.streamOutput.value }}</pre>
       </div>
 
@@ -451,6 +456,13 @@ function relTime(iso: string | null | undefined): string {
 .btn-run--stop {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #fff;
+}
+
+.busy-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .btn-stop-icon {

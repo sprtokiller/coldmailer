@@ -21,7 +21,7 @@ const moreMenuRef = ref<HTMLElement | null>(null)
 
 // ── Font options ───────────────────────────────────────────────────────────
 const customFonts = [
-  { label: 'Inter Tight (TdA)', value: 'Inter Tight' },
+  { label: 'Sans Serif (TdA)', value: 'sans-serif' },
   { label: 'Dosis (XO)', value: 'Dosis' },
   { label: 'Figtree (PPT)', value: 'Figtree' },
 ]

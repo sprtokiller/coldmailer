@@ -346,7 +346,7 @@ defineExpose({
     if (!editor.value) return
     let contentToInsert = html
     if (props.defaultFont && !html.includes('font-family')) {
-      contentToInsert = `<span style="font-family: '${props.defaultFont}'">${html}</span>`
+      contentToInsert = `<span style="font-family: ${props.defaultFont}">${html}</span>`
     }
     editor.value.chain().focus().insertContent(contentToInsert).run()
   },

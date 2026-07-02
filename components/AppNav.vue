@@ -2,6 +2,10 @@
 const { user, loggedIn, clear } = useUserSession()
 const { groups, activeProject, activeGroup, setProject } = useActiveProject()
 
+// Shared with useProjectOutreach — lets us show that an AI job (Value Alignment /
+// email draft) is still running even after navigating away from the Oslovení page.
+const outreachExecuting = useState<'alignment' | 'draft' | null>('outreachExecuting', () => null)
+
 const projectMenuOpen = ref(false)
 
 const projects = computed(() =>
@@ -132,10 +136,15 @@ async function logout() {
           </NuxtLink>
           <NuxtLink
             to="/outreach"
-            class="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            class="text-sm text-gray-500 hover:text-gray-800 transition-colors inline-flex items-center gap-1.5"
             active-class="text-gray-800 font-medium"
           >
             Oslovení
+            <span
+              v-if="outreachExecuting"
+              class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
+              :title="outreachExecuting === 'alignment' ? 'Probíhá Value Alignment' : 'Probíhá generování e-mailu'"
+            />
           </NuxtLink>
           <NuxtLink
             to="/negotiations"

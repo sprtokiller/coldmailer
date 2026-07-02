@@ -53,6 +53,7 @@ export interface ProjectOutreachContext {
   vaConfig: Ref<OutreachConfig>
   opConfig: Ref<OutreachConfig>
   executing: Ref<'alignment' | 'draft' | null>
+  executingPartnerId: Ref<string | null>
   streamOutput: Ref<string>
   isAssignedToMe: ComputedRef<boolean>
   canManageAll: Ref<boolean>
@@ -80,9 +81,15 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const selectedPartnerId = ref<string | null>(null)
   const partnerDetail = ref<ProjectOutreachContext['partnerDetail']['value']>(null)
   const loadingDetail = ref(false)
-  const executing = ref<'alignment' | 'draft' | null>(null)
-  const streamOutput = ref('')
-  const alignmentAbort = ref<AbortController | null>(null)
+  // Persisted across route navigation (via useState) so an in-flight AI job
+  // launched from the Oslovení page isn't silently orphaned when the user
+  // navigates elsewhere and back — the page component (and thus a plain ref)
+  // gets torn down and recreated on each visit, but useState keeps the same
+  // instance alive for the whole client session.
+  const executing = useState<'alignment' | 'draft' | null>('outreachExecuting', () => null)
+  const executingPartnerId = useState<string | null>('outreachExecutingPartnerId', () => null)
+  const streamOutput = useState('outreachStreamOutput', () => '')
+  const alignmentAbort = useState<AbortController | null>('outreachAlignmentAbort', () => null)
 
   const prompts = ref<ProjectOutreachContext['prompts']['value']>([])
   const contextParts = ref<ProjectOutreachContext['contextParts']['value']>([])
@@ -191,7 +198,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     if (!pid || !gid) return
     const ctrl = new AbortController()
     alignmentAbort.value = ctrl
-    executing.value = 'alignment'; streamOutput.value = ''
+    executing.value = 'alignment'; executingPartnerId.value = gid; streamOutput.value = ''
     try {
       const resp = await fetch(`/api/projects/${pid}/outreach/${gid}/alignment`, {
         method: 'POST',
@@ -217,7 +224,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) throw err
     } finally {
       alignmentAbort.value = null
-      executing.value = null
+      executing.value = null; executingPartnerId.value = null
       await refreshDetail(); await refreshPartners()
     }
   }
@@ -225,7 +232,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   async function runDraft(opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) return
-    executing.value = 'draft'; streamOutput.value = ''
+    executing.value = 'draft'; executingPartnerId.value = gid; streamOutput.value = ''
     try {
       const resp = await fetch(`/api/projects/${pid}/outreach/${gid}/draft`, {
         method: 'POST',
@@ -246,7 +253,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
         }
       }
     } finally {
-      executing.value = null
+      executing.value = null; executingPartnerId.value = null
       await refreshDetail(); await refreshPartners()
     }
   }
@@ -303,6 +310,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     vaConfig,
     opConfig,
     executing,
+    executingPartnerId,
     streamOutput,
     isAssignedToMe,
     canManageAll,
