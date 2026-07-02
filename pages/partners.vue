@@ -6,6 +6,7 @@ const router = useRouter()
 
 const { user: sessionUser } = useUserSession()
 const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+const { activeProject } = useActiveProject()
 
 const SIZE_LABELS: Record<string, string> = {
   micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
@@ -100,6 +101,16 @@ function toggleExpand(id: string) {
 
 const editingPartner = ref<GlobalRecord | null>(null)
 const partnerToAssign = ref<GlobalRecord | null>(null)
+
+function isInActiveProject(rec: GlobalRecord): boolean {
+  return rec.projectRecords.some(pr => pr.project.id === activeProject.value?.id)
+}
+
+async function removeFromProject(rec: GlobalRecord) {
+  if (!confirm(`Opravdu odebrat partnera "${rec.canonicalName}" z projektu "${activeProject.value?.name}"? Historie jednání, e-mailů a poznámek zůstane zachována.`)) return
+  await $fetch(`/api/partners/${rec.id}/project`, { method: 'DELETE' })
+  fetchRecords(true)
+}
 
 // ── Permissions ─────────────────────────────────────────────────────────────
 
@@ -251,7 +262,22 @@ function onImportClose() {
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-end gap-3">
-                      <button v-if="isAdmin" class="text-indigo-400 hover:text-indigo-600 transition-colors" title="Přiřadit do aktuálního projektu" @click.stop="partnerToAssign = rec">
+                      <button
+                        v-if="isAdmin && isInActiveProject(rec)"
+                        class="text-red-400 hover:text-red-600 transition-colors"
+                        title="Odebrat z aktuálního projektu"
+                        @click.stop="removeFromProject(rec)"
+                      >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <button
+                        v-else-if="isAdmin"
+                        class="text-indigo-400 hover:text-indigo-600 transition-colors"
+                        title="Přiřadit do aktuálního projektu"
+                        @click.stop="partnerToAssign = rec"
+                      >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>

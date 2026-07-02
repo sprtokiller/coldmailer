@@ -16,6 +16,7 @@ interface Partner {
   lastInteractionAt: string | null
   interactionCount: number
   negotiationStatus: string | null
+  inProject: boolean
 }
 
 const search = ref('')
@@ -116,7 +117,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
             :key="p.id"
             :class="[
               'hover:bg-gray-50 cursor-pointer transition-colors',
-              CLOSED_STATUSES.has(p.negotiationStatus ?? '') ? 'opacity-60' : '',
+              CLOSED_STATUSES.has(p.negotiationStatus ?? '') || !p.inProject ? 'opacity-60' : '',
             ]"
             @click="navigateTo(`/negotiations/${p.id}`)"
           >
@@ -131,6 +132,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
                   class="text-indigo-400 hover:text-indigo-600 text-xs flex-shrink-0"
                   @click.stop
                 >↗</a>
+                <span v-if="!p.inProject" class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 whitespace-nowrap">Mimo projekt</span>
               </div>
               <div v-if="p.payload.summary" class="text-[11px] text-gray-400 mt-0.5 line-clamp-1 max-w-56">
                 {{ p.payload.summary }}

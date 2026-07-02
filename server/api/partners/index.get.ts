@@ -57,6 +57,7 @@ export default defineEventHandler(async (event) => {
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
       negotiationStatus: projectRecord?.negotiationStatus ?? null,
+      inProject: !!projectRecord,
     }
   })
 })
