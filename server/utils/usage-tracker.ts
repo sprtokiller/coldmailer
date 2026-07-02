@@ -81,7 +81,6 @@ export async function trackAIUsage(opts: TrackAIOptions): Promise<void> {
           model:          opts.model,
           costUsd:        cost,
           generationId:   opts.generationId ?? null,
-          pipelineStepId: opts.pipelineStepId ?? null,
           stepType:       opts.stepType ?? null,
         },
       })
@@ -110,7 +109,6 @@ export async function trackSerpUsage(opts: TrackSerpOptions): Promise<void> {
         eventType:      'serp_search',
         model:          'serpapi',
         costUsd:        0,
-        pipelineStepId: opts.pipelineStepId ?? null,
         stepType:       opts.stepType ?? null,
       },
     })

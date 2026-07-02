@@ -14,6 +14,8 @@ const selectedContactIdx = ref<number | null>(null)
 const selectedArgumentIds = ref<Set<string>>(new Set())
 const selectedSignatureId = ref('')
 const saving = ref(false)
+const configCollapsed = ref(false)
+const recsCollapsed = ref(true)
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const alignment = computed(() => {
@@ -73,6 +75,9 @@ watch(() => ctx.partnerDetail.value, (detail) => {
   emailSubject.value = String(d?.subject ?? '')
   emailBody.value = String(d?.body ?? '')
   selectedArgumentIds.value = new Set()
+  const hasContent = !!emailBody.value.trim()
+  configCollapsed.value = hasContent
+  recsCollapsed.value = !hasContent
 }, { immediate: true })
 
 watch(selectedContactIdx, () => {
@@ -96,6 +101,8 @@ async function generate() {
       emailSubject.value = String(d.subject ?? '')
       emailBody.value = String(d.body ?? '')
     }
+    configCollapsed.value = true
+    recsCollapsed.value = false
   } catch (err) { alert(`Chyba: ${err instanceof Error ? err.message : String(err)}`) }
 }
 
@@ -191,124 +198,132 @@ function relTime(iso: string | null | undefined) {
     <template v-else>
       <!-- ── Config header ─────────────────────────────────────── -->
       <div class="panel-config">
-        <!-- Row 1 -->
-        <div class="config-grid">
-          <div class="field-group">
-            <label class="field-label">Systémový prompt</label>
-            <select v-model="ctx.opConfig.value.systemPromptId" class="field-select">
-              <option v-for="p in opPrompts" :key="p.id" :value="p.id">{{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label class="field-label">E-mailová šablona</label>
-            <select
-              v-model="ctx.opConfig.value.emailDraftId"
-              class="field-select"
-              :class="ctx.opConfig.value.emailDraftId ? '' : 'field-select--warn'"
-            >
-              <option value="">— vyberte —</option>
-              <option v-for="d in opDrafts" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Row 2 -->
-        <div class="config-grid">
-          <div class="field-group">
-            <label class="field-label">Kontakt</label>
-            <select
-              v-if="contacts.length"
-              :value="selectedContactIdx ?? 0"
-              class="field-select"
-              @change="selectedContactIdx = Number(($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="(c, i) in contacts" :key="c.id" :value="i">
-                {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
-              </option>
-            </select>
-            <div v-else class="no-contact">Žádný e-mail</div>
-          </div>
-          <div class="field-group">
-            <label class="field-label">Podpis</label>
-            <select
-              v-if="sigs.length > 0"
-              v-model="selectedSignatureId"
-              class="field-select"
-              :class="selectedSignatureId ? '' : 'field-select--warn'"
-            >
-              <option value="">— vyberte —</option>
-              <option v-for="sig in sigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
-            </select>
-            <div v-else class="no-sig">
-              Nemáte podpis pro tento typ projektu.
-              <NuxtLink to="/settings?tab=signatures" class="no-sig-link">Vytvořit v Nastavení</NuxtLink>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 3: arguments -->
-        <div v-if="top3.length" class="field-group">
-          <label class="field-label">Argumenty pro e-mail</label>
-          <div class="arg-chips">
-            <button
-              v-for="arg in top3"
-              :key="String(arg.argumentId)"
-              type="button"
-              class="arg-chip"
-              :class="{ 'arg-chip--active': selectedArgumentIds.has(String(arg.argumentId)) }"
-              @click="toggleArgument(String(arg.argumentId))"
-            >
-              {{ arg.argumentLabel || arg.argumentId }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Row 4: context parts -->
-        <div class="field-group">
-          <label class="field-label">Kontextové části</label>
-          <div v-if="selectedContextNames.length" class="tag-list">
-            <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
-              {{ cp.name }}
-              <button type="button" class="tag-remove" :disabled="isExecutingHere" @click="removeContext(cp.id)">✕</button>
-            </span>
-          </div>
-          <div class="relative">
-            <input
-              v-model="contextSearch"
-              type="text"
-              placeholder="Přidat kontext…"
-              class="field-input"
-              :disabled="isExecutingHere"
-              @focus="showContextDropdown = true"
-              @blur="hideContextDropdown"
-            />
-            <div v-if="showContextDropdown && filteredContext.length" class="dropdown">
-              <button
-                v-for="cp in filteredContext"
-                :key="cp.id"
-                type="button"
-                class="dropdown-item"
-                @mousedown.prevent="addContext(cp.id)"
-              >{{ cp.name }}</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Generate button -->
-        <button
-          :disabled="isExecuting || !canGenerate"
-          class="btn-run btn-run--indigo"
-          @click="generate"
-        >
-          <svg v-if="ctx.executing.value === 'draft' && isExecutingHere" class="btn-spinner" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <button type="button" class="section-toggle" @click="configCollapsed = !configCollapsed">
+          <svg class="toggle-chevron" :class="{ 'toggle-chevron--collapsed': configCollapsed }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
-          {{ ctx.executing.value === 'draft' && isExecutingHere ? 'Generuji…' : 'Generovat e-mail' }}
+          Konfigurace e-mailu
         </button>
-        <p v-if="isExecutingElsewhere" class="busy-hint">
-          Právě běží generování e-mailu pro jiného partnera — počkejte, než skončí.
-        </p>
+        <div v-show="!configCollapsed" class="panel-config-body">
+          <!-- Row 1 -->
+          <div class="config-grid">
+            <div class="field-group">
+              <label class="field-label">Systémový prompt</label>
+              <select v-model="ctx.opConfig.value.systemPromptId" class="field-select">
+                <option v-for="p in opPrompts" :key="p.id" :value="p.id">{{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">E-mailová šablona</label>
+              <select
+                v-model="ctx.opConfig.value.emailDraftId"
+                class="field-select"
+                :class="ctx.opConfig.value.emailDraftId ? '' : 'field-select--warn'"
+              >
+                <option value="">— vyberte —</option>
+                <option v-for="d in opDrafts" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 2 -->
+          <div class="config-grid">
+            <div class="field-group">
+              <label class="field-label">Kontakt</label>
+              <select
+                v-if="contacts.length"
+                :value="selectedContactIdx ?? 0"
+                class="field-select"
+                @change="selectedContactIdx = Number(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="(c, i) in contacts" :key="c.id" :value="i">
+                  {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
+                </option>
+              </select>
+              <div v-else class="no-contact">Žádný e-mail</div>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Podpis</label>
+              <select
+                v-if="sigs.length > 0"
+                v-model="selectedSignatureId"
+                class="field-select"
+                :class="selectedSignatureId ? '' : 'field-select--warn'"
+              >
+                <option value="">— vyberte —</option>
+                <option v-for="sig in sigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
+              </select>
+              <div v-else class="no-sig">
+                Nemáte podpis pro tento typ projektu.
+                <NuxtLink to="/settings?tab=signatures" class="no-sig-link">Vytvořit v Nastavení</NuxtLink>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: arguments -->
+          <div v-if="top3.length" class="field-group">
+            <label class="field-label">Argumenty pro e-mail</label>
+            <div class="arg-chips">
+              <button
+                v-for="arg in top3"
+                :key="String(arg.argumentId)"
+                type="button"
+                class="arg-chip"
+                :class="{ 'arg-chip--active': selectedArgumentIds.has(String(arg.argumentId)) }"
+                @click="toggleArgument(String(arg.argumentId))"
+              >
+                {{ arg.argumentLabel || arg.argumentId }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 4: context parts -->
+          <div class="field-group">
+            <label class="field-label">Kontextové části</label>
+            <div v-if="selectedContextNames.length" class="tag-list">
+              <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
+                {{ cp.name }}
+                <button type="button" class="tag-remove" :disabled="isExecutingHere" @click="removeContext(cp.id)">✕</button>
+              </span>
+            </div>
+            <div class="relative">
+              <input
+                v-model="contextSearch"
+                type="text"
+                placeholder="Přidat kontext…"
+                class="field-input"
+                :disabled="isExecutingHere"
+                @focus="showContextDropdown = true"
+                @blur="hideContextDropdown"
+              />
+              <div v-if="showContextDropdown && filteredContext.length" class="dropdown">
+                <button
+                  v-for="cp in filteredContext"
+                  :key="cp.id"
+                  type="button"
+                  class="dropdown-item"
+                  @mousedown.prevent="addContext(cp.id)"
+                >{{ cp.name }}</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Generate button -->
+          <button
+            :disabled="isExecuting || !canGenerate"
+            class="btn-run btn-run--indigo"
+            @click="generate"
+          >
+            <svg v-if="ctx.executing.value === 'draft' && isExecutingHere" class="btn-spinner" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            {{ ctx.executing.value === 'draft' && isExecutingHere ? 'Generuji…' : 'Generovat e-mail' }}
+          </button>
+          <p v-if="isExecutingElsewhere" class="busy-hint">
+            Právě běží generování e-mailu pro jiného partnera — počkejte, než skončí.
+          </p>
+        </div>
       </div>
 
       <!-- ── Email fields ──────────────────────────────────────── -->
@@ -335,13 +350,16 @@ function relTime(iso: string | null | undefined) {
 
       <!-- ── Recommendations ───────────────────────────────────── -->
       <div v-if="recommendations.length" class="recommendations-panel">
-        <div class="recommendations-header">
+        <button type="button" class="recommendations-header" @click="recsCollapsed = !recsCollapsed">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="rec-icon">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Doporučení
-        </div>
-        <ul class="recommendations-list">
+          <svg class="toggle-chevron toggle-chevron--end" :class="{ 'toggle-chevron--collapsed': recsCollapsed }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <ul v-show="!recsCollapsed" class="recommendations-list">
           <li v-for="(rec, i) in recommendations" :key="i" class="recommendations-item">{{ rec }}</li>
         </ul>
       </div>
@@ -443,13 +461,45 @@ function relTime(iso: string | null | undefined) {
 
 /* ── Config section ──────────────────────────────────────── */
 .panel-config {
-  padding: 14px 16px;
   border-bottom: 1px solid #e9eaec;
   flex-shrink: 0;
+}
+
+.panel-config-body {
+  padding: 0 16px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.section-toggle:hover { color: #4338ca; }
+
+.toggle-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.toggle-chevron--collapsed { transform: rotate(-90deg); }
+
+.toggle-chevron--end { margin-left: auto; }
 
 .config-grid {
   display: grid;
@@ -751,13 +801,21 @@ function relTime(iso: string | null | undefined) {
   display: flex;
   align-items: center;
   gap: 5px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 11px;
   font-weight: 700;
   color: #6b7280;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin-bottom: 8px;
+  cursor: pointer;
+  transition: color 0.15s;
 }
+
+.recommendations-header:hover { color: #4338ca; }
 
 .rec-icon {
   width: 13px;
