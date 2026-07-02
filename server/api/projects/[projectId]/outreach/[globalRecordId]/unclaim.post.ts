@@ -13,21 +13,17 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
-  const assignment = await prisma.outreachAssignment.findUnique({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    select: { assigneeId: true },
+  const assignment = await prisma.outreachAssignment.findFirst({
+    where: { projectId, globalRecordId, assigneeId: user.id },
+    select: { id: true },
   })
 
   if (!assignment) {
-    throw createError({ statusCode: 404, message: 'Partner nemá žádné přiřazení.' })
+    throw createError({ statusCode: 404, message: 'Nejste přiřazeni k tomuto partnerovi.' })
   }
 
-  if (assignment.assigneeId !== user.id) {
-    throw createError({ statusCode: 403, message: 'Odstoupit může pouze přiřazený řešitel.' })
-  }
-
-  await prisma.outreachAssignment.delete({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+  await prisma.outreachAssignment.deleteMany({
+    where: { projectId, globalRecordId, assigneeId: user.id },
   })
 
   return { ok: true }

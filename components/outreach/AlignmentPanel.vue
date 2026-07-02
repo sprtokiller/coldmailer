@@ -212,10 +212,9 @@ function relTime(iso: string | null | undefined): string {
         </div>
       </div>
     </template>
-  </div>
 
-  <!-- Cancel confirmation modal -->
-  <Teleport to="body">
+    <!-- Cancel confirmation modal -->
+    <Teleport to="body">
     <div v-if="showCancelConfirm" class="confirm-overlay" @click.self="showCancelConfirm = false">
       <div class="confirm-modal">
         <div class="confirm-header">
@@ -233,33 +232,34 @@ function relTime(iso: string | null | undefined): string {
         </div>
       </div>
     </div>
-  </Teleport>
+    </Teleport>
 
-  <!-- Run confirmation modal -->
-  <Teleport to="body">
-    <div v-if="showConfirm" class="confirm-overlay" @click.self="showConfirm = false">
-      <div class="confirm-modal">
-        <div class="confirm-header">
-          <h3 class="confirm-title">Potvrzení akce</h3>
-          <button class="confirm-close" @click="showConfirm = false">✕</button>
-        </div>
-        <div class="confirm-body">
-          <p v-if="ctx.isSubstituting.value" class="confirm-warn">
-            Tuto analýzu spouštíte jménem jiného člena týmu — partner je přiřazen uživateli
-            <strong>{{ ctx.partnerDetail.value?.assignment?.assignee?.name }}</strong>, ne vám.
-          </p>
-          <p v-if="isRegeneration" class="confirm-warn">
-            Pro tohoto partnera už existuje hotová analýza Value Alignment. Spuštěním dojde k jejímu
-            <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
-          </p>
-        </div>
-        <div class="confirm-actions">
-          <button class="confirm-btn confirm-btn--cancel" @click="showConfirm = false">Zrušit</button>
-          <button class="confirm-btn confirm-btn--confirm" @click="confirmAndRun">Potvrdit a spustit</button>
+    <!-- Run confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showConfirm" class="confirm-overlay" @click.self="showConfirm = false">
+        <div class="confirm-modal">
+          <div class="confirm-header">
+            <h3 class="confirm-title">Potvrzení akce</h3>
+            <button class="confirm-close" @click="showConfirm = false">✕</button>
+          </div>
+          <div class="confirm-body">
+            <p v-if="ctx.isSubstituting.value" class="confirm-warn">
+              Tuto analýzu spouštíte jménem jiného člena týmu — partner je přiřazen uživateli
+              <strong>{{ ctx.partnerDetail.value?.assignment?.assignee?.name }}</strong>, ne vám.
+            </p>
+            <p v-if="isRegeneration" class="confirm-warn">
+              Pro tohoto partnera už existuje hotová analýza Value Alignment. Spuštěním dojde k jejímu
+              <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
+            </p>
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-btn confirm-btn--cancel" @click="showConfirm = false">Zrušit</button>
+            <button class="confirm-btn confirm-btn--confirm" @click="confirmAndRun">Potvrdit a spustit</button>
+          </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
+  </div>
 </template>
 
 <style scoped>

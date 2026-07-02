@@ -369,11 +369,10 @@ function relTime(iso: string | null | undefined) {
         </div>
       </div>
     </template>
-  </div>
 
-  <!-- Sender confirmation modal -->
-  <Teleport to="body">
-    <div v-if="showSenderConfirmModal" class="modal-backdrop" @click.self="showSenderConfirmModal = false">
+    <!-- Sender confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showSenderConfirmModal" class="modal-backdrop" @click.self="showSenderConfirmModal = false">
       <div class="modal-card">
         <div class="modal-header">
           <h2 class="modal-title">Odeslat cizí e-mail</h2>
@@ -397,8 +396,9 @@ function relTime(iso: string | null | undefined) {
           </button>
         </div>
       </div>
-    </div>
-  </Teleport>
+      </div>
+    </Teleport>
+  </div>
 </template>
 
 <style scoped>

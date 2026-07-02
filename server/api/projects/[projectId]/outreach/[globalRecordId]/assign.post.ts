@@ -30,10 +30,10 @@ export default defineEventHandler(async (event) => {
   const targetUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
   if (!targetUser) throw createError({ statusCode: 400, message: 'Uživatel nebyl nalezen.' })
 
-  const assignment = await prisma.outreachAssignment.upsert({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    create: { projectId, globalRecordId, assigneeId: userId, assignedById: session.id },
-    update: { assigneeId: userId, assignedById: session.id },
+  // Oslovování uses single-user assign: replace all existing with the new one
+  await prisma.outreachAssignment.deleteMany({ where: { projectId, globalRecordId } })
+  const assignment = await prisma.outreachAssignment.create({
+    data: { projectId, globalRecordId, assigneeId: userId, assignedById: session.id },
     include: { assignee: { select: { id: true, name: true, image: true } } },
   })
 

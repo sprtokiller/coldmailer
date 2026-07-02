@@ -445,6 +445,28 @@ const unassignedSolutionUsers = computed(() => {
   return (allUsers.value ?? []).filter(u => !assigned.has(u.id))
 })
 
+// ── Email composer ────────────────────────────────────────────────────────────
+
+const composerOpen = ref(false)
+const composerPrefilledTo = ref('')
+const composerPrefilledSubject = ref('')
+const composerReplyToGmailId = ref<string | null>(null)
+
+function openNewEmail() {
+  composerPrefilledTo.value = primaryContact.value?.address ?? ''
+  composerPrefilledSubject.value = ''
+  composerReplyToGmailId.value = null
+  composerOpen.value = true
+}
+
+function openReply(i: Interaction) {
+  composerPrefilledTo.value = i.direction === 'RECEIVED' ? (i.fromAddress ?? '') : (i.toAddress ?? '')
+  const subj = i.subject ?? ''
+  composerPrefilledSubject.value = /^re:/i.test(subj) ? subj : `Re: ${subj}`
+  composerReplyToGmailId.value = i.gmailId
+  composerOpen.value = true
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string) {
@@ -652,6 +674,12 @@ const TYPE_COLORS: Record<string, string> = {
           @click="newMode = newMode === 'NOTE' ? null : 'NOTE'"
         >{{ newMode === 'NOTE' ? 'Zrušit' : '+ Poznámka' }}</button>
 
+        <button
+          v-if="typeFilter === 'EMAIL' && canEdit"
+          class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          @click="openNewEmail"
+        >+ Nový e-mail</button>
+
         <div v-if="typeFilter === 'EMAIL'" class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
         <button
           :class="['px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1', emailDisplayMode === 'text' ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600']"
@@ -830,6 +858,7 @@ const TYPE_COLORS: Record<string, string> = {
             <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
           </div>
           <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
+            <button v-if="i.type === 'EMAIL'" class="text-xs text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i)">odpovědět</button>
             <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
             <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">smazat</button>
           </div>
@@ -1074,6 +1103,17 @@ const TYPE_COLORS: Record<string, string> = {
     :partner="{ id: partner.id, canonicalName: partner.canonicalName, payload: partner.payload }"
     @close="showEditModal = false"
     @saved="showEditModal = false; refreshPartner()"
+  />
+
+  <NegotiationsEmailComposer
+    v-if="composerOpen && partner"
+    :global-record-id="id"
+    :contacts="partner.contacts"
+    :prefilled-to="composerPrefilledTo"
+    :prefilled-subject="composerPrefilledSubject"
+    :in-reply-to-gmail-id="composerReplyToGmailId ?? undefined"
+    @close="composerOpen = false"
+    @sent="composerOpen = false; refreshInteractions()"
   />
 </template>
 

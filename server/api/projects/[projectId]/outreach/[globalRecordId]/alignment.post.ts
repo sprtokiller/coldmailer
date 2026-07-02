@@ -34,11 +34,11 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(user.id, projectId)
   const canManageAll = access.isAdmin || access.canEditAll
   if (!canManageAll) {
-    const assignment = await prisma.outreachAssignment.findUnique({
-      where: { projectId_globalRecordId: { projectId, globalRecordId } },
-      select: { assigneeId: true },
+    const assignment = await prisma.outreachAssignment.findFirst({
+      where: { projectId, globalRecordId, assigneeId: user.id },
+      select: { id: true },
     })
-    if (!assignment || assignment.assigneeId !== user.id) {
+    if (!assignment) {
       throw createError({ statusCode: 403, message: 'K tomuto partnerovi nemáte přiřazení.' })
     }
   }

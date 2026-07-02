@@ -489,7 +489,7 @@ model PartnerOutreachDraft {
   @@index([projectId])
 }
 
-// Přiřazení zodpovědnosti za zpracování partnera v outreach workflow
+// Přiřazení zodpovědnosti za zpracování partnera v outreach workflow a v Jednání
 model OutreachAssignment {
   id             String       @id @default(cuid())
   projectId      String
@@ -502,6 +502,7 @@ model OutreachAssignment {
   assignedById   String?
   assignedBy     User?        @relation("OutreachAssignedBy", fields: [assignedById], references: [id])
 
-  @@unique([projectId, globalRecordId])
+  @@unique([projectId, globalRecordId, assigneeId])
   @@index([projectId])
+  @@index([projectId, globalRecordId])
 }

@@ -48,11 +48,11 @@ export default defineEventHandler(async (event) => {
 
   const access = await getInteractionAccess(session.id, projectId)
 
-  const outreachAssignment = await prisma.outreachAssignment.findUnique({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+  const outreachAssignment = await prisma.outreachAssignment.findFirst({
+    where: { projectId, globalRecordId, assigneeId: session.id },
     select: { assigneeId: true },
   })
-  const isOutreachAssignee = outreachAssignment?.assigneeId === session.id
+  const isOutreachAssignee = !!outreachAssignment
   const effectiveCanEdit = access.canEditAll || access.isAdmin || isOutreachAssignee
 
   let items

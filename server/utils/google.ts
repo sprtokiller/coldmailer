@@ -159,23 +159,29 @@ export async function sendGmailMessage(
   to: string,
   subject: string,
   body: string,
+  threading?: { threadId: string; inReplyTo: string; references: string },
 ): Promise<{ id: string; threadId: string }> {
-  const raw = Buffer.from(
-    [
-      `To: ${to}`,
-      `Subject: ${encodeRfc2047(subject)}`,
-      'Content-Type: text/html; charset=UTF-8',
-      '',
-      body,
-    ].join('\r\n'),
-  ).toString('base64url')
+  const headerLines = [
+    `To: ${to}`,
+    `Subject: ${encodeRfc2047(subject)}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'MIME-Version: 1.0',
+  ]
+  if (threading) {
+    headerLines.push(`In-Reply-To: ${threading.inReplyTo}`)
+    headerLines.push(`References: ${threading.references}`)
+  }
+  const raw = Buffer.from([...headerLines, '', body].join('\r\n')).toString('base64url')
+
+  const reqBody: Record<string, unknown> = { raw }
+  if (threading?.threadId) reqBody.threadId = threading.threadId
 
   const res = await $fetch<{ id: string; threadId: string }>(
     'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
-      body: { raw },
+      body: reqBody,
     },
   )
   return res

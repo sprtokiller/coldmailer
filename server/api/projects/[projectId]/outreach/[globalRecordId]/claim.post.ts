@@ -14,15 +14,8 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
-  const existing = await prisma.outreachAssignment.findUnique({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-  })
-  if (existing && existing.assigneeId !== user.id) {
-    throw createError({ statusCode: 409, message: 'Tento partner je již přiřazen jinému uživateli.' })
-  }
-
   const assignment = await prisma.outreachAssignment.upsert({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: user.id } },
     create: { projectId, globalRecordId, assigneeId: user.id, assignedById: user.id },
     update: {},
     include: { assignee: { select: { id: true, name: true, image: true } } },

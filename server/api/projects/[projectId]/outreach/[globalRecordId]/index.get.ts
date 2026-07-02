@@ -34,8 +34,8 @@ export default defineEventHandler(async (event) => {
         sentBy: { select: { id: true, name: true } },
       },
     }),
-    prisma.outreachAssignment.findUnique({
-      where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    prisma.outreachAssignment.findFirst({
+      where: { projectId, globalRecordId },
       include: { assignee: { select: { id: true, name: true, image: true } } },
     }),
   ])

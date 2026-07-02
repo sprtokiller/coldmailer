@@ -72,11 +72,11 @@ export async function canEditNegotiation(userId: string, projectId: string, glob
   if (user?.isAdmin) return true
   const perms = await getProjectPermissions(userId, projectId)
   if (perms.includes('project.interactions.edit_all')) return true
-  const assignment = await prisma.outreachAssignment.findUnique({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    select: { assigneeId: true },
+  const assignment = await prisma.outreachAssignment.findFirst({
+    where: { projectId, globalRecordId, assigneeId: userId },
+    select: { id: true },
   })
-  return assignment?.assigneeId === userId
+  return !!assignment
 }
 
 export async function requirePipelineManage(event: H3Event, projectId: string) {
@@ -114,18 +114,19 @@ export async function requireInteractionAccess(
     throw createError({ statusCode: 403, message: 'K tomuto projektu nemáte přístup.' })
   }
 
-  if (mode === 'edit' && !access.isAdmin && !access.canEditAll) {
-    const assignment = await prisma.outreachAssignment.findUnique({
-      where: { projectId_globalRecordId: { projectId: interaction.projectId, globalRecordId: interaction.globalRecordId } },
-      select: { assigneeId: true },
+  const isCreator = interaction.createdBy === session.id
+
+  if (mode === 'edit' && !access.isAdmin && !access.canEditAll && !isCreator) {
+    const assignment = await prisma.outreachAssignment.findFirst({
+      where: { projectId: interaction.projectId, globalRecordId: interaction.globalRecordId, assigneeId: session.id },
+      select: { id: true },
     })
-    if (assignment?.assigneeId !== session.id) {
+    if (!assignment) {
       throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat toto jednání. Nejste přiřazeni k tomuto partnerovi.' })
     }
   }
 
   const isAssignee = interaction.assignees.some(a => a.userId === session.id)
-  const isCreator = interaction.createdBy === session.id
 
   return { session, interaction, access, isAssignee, isCreator }
 }

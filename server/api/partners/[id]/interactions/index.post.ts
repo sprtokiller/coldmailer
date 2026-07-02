@@ -88,9 +88,9 @@ export default defineEventHandler(async (event) => {
     })
     if (assigneeIds.length === 1) {
       await prisma.outreachAssignment.upsert({
-        where: { projectId_globalRecordId: { projectId, globalRecordId } },
+        where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: assigneeIds[0] } },
         create: { projectId, globalRecordId, assigneeId: assigneeIds[0], assignedById: session.id },
-        update: { assigneeId: assigneeIds[0], assignedById: session.id },
+        update: {},
       })
     }
   }
