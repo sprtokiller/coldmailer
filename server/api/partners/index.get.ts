@@ -1,4 +1,4 @@
-﻿import { prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 
@@ -35,7 +35,12 @@ export default defineEventHandler(async (event) => {
       },
       _count: {
         select: {
-          interactions: projectId ? { where: { projectId } } : true,
+          interactions: {
+            where: {
+              type: 'EMAIL',
+              ...(projectId ? { projectId } : {}),
+            },
+          },
         },
       },
     },

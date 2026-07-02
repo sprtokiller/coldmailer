@@ -156,6 +156,23 @@ const unknownContacts = computed(() => {
   return byEmail
 })
 
+// Contacts offered in the "New Email" composer: saved contacts + whitelisted additional
+// addresses + manually-used addresses from Oslovování/interactions that aren't saved as a
+// contact yet — minus anything explicitly blacklisted for this partner.
+const composerContacts = computed(() => {
+  const known = partner.value?.contacts ?? []
+  const knownAddresses = new Set(known.map(c => c.address))
+  const blacklisted = new Set(blacklist.value)
+  const extraAddresses = new Set([
+    ...additionalAddresses.value,
+    ...unknownContacts.value.keys(),
+  ])
+  const extra = [...extraAddresses]
+    .filter(address => !knownAddresses.has(address) && !blacklisted.has(address))
+    .map(address => ({ id: `extra-${address}`, address, firstName: null, lastName: null }))
+  return [...known.filter(c => !blacklisted.has(c.address)), ...extra]
+})
+
 const unknownContactActionLoading = ref<string | null>(null)
 
 async function handleUnknownContactAction(action: 'dismiss' | 'blacklist' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string }) {
@@ -1260,7 +1277,7 @@ const TYPE_COLORS: Record<string, string> = {
   <NegotiationsEmailComposer
     v-if="composerOpen && partner"
     :global-record-id="id"
-    :contacts="partner.contacts"
+    :contacts="composerContacts"
     :prefilled-to="composerPrefilledTo"
     :prefilled-subject="composerPrefilledSubject"
     :in-reply-to-gmail-id="composerReplyToGmailId ?? undefined"
