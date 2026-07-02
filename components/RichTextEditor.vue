@@ -53,7 +53,7 @@ function buildDecorations(doc: import('@tiptap/pm/model').Node): DecorationSet {
   return DecorationSet.create(doc, decorations)
 }
 
-const props = withDefaults(defineProps<{ modelValue: string; placeholder?: string; defaultFont?: string }>(), { placeholder: '', defaultFont: '' })
+const props = withDefaults(defineProps<{ modelValue: string; placeholder?: string; defaultFont?: string; editable?: boolean }>(), { placeholder: '', defaultFont: '', editable: true })
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -79,6 +79,7 @@ const toolbarRef = ref<InstanceType<typeof import('./RichTextToolbar.vue').defau
 // ── Editor ─────────────────────────────────────────────────────────────────
 const editor = useEditor({
   content: props.modelValue,
+  editable: props.editable,
   extensions: [
     StarterKit.configure({
       link: {
@@ -193,6 +194,11 @@ function applyDefaultFont() {
 watch(
   () => props.defaultFont,
   () => { if (editor.value?.isEmpty) applyDefaultFont() },
+)
+
+watch(
+  () => props.editable,
+  (val) => { editor.value?.setEditable(val) },
 )
 
 onMounted(() => nextTick(applyDefaultFont))

@@ -67,6 +67,7 @@ export interface ProjectOutreachContext {
   runAlignment: () => Promise<void>
   cancelAlignment: (globalRecordId: string) => void
   runDraft: (opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) => Promise<void>
+  cancelDraft: () => void
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
   sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
   claimPartner: () => Promise<void>
@@ -94,6 +95,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const runningAlignmentIds = useState<Set<string>>('outreachRunningAlignmentIds', () => new Set())
   const alignmentStreamOutputs = useState<Map<string, string>>('outreachAlignmentStreams', () => new Map())
   const alignmentAborts = useState<Map<string, AbortController>>('outreachAlignmentAborts', () => new Map())
+  const draftAbort = useState<AbortController | null>('outreachDraftAbort', () => null)
   const toast = useToast()
 
   const prompts = ref<ProjectOutreachContext['prompts']['value']>([])
@@ -257,19 +259,27 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     }
   }
 
+  function cancelDraft() {
+    draftAbort.value?.abort()
+  }
+
   async function runDraft(opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) return
+    const ctrl = new AbortController()
+    draftAbort.value = ctrl
     executing.value = 'draft'; executingPartnerId.value = gid; streamOutput.value = ''
     try {
       const resp = await fetch(`/api/projects/${pid}/outreach/${gid}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
         body: JSON.stringify({ systemPromptId: opConfig.value.systemPromptId || undefined, emailDraftId: opConfig.value.emailDraftId || undefined, contextPartIds: opConfig.value.contextPartIds, sellingPointId: opConfig.value.sellingPointId || undefined, manualContext: opConfig.value.manualContext || undefined, selectedContact: opts.selectedContact, selectedArgumentIds: opts.selectedArgumentIds }),
       })
       const reader = resp.body?.getReader(); if (!reader) throw new Error('No stream')
       const dec = new TextDecoder()
       while (true) {
+        if (ctrl.signal.aborted) { reader.cancel(); break }
         const { done, value } = await reader.read(); if (done) break
         for (const line of dec.decode(value).split('\n')) {
           if (!line.startsWith('data:')) continue
@@ -280,7 +290,10 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
           } catch { /* skip parse errors */ }
         }
       }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) throw err
     } finally {
+      draftAbort.value = null
       executing.value = null; executingPartnerId.value = null
       await refreshDetail(); await refreshPartners()
     }
@@ -353,6 +366,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     runAlignment,
     cancelAlignment,
     runDraft,
+    cancelDraft,
     saveDraft,
     sendDraft,
     claimPartner,

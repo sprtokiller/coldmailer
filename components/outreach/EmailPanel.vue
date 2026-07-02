@@ -16,6 +16,7 @@ const selectedSignatureId = ref('')
 const saving = ref(false)
 const configCollapsed = ref(false)
 const recsCollapsed = ref(true)
+const streamBoxEl = ref<HTMLElement | null>(null)
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const alignment = computed(() => {
@@ -62,6 +63,11 @@ const draft = computed(() => {
   return d
 })
 
+const isRegeneration = computed(() => !!draft.value)
+const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value)
+const showConfirm = ref(false)
+const showCancelConfirm = ref(false)
+
 const recommendations = computed<string[]>(() => {
   const d = draft.value
   if (!d) return []
@@ -88,6 +94,11 @@ watch(sigs, (val) => {
   if (!selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0]?.id ?? ''
 }, { immediate: true })
 
+watch(() => ctx.streamOutput.value, async () => {
+  await nextTick()
+  if (streamBoxEl.value) streamBoxEl.value.scrollTop = streamBoxEl.value.scrollHeight
+})
+
 // ── Actions ───────────────────────────────────────────────────────────────────
 async function generate() {
   try {
@@ -104,6 +115,25 @@ async function generate() {
     configCollapsed.value = true
     recsCollapsed.value = false
   } catch (err) { alert(`Chyba: ${err instanceof Error ? err.message : String(err)}`) }
+}
+
+function onGenerateClick() {
+  if (needsConfirm.value) { showConfirm.value = true; return }
+  generate()
+}
+
+function confirmAndGenerate() {
+  showConfirm.value = false
+  generate()
+}
+
+function onCancelClick() {
+  showCancelConfirm.value = true
+}
+
+function confirmCancel() {
+  showCancelConfirm.value = false
+  ctx.cancelDraft()
 }
 
 async function doSave() {
@@ -209,7 +239,7 @@ function relTime(iso: string | null | undefined) {
           <div class="config-grid">
             <div class="field-group">
               <label class="field-label">Systémový prompt</label>
-              <select v-model="ctx.opConfig.value.systemPromptId" class="field-select">
+              <select v-model="ctx.opConfig.value.systemPromptId" class="field-select" :disabled="isExecutingHere">
                 <option v-for="p in opPrompts" :key="p.id" :value="p.id">{{ p.isSystem ? '⚙ ' : '' }}{{ p.name }}</option>
               </select>
             </div>
@@ -219,6 +249,7 @@ function relTime(iso: string | null | undefined) {
                 v-model="ctx.opConfig.value.emailDraftId"
                 class="field-select"
                 :class="ctx.opConfig.value.emailDraftId ? '' : 'field-select--warn'"
+                :disabled="isExecutingHere"
               >
                 <option value="">— vyberte —</option>
                 <option v-for="d in opDrafts" :key="d.id" :value="d.id">{{ d.name }}</option>
@@ -234,6 +265,7 @@ function relTime(iso: string | null | undefined) {
                 v-if="contacts.length"
                 :value="selectedContactIdx ?? 0"
                 class="field-select"
+                :disabled="isExecutingHere"
                 @change="selectedContactIdx = Number(($event.target as HTMLSelectElement).value)"
               >
                 <option v-for="(c, i) in contacts" :key="c.id" :value="i">
@@ -249,6 +281,7 @@ function relTime(iso: string | null | undefined) {
                 v-model="selectedSignatureId"
                 class="field-select"
                 :class="selectedSignatureId ? '' : 'field-select--warn'"
+                :disabled="isExecutingHere"
               >
                 <option value="">— vyberte —</option>
                 <option v-for="sig in sigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
@@ -270,6 +303,7 @@ function relTime(iso: string | null | undefined) {
                 type="button"
                 class="arg-chip"
                 :class="{ 'arg-chip--active': selectedArgumentIds.has(String(arg.argumentId)) }"
+                :disabled="isExecutingHere"
                 @click="toggleArgument(String(arg.argumentId))"
               >
                 {{ arg.argumentLabel || arg.argumentId }}
@@ -308,17 +342,24 @@ function relTime(iso: string | null | undefined) {
             </div>
           </div>
 
-          <!-- Generate button -->
+          <!-- Generate / Stop button -->
           <button
+            v-if="isExecutingHere"
+            class="btn-run btn-run--stop"
+            @click="onCancelClick"
+          >
+            <svg class="btn-stop-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" stroke-width="2" fill="currentColor" stroke="none" />
+            </svg>
+            Zastavit generování
+          </button>
+          <button
+            v-else
             :disabled="isExecuting || !canGenerate"
             class="btn-run btn-run--indigo"
-            @click="generate"
+            @click="onGenerateClick"
           >
-            <svg v-if="ctx.executing.value === 'draft' && isExecutingHere" class="btn-spinner" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ ctx.executing.value === 'draft' && isExecutingHere ? 'Generuji…' : 'Generovat e-mail' }}
+            {{ draft ? 'Znovu generovat e-mail' : 'Generovat e-mail' }}
           </button>
           <p v-if="isExecutingElsewhere" class="busy-hint">
             Právě běží generování e-mailu pro jiného partnera — počkejte, než skončí.
@@ -330,22 +371,22 @@ function relTime(iso: string | null | undefined) {
       <div class="email-fields">
         <div class="email-field-row">
           <span class="email-field-label">Předmět</span>
-          <input v-model="emailSubject" type="text" class="email-field-input" placeholder="Předmět e-mailu…" />
+          <input v-model="emailSubject" type="text" class="email-field-input" placeholder="Předmět e-mailu…" :disabled="isExecutingHere" />
         </div>
         <div class="email-field-row">
           <span class="email-field-label">Komu</span>
-          <input v-model="emailTo" type="email" class="email-field-input" placeholder="E-mailová adresa…" />
+          <input v-model="emailTo" type="email" class="email-field-input" placeholder="E-mailová adresa…" :disabled="isExecutingHere" />
         </div>
       </div>
 
       <!-- ── Stream output ─────────────────────────────────────── -->
-      <div v-if="ctx.executing.value === 'draft' && isExecutingHere && ctx.streamOutput.value" class="stream-box">
+      <div v-if="ctx.executing.value === 'draft' && isExecutingHere && ctx.streamOutput.value" ref="streamBoxEl" class="stream-box">
         <pre class="stream-text">{{ ctx.streamOutput.value }}</pre>
       </div>
 
       <!-- ── Rich text editor ─────────────────────────────────── -->
       <div class="editor-area">
-        <RichTextEditor v-model="emailBody" placeholder="Vygenerovaný e-mail se zobrazí zde..." :default-font="defaultFont" />
+        <RichTextEditor v-model="emailBody" placeholder="Vygenerovaný e-mail se zobrazí zde..." :default-font="defaultFont" :editable="!isExecutingHere" />
       </div>
 
       <!-- ── Recommendations ───────────────────────────────────── -->
@@ -376,7 +417,7 @@ function relTime(iso: string | null | undefined) {
         </div>
         <div v-if="emailBody.trim()" class="footer-actions">
           <button
-            :disabled="saving"
+            :disabled="saving || isExecutingHere"
             class="btn-secondary"
             @click="doSave"
           >
@@ -387,7 +428,7 @@ function relTime(iso: string | null | undefined) {
             Uložit
           </button>
           <button
-            :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend"
+            :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend || isExecutingHere"
             class="btn-primary"
             @click="handleSendClick"
           >
@@ -423,6 +464,53 @@ function relTime(iso: string | null | undefined) {
           </button>
         </div>
       </div>
+      </div>
+    </Teleport>
+
+    <!-- Cancel confirmation modal -->
+    <Teleport to="body">
+    <div v-if="showCancelConfirm" class="confirm-overlay" @click.self="showCancelConfirm = false">
+      <div class="confirm-modal">
+        <div class="confirm-header">
+          <h3 class="confirm-title">Zastavit generování?</h3>
+          <button class="confirm-close" @click="showCancelConfirm = false">✕</button>
+        </div>
+        <div class="confirm-body">
+          <p class="confirm-warn confirm-warn--red">
+            Probíhající generování e-mailu bude přerušeno. Výsledky nebudou uloženy.
+          </p>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-btn--cancel" @click="showCancelConfirm = false">Pokračovat v generování</button>
+          <button class="confirm-btn confirm-btn--stop" @click="confirmCancel">Zastavit</button>
+        </div>
+      </div>
+    </div>
+    </Teleport>
+
+    <!-- Run confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showConfirm" class="confirm-overlay" @click.self="showConfirm = false">
+        <div class="confirm-modal">
+          <div class="confirm-header">
+            <h3 class="confirm-title">Potvrzení akce</h3>
+            <button class="confirm-close" @click="showConfirm = false">✕</button>
+          </div>
+          <div class="confirm-body">
+            <p v-if="ctx.isSubstituting.value" class="confirm-warn">
+              Tento e-mail generujete jménem jiného člena týmu — partner je přiřazen uživateli
+              <strong>{{ ctx.partnerDetail.value?.assignment?.assignee?.name }}</strong>, ne vám.
+            </p>
+            <p v-if="isRegeneration" class="confirm-warn">
+              Pro tohoto partnera už existuje vygenerovaný e-mail. Spuštěním dojde k jeho
+              <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
+            </p>
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-btn confirm-btn--cancel" @click="showConfirm = false">Zrušit</button>
+            <button class="confirm-btn confirm-btn--confirm" @click="confirmAndGenerate">Potvrdit a spustit</button>
+          </div>
+        </div>
       </div>
     </Teleport>
   </div>
@@ -698,6 +786,17 @@ function relTime(iso: string | null | undefined) {
 .btn-run--indigo {
   background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
   color: #fff;
+}
+
+.btn-run--stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.btn-stop-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .busy-hint {
@@ -979,5 +1078,116 @@ function relTime(iso: string | null | undefined) {
   gap: 8px;
   padding: 14px 20px;
   border-top: 1px solid #f3f4f6;
+}
+
+/* ── Confirmation modal ──────────────────────────────────── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  padding: 16px;
+}
+
+.confirm-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+
+.confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e9eaec;
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1d23;
+  margin: 0;
+}
+
+.confirm-close {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.confirm-close:hover { color: #6b7280; }
+
+.confirm-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-warn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4b5563;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid #e9eaec;
+}
+
+.confirm-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.confirm-btn--cancel {
+  background: transparent;
+  color: #6b7280;
+}
+
+.confirm-btn--cancel:hover { color: #374151; }
+
+.confirm-btn--confirm {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+}
+
+.confirm-btn--confirm:hover { opacity: 0.9; }
+
+.confirm-btn--stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.confirm-btn--stop:hover { opacity: 0.9; }
+
+.confirm-warn--red {
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 </style>

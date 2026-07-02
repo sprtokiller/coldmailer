@@ -46,6 +46,12 @@ const showCancelConfirm = ref(false)
 
 const isExecutingHere = computed(() => !!ctx.selectedPartnerId.value && ctx.runningAlignmentIds.value.has(ctx.selectedPartnerId.value))
 const currentStreamOutput = computed(() => (ctx.selectedPartnerId.value && ctx.alignmentStreamOutputs.value.get(ctx.selectedPartnerId.value)) || '')
+const streamBoxEl = ref<HTMLElement | null>(null)
+
+watch(currentStreamOutput, async () => {
+  await nextTick()
+  if (streamBoxEl.value) streamBoxEl.value.scrollTop = streamBoxEl.value.scrollHeight
+})
 
 function onRunClick() {
   if (needsConfirm.value) { showConfirm.value = true; return }
@@ -173,7 +179,7 @@ function relTime(iso: string | null | undefined): string {
       </div>
 
       <!-- Streaming output -->
-      <div v-if="isExecutingHere && currentStreamOutput" class="stream-box">
+      <div v-if="isExecutingHere && currentStreamOutput" ref="streamBoxEl" class="stream-box">
         <pre class="stream-text">{{ currentStreamOutput }}</pre>
       </div>
 
