@@ -16,7 +16,7 @@ const query = ref('')
 const results = ref<SearchResult[]>([])
 const searching = ref(false)
 const selectedPartner = ref<SearchResult | null>(props.preselectedPartner ?? null)
-const assigneeIds = ref<string[]>([])
+const selectedAssigneeId = ref<string | null>(null)
 const assigning = ref(false)
 const error = ref('')
 
@@ -44,19 +44,22 @@ watch(query, (val) => {
 
 function selectPartner(p: SearchResult) {
   selectedPartner.value = p
-  assigneeIds.value = []
+  selectedAssigneeId.value = null
   error.value = ''
+}
+
+function toggleAssignee(userId: string) {
+  selectedAssigneeId.value = selectedAssigneeId.value === userId ? null : userId
 }
 
 async function assign() {
   if (!selectedPartner.value || assigning.value) return
-  if (assigneeIds.value.length === 0) { error.value = 'Vyberte alespoň jednoho člena týmu.'; return }
   assigning.value = true
   error.value = ''
   try {
     await $fetch(`/api/partners/${selectedPartner.value.id}/interactions`, {
       method: 'POST',
-      body: { type: 'FULFILLMENT', assigneeIds: assigneeIds.value },
+      body: { type: 'FULFILLMENT', assigneeIds: selectedAssigneeId.value ? [selectedAssigneeId.value] : [] },
     })
     emit('assigned', { partnerId: selectedPartner.value.id })
     emit('close')
@@ -142,28 +145,29 @@ const SIZE_LABELS: Record<string, string> = {
             <div v-if="error" class="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{{ error }}</div>
 
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-2">Přiřadit členy obchodního týmu</label>
+              <label class="block text-xs font-medium text-gray-600 mb-2">Přiřadit člena obchodního týmu (nepovinné)</label>
               <div class="flex flex-wrap gap-2">
-                <label
+                <button
                   v-for="u in allUsers"
                   :key="u.id"
+                  type="button"
                   class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors"
-                  :class="assigneeIds.includes(u.id) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
+                  :class="selectedAssigneeId === u.id ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
+                  @click="toggleAssignee(u.id)"
                 >
-                  <input v-model="assigneeIds" type="checkbox" :value="u.id" class="sr-only" />
                   <img v-if="u.image" :src="u.image" class="w-4 h-4 rounded-full" referrerpolicy="no-referrer" />
                   {{ u.name }}
-                </label>
+                </button>
               </div>
             </div>
 
             <div class="flex justify-end pt-2">
               <button
                 class="text-sm font-medium text-white bg-primary px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-                :disabled="assigneeIds.length === 0 || assigning"
+                :disabled="assigning"
                 @click="assign"
               >
-                {{ assigning ? 'Přiřazuji...' : 'Přiřadit do projektu' }}
+                {{ assigning ? 'Přiřazuji...' : 'Přidat do projektu' }}
               </button>
             </div>
           </div>
