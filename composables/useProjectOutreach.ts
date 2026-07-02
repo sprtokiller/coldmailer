@@ -171,6 +171,10 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     if (vaPrompt && !vaConfig.value.systemPromptId) vaConfig.value.systemPromptId = vaPrompt.id
     const opPrompt = p.find(x => x.stepType === 'OUTREACH_PREPARATION' && x.isSystem)
     if (opPrompt && !opConfig.value.systemPromptId) opConfig.value.systemPromptId = opPrompt.id
+
+    // Auto-select first selling point / e-mail template
+    if (sp[0] && !vaConfig.value.sellingPointId) vaConfig.value.sellingPointId = sp[0].id
+    if (ed[0] && !opConfig.value.emailDraftId) opConfig.value.emailDraftId = ed[0].id
   }
 
   watch(projectIdRef, async (pid) => {

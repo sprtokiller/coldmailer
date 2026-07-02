@@ -34,12 +34,13 @@ const top3 = computed(() => {
 const opPrompts = computed(() => ctx.promptsForStep('OUTREACH_PREPARATION'))
 const opDrafts = computed(() => ctx.emailDrafts.value)
 const sigs = computed(() => ctx.signatures.value)
+const isExecuting = computed(() => ctx.executing.value !== null)
 const opContextParts = computed(() => ctx.contextParts.value.filter(cp => cp.stepKeys.includes('OUTREACH_PREPARATION')))
 const selectedContextNames = computed(() => ctx.opConfig.value.contextPartIds.map(id => opContextParts.value.find(c => c.id === id)).filter(Boolean) as Array<{ id: string; name: string }>)
 const contextSearch = ref('')
 const showContextDropdown = ref(false)
 const filteredContext = computed(() => opContextParts.value.filter(cp => !ctx.opConfig.value.contextPartIds.includes(cp.id) && cp.name.toLowerCase().includes(contextSearch.value.toLowerCase())))
-function addContext(id: string) { if (!ctx.opConfig.value.contextPartIds.includes(id)) ctx.opConfig.value.contextPartIds.push(id); contextSearch.value = ''; showContextDropdown.value = false }
+function addContext(id: string) { if (!ctx.opConfig.value.contextPartIds.includes(id)) ctx.opConfig.value.contextPartIds.push(id); contextSearch.value = '' }
 function removeContext(id: string) { ctx.opConfig.value.contextPartIds = ctx.opConfig.value.contextPartIds.filter(x => x !== id) }
 function hideContextDropdown() { setTimeout(() => { showContextDropdown.value = false }, 150) }
 
@@ -264,7 +265,7 @@ function relTime(iso: string | null | undefined) {
           <div v-if="selectedContextNames.length" class="tag-list">
             <span v-for="cp in selectedContextNames" :key="cp.id" class="tag">
               {{ cp.name }}
-              <button type="button" class="tag-remove" @click="removeContext(cp.id)">✕</button>
+              <button type="button" class="tag-remove" :disabled="isExecuting" @click="removeContext(cp.id)">✕</button>
             </span>
           </div>
           <div class="relative">
@@ -273,6 +274,7 @@ function relTime(iso: string | null | undefined) {
               type="text"
               placeholder="Přidat kontext…"
               class="field-input"
+              :disabled="isExecuting"
               @focus="showContextDropdown = true"
               @blur="hideContextDropdown"
             />

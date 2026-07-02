@@ -34,7 +34,7 @@ const filteredContext = computed(() =>
     cp.name.toLowerCase().includes(contextSearch.value.toLowerCase()),
   ),
 )
-function addContext(id: string) { if (!ctx.vaConfig.value.contextPartIds.includes(id)) ctx.vaConfig.value.contextPartIds.push(id); contextSearch.value = ''; showContextDropdown.value = false }
+function addContext(id: string) { if (!ctx.vaConfig.value.contextPartIds.includes(id)) ctx.vaConfig.value.contextPartIds.push(id); contextSearch.value = '' }
 function removeContext(id: string) { ctx.vaConfig.value.contextPartIds = ctx.vaConfig.value.contextPartIds.filter(x => x !== id) }
 
 const selectedContextNames = computed(() => ctx.vaConfig.value.contextPartIds.map(id => vaContextParts.value.find(c => c.id === id)).filter(Boolean) as Array<{ id: string; name: string }>)
