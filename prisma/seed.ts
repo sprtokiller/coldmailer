@@ -69,6 +69,19 @@ async function main() {
   }
 }
 
+const TDA_PROJECT_ROLES = [
+  {
+    name: 'Vedení obchodu',
+    permissions: ['project.pipeline.manage', 'project.interactions.view_all', 'project.interactions.edit_all'] as string[],
+    isSystem: true,
+  },
+  {
+    name: 'Obchodní tým',
+    permissions: ['project.interactions.view_all'] as string[],
+    isSystem: true,
+  },
+]
+
 const GROUPS = [
   { name: 'Tour de App', slug: 'tda', color: '#EF8A17' },
   { name: 'Prezentiáda', slug: 'ppt', color: '#A6CE39' },
@@ -95,8 +108,13 @@ async function seedGroups() {
   })
   console.log('  ✓ Project: Tour de App → TdA27')
 
-  const { ensureDefaultProjectRoles } = await import('../server/utils/projectPermissions')
-  await ensureDefaultProjectRoles(tda27.id)
+  for (const role of TDA_PROJECT_ROLES) {
+    await prisma.projectRole.upsert({
+      where: { projectId_name: { projectId: tda27.id, name: role.name } },
+      create: { projectId: tda27.id, name: role.name, permissions: role.permissions, isSystem: role.isSystem },
+      update: { permissions: role.permissions },
+    })
+  }
 
   const defaultRole = await prisma.projectRole.findFirst({
     where: { projectId: tda27.id, name: 'Obchodní tým' },

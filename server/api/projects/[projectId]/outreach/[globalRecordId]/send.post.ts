@@ -46,6 +46,18 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 403, message: 'Nemáte oprávnění odeslat e-mail připravený jiným uživatelem.' })
       }
     }
+
+    // Sending on behalf of a colleague — assign both users so Gmail sync scans both mailboxes for this partner
+    await prisma.outreachAssignment.upsert({
+      where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: user.id } },
+      create: { projectId, globalRecordId, assigneeId: user.id, assignedById: user.id },
+      update: {},
+    })
+    await prisma.outreachAssignment.upsert({
+      where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: existingDraft.savedById } },
+      create: { projectId, globalRecordId, assigneeId: existingDraft.savedById, assignedById: user.id },
+      update: {},
+    })
   }
 
   // Save draft before sending; preserve savedById/savedAt of original author

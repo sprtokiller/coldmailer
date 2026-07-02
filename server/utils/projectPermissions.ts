@@ -2,20 +2,6 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
-export const PROJECT_PERMISSIONS = [
-  'project.pipeline.manage',
-  'project.interactions.view_all',
-  'project.interactions.edit_all',
-] as const
-
-export type ProjectPermissionKey = typeof PROJECT_PERMISSIONS[number]
-
-export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
-  'project.pipeline.manage': 'Spravuje pipeline (vytváření, spouštění kroků, import dat)',
-  'project.interactions.view_all': 'Vidí všechna jednání v projektu',
-  'project.interactions.edit_all': 'Edituje všechna jednání v projektu',
-}
-
 export const DEFAULT_PROJECT_ROLES = [
   {
     name: 'Vedení obchodu',
@@ -77,17 +63,6 @@ export async function canEditNegotiation(userId: string, projectId: string, glob
     select: { id: true },
   })
   return !!assignment
-}
-
-export async function requirePipelineManage(event: H3Event, projectId: string) {
-  const session = await requireAuth(event)
-  const user = await prisma.user.findUnique({ where: { id: session.id }, select: { isAdmin: true } })
-  if (user?.isAdmin) return session
-  const perms = await getProjectPermissions(session.id, projectId)
-  if (!perms.includes('project.pipeline.manage')) {
-    throw createError({ statusCode: 403, message: 'Pro tuto akci potřebujete oprávnění vedení obchodu.' })
-  }
-  return session
 }
 
 export async function requireInteractionAccess(

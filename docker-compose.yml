@@ -15,19 +15,6 @@ services:
       timeout: 5s
       retries: 5
 
-  db-backup:
-    image: postgres:16-alpine
-    environment:
-      PGPASSWORD: coldmailer
-    volumes:
-      - ./backups:/backups
-      - ./scripts/backup.sh:/backup.sh:ro
-    entrypoint: ["/bin/sh", "/backup.sh"]
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
   app:
     build:
       context: .
