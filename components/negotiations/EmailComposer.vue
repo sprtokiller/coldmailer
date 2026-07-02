@@ -42,7 +42,7 @@ const { data: sigsData } = useFetch('/api/library/signatures', {
 const signatures = computed<SigItem[]>(() => {
   const d = sigsData.value as { templates?: SigItem[]; personal?: SigItem[] } | null
   if (!d) return []
-  return [...(d.templates ?? []), ...(d.personal ?? [])]
+  return d.personal ?? []
 })
 
 watch(signatures, (val) => {
@@ -50,7 +50,7 @@ watch(signatures, (val) => {
 }, { immediate: true })
 
 const title = computed(() => props.inReplyToGmailId ? 'Odpovědět' : 'Nový e-mail')
-const canSend = computed(() => !!to.value.trim() && !!subject.value.trim() && !!body.value.trim() && !sending.value)
+const canSend = computed(() => !!to.value.trim() && !!subject.value.trim() && !!body.value.trim() && !!selectedSignatureId.value && !sending.value)
 
 async function handleSend() {
   if (!canSend.value) return
@@ -116,9 +116,12 @@ async function handleSend() {
           <div v-if="signatures.length" class="composer-field-row">
             <span class="composer-field-label">Podpis</span>
             <select v-model="selectedSignatureId" class="composer-field-input composer-field-select">
-              <option value="">— bez podpisu —</option>
               <option v-for="sig in signatures" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
             </select>
+          </div>
+          <div v-else class="composer-field-row">
+            <span class="composer-field-label">Podpis</span>
+            <span class="composer-no-signature">Nemáte podpis pro tento typ projektu — vytvořte jej v Knihovně.</span>
           </div>
         </div>
 
@@ -237,6 +240,11 @@ async function handleSend() {
 .composer-field-input:focus {
   border-color: #818cf8;
   box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
+}
+
+.composer-no-signature {
+  font-size: 12px;
+  color: #dc2626;
 }
 
 .composer-field-select {
