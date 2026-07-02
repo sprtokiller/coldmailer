@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
     include: {
       creator: { select: { id: true, name: true, image: true } },
       _count: { select: { events: true } },
+      projectRecords: { select: { project: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     skip: offset,

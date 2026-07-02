@@ -91,7 +91,7 @@ const SIZE_LABELS: Record<string, string> = {
 
         <div class="px-5 py-4 space-y-4">
           <!-- Search input -->
-          <div>
+          <div v-if="!props.preselectedPartner">
             <input
               v-model="query"
               type="text"
@@ -137,9 +137,8 @@ const SIZE_LABELS: Record<string, string> = {
 
           <!-- Selected partner — assign step -->
           <div v-if="selectedPartner" class="space-y-3">
-            <div class="flex items-center justify-between bg-indigo-50 rounded-lg px-3 py-2">
+            <div class="bg-indigo-50 rounded-lg px-3 py-2">
               <span class="text-sm font-medium text-indigo-800">{{ selectedPartner.canonicalName }}</span>
-              <button class="text-xs text-indigo-500 hover:text-indigo-700" @click="selectedPartner = null">Změnit</button>
             </div>
 
             <div v-if="error" class="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{{ error }}</div>

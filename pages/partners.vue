@@ -20,6 +20,7 @@ interface GlobalRecord {
   payload: Record<string, unknown>
   creator: { id: string; name: string; image: string | null }
   _count: { events: number }
+  projectRecords: Array<{ project: { id: string; name: string } }>
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ function onImportClose() {
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přidal</th>
+              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Projekty</th>
               <th class="px-4 py-3 w-10" />
             </tr>
           </thead>
@@ -244,9 +245,8 @@ function onImportClose() {
                     <span v-else class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400">Identifikován</span>
                   </td>
                   <td class="px-4 py-3">
-                    <div class="flex items-center gap-1.5">
-                      <img v-if="rec.creator.image" :src="rec.creator.image" :alt="rec.creator.name" class="w-5 h-5 rounded-full flex-shrink-0" referrerpolicy="no-referrer" />
-                      <span class="text-xs text-gray-500 truncate max-w-28">{{ rec.creator.name }}</span>
+                    <div class="flex items-center gap-1 flex-wrap max-w-56">
+                      <span v-for="pr in rec.projectRecords" :key="pr.project.id" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ pr.project.name }}</span>
                     </div>
                   </td>
                   <td class="px-4 py-3">
