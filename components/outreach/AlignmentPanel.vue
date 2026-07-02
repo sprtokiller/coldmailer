@@ -44,22 +44,17 @@ const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.v
 const showConfirm = ref(false)
 const showCancelConfirm = ref(false)
 
-const isExecuting = computed(() => ctx.executing.value !== null)
-const isExecutingHere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value === ctx.selectedPartnerId.value)
-const isExecutingElsewhere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value !== ctx.selectedPartnerId.value)
+const isExecutingHere = computed(() => !!ctx.selectedPartnerId.value && ctx.runningAlignmentIds.value.has(ctx.selectedPartnerId.value))
+const currentStreamOutput = computed(() => (ctx.selectedPartnerId.value && ctx.alignmentStreamOutputs.value.get(ctx.selectedPartnerId.value)) || '')
 
 function onRunClick() {
   if (needsConfirm.value) { showConfirm.value = true; return }
-  runAnalysis()
+  ctx.runAlignment()
 }
 
 function confirmAndRun() {
   showConfirm.value = false
-  runAnalysis()
-}
-
-async function runAnalysis() {
-  try { await ctx.runAlignment() } catch (err) { alert(`Chyba: ${err instanceof Error ? err.message : String(err)}`) }
+  ctx.runAlignment()
 }
 
 function onCancelClick() {
@@ -68,7 +63,7 @@ function onCancelClick() {
 
 function confirmCancel() {
   showCancelConfirm.value = false
-  ctx.cancelAlignment()
+  if (ctx.selectedPartnerId.value) ctx.cancelAlignment(ctx.selectedPartnerId.value)
 }
 
 function relTime(iso: string | null | undefined): string {
@@ -158,7 +153,7 @@ function relTime(iso: string | null | undefined): string {
 
         <!-- Run / Stop button -->
         <button
-          v-if="ctx.executing.value === 'alignment' && isExecutingHere"
+          v-if="isExecutingHere"
           class="btn-run btn-run--stop"
           @click="onCancelClick"
         >
@@ -169,20 +164,17 @@ function relTime(iso: string | null | undefined): string {
         </button>
         <button
           v-else
-          :disabled="isExecuting || !ctx.canRunAI.value"
+          :disabled="!ctx.canRunAI.value"
           class="btn-run btn-run--violet"
           @click="onRunClick"
         >
           {{ alignment ? 'Znovu analyzovat' : 'Spustit analýzu' }}
         </button>
-        <p v-if="isExecutingElsewhere" class="busy-hint">
-          Právě běží {{ ctx.executing.value === 'alignment' ? 'Value Alignment' : 'generování e-mailu' }} pro jiného partnera — počkejte, než skončí.
-        </p>
       </div>
 
       <!-- Streaming output -->
-      <div v-if="ctx.executing.value === 'alignment' && isExecutingHere && ctx.streamOutput.value" class="stream-box">
-        <pre class="stream-text">{{ ctx.streamOutput.value }}</pre>
+      <div v-if="isExecutingHere && currentStreamOutput" class="stream-box">
+        <pre class="stream-text">{{ currentStreamOutput }}</pre>
       </div>
 
       <!-- Results (scrollable) -->
@@ -456,13 +448,6 @@ function relTime(iso: string | null | undefined): string {
 .btn-run--stop {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #fff;
-}
-
-.busy-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #9ca3af;
-  text-align: center;
 }
 
 .btn-stop-icon {

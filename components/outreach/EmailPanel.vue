@@ -307,7 +307,7 @@ function relTime(iso: string | null | undefined) {
           {{ ctx.executing.value === 'draft' && isExecutingHere ? 'Generuji…' : 'Generovat e-mail' }}
         </button>
         <p v-if="isExecutingElsewhere" class="busy-hint">
-          Právě běží {{ ctx.executing.value === 'alignment' ? 'Value Alignment' : 'generování e-mailu' }} pro jiného partnera — počkejte, než skončí.
+          Právě běží generování e-mailu pro jiného partnera — počkejte, než skončí.
         </p>
       </div>
 

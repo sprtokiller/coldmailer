@@ -1,8 +1,17 @@
-export function useGmailSync() {
+export function useGmailSyncState() {
   const syncError = useState<'auth-error' | 'error' | null>('gmail-sync-error', () => null)
+  const isSyncing = useState<boolean>('gmail-sync-active', () => false)
+  const lastSyncAt = useState<number>('gmail-last-sync-at', () => 0)
+  return { syncError, isSyncing, lastSyncAt }
+}
+
+export function useGmailSync() {
+  const { syncError, isSyncing, lastSyncAt } = useGmailSyncState()
   const interval = ref<ReturnType<typeof setInterval>>()
 
   async function sync() {
+    if (isSyncing.value) return { synced: 0, skipped: 'in-progress' }
+    isSyncing.value = true
     try {
       const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST' })
       if (res.skipped === 'auth-error') {
@@ -16,6 +25,9 @@ export function useGmailSync() {
     } catch {
       syncError.value = 'error'
       return { synced: 0 }
+    } finally {
+      lastSyncAt.value = Date.now()
+      isSyncing.value = false
     }
   }
 
@@ -28,5 +40,5 @@ export function useGmailSync() {
     if (interval.value) clearInterval(interval.value)
   })
 
-  return { syncError, triggerSync: sync }
+  return { syncError, isSyncing, triggerSync: sync }
 }

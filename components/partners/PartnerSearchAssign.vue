@@ -19,6 +19,7 @@ const selectedPartner = ref<SearchResult | null>(props.preselectedPartner ?? nul
 const selectedAssigneeId = ref<string | null>(null)
 const assigning = ref(false)
 const error = ref('')
+const toast = useToast()
 
 const { data: allUsers } = useFetch<AppUser[]>('/api/users')
 
@@ -61,6 +62,7 @@ async function assign() {
       method: 'POST',
       body: { type: 'FULFILLMENT', assigneeIds: selectedAssigneeId.value ? [selectedAssigneeId.value] : [] },
     })
+    toast.show(`Partner "${selectedPartner.value.canonicalName}" přidán do projektu`, 'success')
     emit('assigned', { partnerId: selectedPartner.value.id })
     emit('close')
   } catch (e: any) {

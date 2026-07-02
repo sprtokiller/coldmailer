@@ -6,6 +6,7 @@ const text = ref(props.prefill ?? '')
 const loading = ref(false)
 const error = ref('')
 const showSchema = ref(false)
+const toast = useToast()
 
 const PARTNER_PAYLOAD_FIELDS = [
   'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
@@ -85,6 +86,7 @@ async function doImport() {
         method: 'POST',
         body: { canonicalName: body.canonicalName, payload: body.payload },
       })
+      toast.show(`Partner "${body.canonicalName}" byl naimportován`, 'success')
       emit('saved', { id: res.record.id })
     } else {
       // AI conversion
@@ -92,6 +94,7 @@ async function doImport() {
         method: 'POST',
         body: { rawText: text.value },
       })
+      toast.show('Partner byl naimportován', 'success')
       emit('saved', { id: res.record.id })
     }
     emit('close')

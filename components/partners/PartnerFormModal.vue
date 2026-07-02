@@ -63,6 +63,7 @@ const saving = ref(false)
 const deleting = ref(false)
 const error = ref('')
 const duplicateLink = ref('')
+const toast = useToast()
 
 const canSubmit = computed(() => {
   if (props.mode === 'create') return form.canonicalName.trim().length > 0
@@ -75,6 +76,7 @@ async function deletePartner() {
   error.value = ''
   try {
     await $fetch(`/api/partners/${props.partner.id}`, { method: 'DELETE' })
+    toast.show(`Partner "${props.partner.canonicalName}" byl smazán`, 'success')
     emit('deleted')
     emit('close')
   } catch (e: any) {
@@ -119,6 +121,7 @@ async function save() {
           assigneeIds: createInteraction.value ? assigneeIds.value : undefined,
         },
       })
+      toast.show(`Partner "${form.canonicalName.trim()}" byl vytvořen`, 'success')
       emit('saved', { id: res.record.id })
     } else {
       const body: Record<string, unknown> = { payload: payloadData }
@@ -129,6 +132,7 @@ async function save() {
         method: 'PATCH',
         body,
       })
+      toast.show(`Změny partnera "${form.canonicalName.trim()}" byly uloženy`, 'success')
       emit('saved', { id: res.id })
     }
     emit('close')

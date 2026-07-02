@@ -55,6 +55,8 @@ export interface ProjectOutreachContext {
   executing: Ref<'alignment' | 'draft' | null>
   executingPartnerId: Ref<string | null>
   streamOutput: Ref<string>
+  runningAlignmentIds: Ref<Set<string>>
+  alignmentStreamOutputs: Ref<Map<string, string>>
   isAssignedToMe: ComputedRef<boolean>
   canManageAll: Ref<boolean>
   isSubstituting: ComputedRef<boolean>
@@ -63,7 +65,7 @@ export interface ProjectOutreachContext {
   refreshPartners: () => Promise<void>
   refreshDetail: () => Promise<void>
   runAlignment: () => Promise<void>
-  cancelAlignment: () => void
+  cancelAlignment: (globalRecordId: string) => void
   runDraft: (opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) => Promise<void>
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
   sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
@@ -89,7 +91,10 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const executing = useState<'alignment' | 'draft' | null>('outreachExecuting', () => null)
   const executingPartnerId = useState<string | null>('outreachExecutingPartnerId', () => null)
   const streamOutput = useState('outreachStreamOutput', () => '')
-  const alignmentAbort = useState<AbortController | null>('outreachAlignmentAbort', () => null)
+  const runningAlignmentIds = useState<Set<string>>('outreachRunningAlignmentIds', () => new Set())
+  const alignmentStreamOutputs = useState<Map<string, string>>('outreachAlignmentStreams', () => new Map())
+  const alignmentAborts = useState<Map<string, AbortController>>('outreachAlignmentAborts', () => new Map())
+  const toast = useToast()
 
   const prompts = ref<ProjectOutreachContext['prompts']['value']>([])
   const contextParts = ref<ProjectOutreachContext['contextParts']['value']>([])
@@ -189,16 +194,20 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     await Promise.all([refreshPartners(), loadLibrary(pid)])
   }, { immediate: true })
 
-  function cancelAlignment() {
-    alignmentAbort.value?.abort()
+  function cancelAlignment(globalRecordId: string) {
+    alignmentAborts.value.get(globalRecordId)?.abort()
   }
 
   async function runAlignment() {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) return
+    if (runningAlignmentIds.value.has(gid)) return
     const ctrl = new AbortController()
-    alignmentAbort.value = ctrl
-    executing.value = 'alignment'; executingPartnerId.value = gid; streamOutput.value = ''
+    alignmentAborts.value.set(gid, ctrl)
+    runningAlignmentIds.value.add(gid)
+    alignmentStreamOutputs.value.set(gid, '')
+    let aborted = false
+    let errorMessage: string | null = null
     try {
       const resp = await fetch(`/api/projects/${pid}/outreach/${gid}/alignment`, {
         method: 'POST',
@@ -213,19 +222,30 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
         const { done, value } = await reader.read(); if (done) break
         for (const line of dec.decode(value).split('\n')) {
           if (!line.startsWith('data:')) continue
-          try {
-            const ev = JSON.parse(line.slice(5))
-            if (ev.chunk) streamOutput.value += ev.chunk
-            if (ev.error) throw new Error(ev.error)
-          } catch { /* skip parse errors */ }
+          let ev: { chunk?: string; error?: string }
+          try { ev = JSON.parse(line.slice(5)) } catch { continue }
+          if (ev.chunk) alignmentStreamOutputs.value.set(gid, (alignmentStreamOutputs.value.get(gid) ?? '') + ev.chunk)
+          if (ev.error) throw new Error(ev.error)
         }
       }
     } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError')) throw err
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        aborted = true
+      } else {
+        errorMessage = err instanceof Error ? err.message : String(err)
+      }
     } finally {
-      alignmentAbort.value = null
-      executing.value = null; executingPartnerId.value = null
-      await refreshDetail(); await refreshPartners()
+      alignmentAborts.value.delete(gid)
+      runningAlignmentIds.value.delete(gid)
+      alignmentStreamOutputs.value.delete(gid)
+      const partnerName = partners.value.find(p => p.id === gid)?.canonicalName ?? 'Partner'
+      if (errorMessage) {
+        toast.show(`${partnerName}: Chyba – ${errorMessage}`, 'error')
+      } else if (!aborted) {
+        toast.show(`${partnerName}: Value Alignment dokončen`, 'success')
+      }
+      if (selectedPartnerId.value === gid) await refreshDetail()
+      await refreshPartners()
     }
   }
 
@@ -312,6 +332,8 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     executing,
     executingPartnerId,
     streamOutput,
+    runningAlignmentIds,
+    alignmentStreamOutputs,
     isAssignedToMe,
     canManageAll,
     isSubstituting,

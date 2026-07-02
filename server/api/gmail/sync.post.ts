@@ -2,7 +2,7 @@
 import { requireAuth } from '~/server/utils/requireAuth'
 import { syncGmailForUser } from '~/server/utils/gmail-sync'
 
-const DEBOUNCE_MS = 30_000
+const DEBOUNCE_MS = 10_000
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)

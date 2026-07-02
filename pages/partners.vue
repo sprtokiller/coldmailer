@@ -7,6 +7,7 @@ const router = useRouter()
 const { user: sessionUser } = useUserSession()
 const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
 const { activeProject } = useActiveProject()
+const toast = useToast()
 
 const SIZE_LABELS: Record<string, string> = {
   micro: '<10', small: '10–50', medium: '50–500', large: '500–5k', enterprise: '>5k',
@@ -109,6 +110,7 @@ function isInActiveProject(rec: GlobalRecord): boolean {
 async function removeFromProject(rec: GlobalRecord) {
   if (!confirm(`Opravdu odebrat partnera "${rec.canonicalName}" z projektu "${activeProject.value?.name}"? Historie jednání, e-mailů a poznámek zůstane zachována.`)) return
   await $fetch(`/api/partners/${rec.id}/project`, { method: 'DELETE' })
+  toast.show(`Partner "${rec.canonicalName}" odebrán z projektu`, 'success')
   fetchRecords(true)
 }
 

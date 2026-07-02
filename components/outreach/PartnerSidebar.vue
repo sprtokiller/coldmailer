@@ -106,6 +106,10 @@ const STATUS_META = {
         <div class="partner-info">
           <span class="partner-name" :title="p.canonicalName">{{ p.canonicalName }}</span>
           <div class="partner-meta">
+            <svg v-if="ctx.runningAlignmentIds.value.has(p.id)" class="running-spinner" fill="none" viewBox="0 0 24 24" title="Value Alignment běží…">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
             <span
               v-if="getStatus(p)"
               class="partner-status"
@@ -289,6 +293,14 @@ const STATUS_META = {
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
+}
+
+.running-spinner {
+  width: 11px;
+  height: 11px;
+  color: #7c3aed;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
 .status--sent    { color: #2563eb; }
