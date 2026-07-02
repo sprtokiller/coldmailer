@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
       },
       projectRecords: {
         where: projectId ? { projectId } : undefined,
-        select: { dealStage: true, actionStatus: true },
+        select: { negotiationStatus: true },
       },
       _count: {
         select: {
@@ -56,8 +56,7 @@ export default defineEventHandler(async (event) => {
       assignees: r.outreachAssignments.map(a => a.assignee),
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
-      dealStage: projectRecord?.dealStage ?? null,
-      actionStatus: projectRecord?.actionStatus ?? null,
+      negotiationStatus: projectRecord?.negotiationStatus ?? null,
     }
   })
 })

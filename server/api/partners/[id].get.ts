@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       },
       projectRecords: {
         where: projectId ? { projectId } : undefined,
-        select: { dealStage: true, actionStatus: true },
+        select: { negotiationStatus: true },
       },
     },
   })
@@ -31,8 +31,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     ...rest,
-    actionStatus: projectRecord?.actionStatus ?? null,
-    dealStage: projectRecord?.dealStage ?? null,
+    negotiationStatus: projectRecord?.negotiationStatus ?? null,
     assignees,
   }
 })

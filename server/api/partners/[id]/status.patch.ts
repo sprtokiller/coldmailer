@@ -14,17 +14,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { actionStatus, dealStage, addAssigneeId, removeAssigneeId } = body
+  const { negotiationStatus, addAssigneeId, removeAssigneeId } = body
 
-  if (actionStatus !== undefined || dealStage !== undefined) {
+  if (negotiationStatus !== undefined) {
     const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
     if (!canEdit) {
       throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat stav tohoto partnera. Nejste přiřazeni k tomuto partnerovi.' })
     }
     await prisma.projectRecord.upsert({
       where: { projectId_globalRecordId: { projectId, globalRecordId } },
-      create: { projectId, globalRecordId, ...(actionStatus !== undefined && { actionStatus }), ...(dealStage !== undefined && { dealStage }) },
-      update: { ...(actionStatus !== undefined && { actionStatus }), ...(dealStage !== undefined && { dealStage }) },
+      create: { projectId, globalRecordId, negotiationStatus },
+      update: { negotiationStatus },
     })
   }
 

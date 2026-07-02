@@ -461,7 +461,7 @@ async function processMessage(
       const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
       await prisma.projectRecord.upsert({
         where: { projectId_globalRecordId: { projectId: entry.projectId, globalRecordId: entry.globalRecordId } },
-        create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, actionStatus: newStatus },
+        create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, negotiationStatus: newStatus },
         update: {},
       })
       await prisma.projectRecord.updateMany({
@@ -469,11 +469,11 @@ async function processMessage(
           globalRecordId: entry.globalRecordId,
           projectId: entry.projectId,
           OR: [
-            { actionStatus: null },
-            { actionStatus: { notIn: ['BEFORE_MEETING', 'NONE'] } },
+            { negotiationStatus: null },
+            { negotiationStatus: { notIn: ['NOT_INTERESTED', 'NOT_THIS_TIME', 'COMPLETED', 'THANKS_REMAINING'] } },
           ],
         },
-        data: { actionStatus: newStatus },
+        data: { negotiationStatus: newStatus },
       })
     } catch (e: any) {
       if (e?.code === 'P2002') continue

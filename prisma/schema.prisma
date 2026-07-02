@@ -323,20 +323,16 @@ enum InteractionType {
   FULFILLMENT
 }
 
-enum ActionStatus {
+enum NegotiationStatus {
+  CONTACTED
+  REMINDED
   WAITING_FOR_THEM
   WAITING_FOR_US
-  BEFORE_MEETING
-  NONE
-}
-
-enum DealStage {
-  CONTACTED
-  NEGOTIATING
+  FULFILLING
+  THANKS_REMAINING
+  COMPLETED
   NOT_INTERESTED
   NOT_THIS_TIME
-  PARTNER
-  COMPLETED
 }
 
 model Interaction {
@@ -423,8 +419,7 @@ model ProjectRecord {
   globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
 
-  dealStage    DealStage?
-  actionStatus ActionStatus?
+  negotiationStatus NegotiationStatus?
 
   // Moved from deprecated PartnerFulfillment
   contactBlacklist    Json?

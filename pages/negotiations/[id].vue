@@ -50,8 +50,7 @@ interface Partner {
   id: string; canonicalName: string; payload: Record<string, string>
   contacts: Contact[]
   assignees: AssigneeUser[]
-  actionStatus: 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'BEFORE_MEETING' | 'NONE' | null
-  dealStage: 'CONTACTED' | 'NEGOTIATING' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | 'PARTNER' | 'COMPLETED' | null
+  negotiationStatus: 'CONTACTED' | 'REMINDED' | 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'FULFILLING' | 'THANKS_REMAINING' | 'COMPLETED' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | null
 }
 interface AppUser { id: string; name: string; image: string | null; email: string }
 
@@ -293,7 +292,7 @@ const fulfillmentForm = ref({ myToThem: '', themToUs: '' })
 const editingId = ref<string | null>(null)
 const editingContent = ref('')
 
-const statusForm = ref({ actionStatus: null as string | null, dealStage: null as string | null })
+const statusForm = ref({ negotiationStatus: null as string | null })
 
 // Assignee management
 const addAssigneeInteractionId = ref<string | null>(null)
@@ -397,10 +396,10 @@ async function saveFulfillmentField(interactionId: string) {
   await refreshInteractions()
 }
 
-async function updateStatus(field: 'actionStatus' | 'dealStage', value: string | null) {
+async function updateStatus(value: string | null) {
   await $fetch(`/api/partners/${id}/status`, {
     method: 'PATCH',
-    body: { [field]: value },
+    body: { negotiationStatus: value },
   })
   await refreshPartner()
 }
@@ -476,27 +475,27 @@ function fmtDateShort(d: string) {
   return new Date(d).toLocaleDateString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const ACTION_STATUS_LABELS: Record<string, string> = {
+const NEGOTIATION_STATUS_LABELS: Record<string, string> = {
+  CONTACTED: 'Osloveno',
+  REMINDED: 'Připomenuto',
   WAITING_FOR_THEM: 'Čekání na ně',
   WAITING_FOR_US: 'Čekání na nás',
-  BEFORE_MEETING: 'Před schůzkou',
-  NONE: 'Už nic',
-}
-const DEAL_STAGE_LABELS: Record<string, string> = {
-  CONTACTED: 'Osloveno',
-  NEGOTIATING: 'V jednání',
-  NOT_INTERESTED: 'Nezájem',
-  NOT_THIS_TIME: 'Tentokrát ne',
-  PARTNER: 'Partner',
+  FULFILLING: 'Plnění',
+  THANKS_REMAINING: 'Zbývá poděkovat',
   COMPLETED: 'Dokončeno',
+  NOT_INTERESTED: 'Nezájem',
+  NOT_THIS_TIME: 'Tentokrát nezájem',
 }
-const DEAL_STAGE_COLORS: Record<string, string> = {
+const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
   CONTACTED: 'bg-blue-100 text-blue-700',
-  NEGOTIATING: 'bg-amber-100 text-amber-700',
-  NOT_INTERESTED: 'bg-red-100 text-red-700',
-  NOT_THIS_TIME: 'bg-orange-100 text-orange-700',
-  PARTNER: 'bg-green-100 text-green-700',
-  COMPLETED: 'bg-gray-100 text-gray-600',
+  REMINDED: 'bg-yellow-100 text-yellow-700',
+  WAITING_FOR_THEM: 'bg-orange-100 text-orange-700',
+  WAITING_FOR_US: 'bg-red-100 text-red-700',
+  FULFILLING: 'bg-purple-100 text-purple-700',
+  THANKS_REMAINING: 'bg-teal-100 text-teal-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  NOT_INTERESTED: 'bg-gray-100 text-gray-500',
+  NOT_THIS_TIME: 'bg-gray-200 text-gray-600',
 }
 const TYPE_LABELS: Record<string, string> = {
   NOTE: 'Poznámky',
@@ -587,34 +586,22 @@ const TYPE_COLORS: Record<string, string> = {
         </div>
       </div>
 
-      <!-- Partner Status (Pipeline) -->
-      <div v-if="canEdit || partner.dealStage || partner.actionStatus" class="mt-4 flex items-center gap-4 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-500 font-medium">Fáze:</span>
-          <select
-            v-if="canEdit"
-            :value="partner.dealStage ?? ''"
-            class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
-            @change="updateStatus('dealStage', ($event.target as HTMLSelectElement).value || null)"
-          >
-            <option value="">—</option>
-            <option v-for="(label, key) in DEAL_STAGE_LABELS" :key="key" :value="key">{{ label }}</option>
-          </select>
-          <span v-else :class="['text-xs px-2 py-1 rounded font-medium', DEAL_STAGE_COLORS[partner.dealStage ?? ''] ?? 'bg-gray-100 text-gray-600']">{{ partner.dealStage ? DEAL_STAGE_LABELS[partner.dealStage] : '—' }}</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-500 font-medium">Stav:</span>
-          <select
-            v-if="canEdit"
-            :value="partner.actionStatus ?? ''"
-            class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-32"
-            @change="updateStatus('actionStatus', ($event.target as HTMLSelectElement).value || null)"
-          >
-            <option value="">—</option>
-            <option v-for="(label, key) in ACTION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
-          </select>
-          <span v-else class="text-xs px-2 py-1 rounded font-medium bg-gray-100 text-gray-600">{{ partner.actionStatus ? ACTION_STATUS_LABELS[partner.actionStatus] : '—' }}</span>
-        </div>
+      <!-- Partner Status -->
+      <div v-if="canEdit || partner.negotiationStatus" class="mt-4 flex items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
+        <span class="text-xs text-gray-500 font-medium">Stav jednání:</span>
+        <select
+          v-if="canEdit"
+          :value="partner.negotiationStatus ?? ''"
+          class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-40"
+          @change="updateStatus(($event.target as HTMLSelectElement).value || null)"
+        >
+          <option value="">—</option>
+          <option v-for="(label, key) in NEGOTIATION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <span
+          v-else-if="partner.negotiationStatus"
+          :class="['text-xs px-2 py-1 rounded font-medium', NEGOTIATION_STATUS_COLORS[partner.negotiationStatus] ?? 'bg-gray-100 text-gray-600']"
+        >{{ NEGOTIATION_STATUS_LABELS[partner.negotiationStatus] }}</span>
       </div>
 
       <!-- Souhrnné přiřazení -->

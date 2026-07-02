@@ -15,8 +15,7 @@ interface Partner {
   assignees: AssigneeUser[]
   lastInteractionAt: string | null
   interactionCount: number
-  dealStage: string | null
-  actionStatus: string | null
+  negotiationStatus: string | null
 }
 
 const search = ref('')
@@ -38,7 +37,10 @@ function lastContact(p: Partner) {
   return new Date(p.lastInteractionAt).toLocaleDateString('cs-CZ')
 }
 
+const CLOSED_STATUSES = new Set(['NOT_INTERESTED', 'NOT_THIS_TIME'])
+
 function lastInteractionColor(p: Partner): string {
+  if (CLOSED_STATUSES.has(p.negotiationStatus ?? '')) return 'bg-gray-100 text-gray-400'
   if (!p.lastInteractionAt) return 'bg-gray-100 text-gray-400'
   const days = (Date.now() - new Date(p.lastInteractionAt).getTime()) / 86_400_000
   if (days < 3) return ''
@@ -47,36 +49,28 @@ function lastInteractionColor(p: Partner): string {
   return 'bg-red-100 text-red-700'
 }
 
-const DEAL_STAGE_LABELS: Record<string, string> = {
+const NEGOTIATION_STATUS_LABELS: Record<string, string> = {
   CONTACTED: 'Osloveno',
-  NEGOTIATING: 'V jednání',
-  NOT_INTERESTED: 'Nezájem',
-  NOT_THIS_TIME: 'Tentokrát ne',
-  PARTNER: 'Partner',
-  COMPLETED: 'Dokončeno',
-}
-
-const DEAL_STAGE_COLORS: Record<string, string> = {
-  CONTACTED: 'bg-blue-100 text-blue-700',
-  NEGOTIATING: 'bg-amber-100 text-amber-700',
-  NOT_INTERESTED: 'bg-red-100 text-red-700',
-  NOT_THIS_TIME: 'bg-orange-100 text-orange-700',
-  PARTNER: 'bg-green-100 text-green-700',
-  COMPLETED: 'bg-gray-100 text-gray-600',
-}
-
-const ACTION_STATUS_LABELS: Record<string, string> = {
+  REMINDED: 'Připomenuto',
   WAITING_FOR_THEM: 'Čekání na ně',
   WAITING_FOR_US: 'Čekání na nás',
-  BEFORE_MEETING: 'Před schůzkou',
-  NONE: 'Už nic',
+  FULFILLING: 'Plnění',
+  THANKS_REMAINING: 'Zbývá poděkovat',
+  COMPLETED: 'Dokončeno',
+  NOT_INTERESTED: 'Nezájem',
+  NOT_THIS_TIME: 'Tentokrát nezájem',
 }
 
-const ACTION_STATUS_COLORS: Record<string, string> = {
-  WAITING_FOR_THEM: 'bg-sky-100 text-sky-700',
-  WAITING_FOR_US: 'bg-rose-100 text-rose-700',
-  BEFORE_MEETING: 'bg-purple-100 text-purple-700',
-  NONE: 'bg-gray-100 text-gray-500',
+const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
+  CONTACTED: 'bg-blue-100 text-blue-700',
+  REMINDED: 'bg-yellow-100 text-yellow-700',
+  WAITING_FOR_THEM: 'bg-orange-100 text-orange-700',
+  WAITING_FOR_US: 'bg-red-100 text-red-700',
+  FULFILLING: 'bg-purple-100 text-purple-700',
+  THANKS_REMAINING: 'bg-teal-100 text-teal-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  NOT_INTERESTED: 'bg-gray-100 text-gray-500',
+  NOT_THIS_TIME: 'bg-gray-200 text-gray-600',
 }
 </script>
 
@@ -101,8 +95,7 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50 text-left">
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Fáze</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav jednání</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Primární email</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
@@ -111,17 +104,20 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-if="pending">
-            <td colspan="7" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
+            <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
           </tr>
           <tr v-else-if="!partners?.length">
-            <td colspan="7" class="text-center py-12 text-gray-400 text-sm">
+            <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
               {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
           <tr
             v-for="p in partners"
             :key="p.id"
-            class="hover:bg-gray-50 cursor-pointer transition-colors"
+            :class="[
+              'hover:bg-gray-50 cursor-pointer transition-colors',
+              CLOSED_STATUSES.has(p.negotiationStatus ?? '') ? 'opacity-60' : '',
+            ]"
             @click="navigateTo(`/negotiations/${p.id}`)"
           >
             <td class="px-4 py-3 font-medium text-gray-800">
@@ -142,21 +138,11 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
             </td>
             <td class="px-4 py-3">
               <span
-                v-if="p.dealStage"
+                v-if="p.negotiationStatus"
                 class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
-                :class="DEAL_STAGE_COLORS[p.dealStage] ?? 'bg-gray-100 text-gray-600'"
+                :class="NEGOTIATION_STATUS_COLORS[p.negotiationStatus] ?? 'bg-gray-100 text-gray-600'"
               >
-                {{ DEAL_STAGE_LABELS[p.dealStage] ?? p.dealStage }}
-              </span>
-              <span v-else class="text-xs text-gray-300">—</span>
-            </td>
-            <td class="px-4 py-3">
-              <span
-                v-if="p.actionStatus"
-                class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
-                :class="ACTION_STATUS_COLORS[p.actionStatus] ?? 'bg-gray-100 text-gray-500'"
-              >
-                {{ ACTION_STATUS_LABELS[p.actionStatus] ?? p.actionStatus }}
+                {{ NEGOTIATION_STATUS_LABELS[p.negotiationStatus] ?? p.negotiationStatus }}
               </span>
               <span v-else class="text-xs text-gray-300">—</span>
             </td>
@@ -192,7 +178,7 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
             </td>
             <td
               class="px-4 py-3 text-xs"
-              :class="isAdmin && lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400'"
+              :class="lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400'"
             >
               {{ lastContact(p) ?? '—' }}
             </td>
