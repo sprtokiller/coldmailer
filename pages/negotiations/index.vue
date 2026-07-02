@@ -1,6 +1,10 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
+const { session } = useUserSession()
+const sessionUser = computed(() => (session.value as any)?.user)
+const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+
 interface Contact { id: string; address: string; isPrimary: boolean; label: string | null }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface Partner {
@@ -32,6 +36,15 @@ function primaryEmail(p: Partner) {
 function lastContact(p: Partner) {
   if (!p.lastInteractionAt) return null
   return new Date(p.lastInteractionAt).toLocaleDateString('cs-CZ')
+}
+
+function lastInteractionColor(p: Partner): string {
+  if (!p.lastInteractionAt) return 'bg-gray-100 text-gray-400'
+  const days = (Date.now() - new Date(p.lastInteractionAt).getTime()) / 86_400_000
+  if (days < 3) return ''
+  if (days < 7) return 'bg-yellow-100 text-yellow-700'
+  if (days < 14) return 'bg-orange-100 text-orange-700'
+  return 'bg-red-100 text-red-700'
 }
 
 const DEAL_STAGE_LABELS: Record<string, string> = {
@@ -177,7 +190,10 @@ const ACTION_STATUS_COLORS: Record<string, string> = {
             <td class="px-4 py-3 text-center">
               <span class="text-xs font-medium text-gray-700">{{ p.interactionCount }}</span>
             </td>
-            <td class="px-4 py-3 text-xs text-gray-400">
+            <td
+              class="px-4 py-3 text-xs"
+              :class="isAdmin && lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400'"
+            >
               {{ lastContact(p) ?? '—' }}
             </td>
           </tr>
