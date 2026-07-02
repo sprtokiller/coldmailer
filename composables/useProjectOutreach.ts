@@ -189,10 +189,18 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     if (ed[0] && !opConfig.value.emailDraftId) opConfig.value.emailDraftId = ed[0].id
   }
 
-  watch(projectIdRef, async (pid) => {
-    if (!pid) return
-    await Promise.all([refreshPartners(), loadLibrary(pid)])
-  }, { immediate: true })
+  // Deferred to onMounted (client-only) so SSR and the client's hydration-time
+  // render always agree on the same "not yet loaded" baseline. Triggering this
+  // fetch synchronously during setup() (immediate watch) races SSR's HTML
+  // serialization against the client's hydration render, causing them to land
+  // on different template branches (empty state vs. partner list) and produce
+  // a hydration mismatch.
+  onMounted(() => {
+    watch(projectIdRef, async (pid) => {
+      if (!pid) return
+      await Promise.all([refreshPartners(), loadLibrary(pid)])
+    }, { immediate: true })
+  })
 
   function cancelAlignment(globalRecordId: string) {
     alignmentAborts.value.get(globalRecordId)?.abort()
