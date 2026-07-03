@@ -92,9 +92,16 @@ async function save() {
   error.value = ''
   duplicateLink.value = ''
 
-  const filteredContacts = contacts.value.filter(c =>
-    c.firstName || c.lastName || c.email || c.role,
+  const invalidContactIndex = contacts.value.findIndex(c =>
+    !c.firstName && !c.lastName && !c.email && !c.role,
   )
+  if (invalidContactIndex !== -1) {
+    error.value = `Kontakt ${invalidContactIndex + 1} musí mít vyplněno jméno, příjmení, pozici nebo email.`
+    saving.value = false
+    return
+  }
+
+  const filteredContacts = contacts.value
 
   const payloadData: Record<string, unknown> = {}
   if (form.website) payloadData.website = form.website
@@ -248,10 +255,11 @@ async function save() {
 
           <!-- Section: Kontakty -->
           <section>
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-1">
               <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Kontaktní osoby</h3>
               <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" @click="addContact">+ Přidat kontakt</button>
             </div>
+            <p class="text-xs text-gray-400 mb-2">Vyplňte alespoň jedno z: jméno, příjmení, pozice nebo email.</p>
             <div v-if="contacts.length === 0" class="text-xs text-gray-400 py-2">Žádné kontaktní osoby</div>
             <div v-for="(c, i) in contacts" :key="i" class="border border-gray-100 rounded-lg p-3 mb-3">
               <div class="flex items-center justify-between mb-2">
