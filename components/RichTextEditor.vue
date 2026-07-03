@@ -459,6 +459,8 @@ defineExpose({
   font-size: 0.875rem;
   line-height: 1.65;
   color: #374151;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ProseMirror p {

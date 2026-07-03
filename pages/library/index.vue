@@ -696,7 +696,7 @@ function handleNew() {
           v-for="item in currentItems"
           :key="item.id"
           class="bg-white rounded-xl border p-5 transition-colors cursor-pointer hover:border-primary/40 hover:shadow-sm"
-          :class="item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'"
+          :class="editingId === item.id ? 'border-primary ring-1 ring-primary/30' : (item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100')"
           @click="startEdit(item)"
         >
           <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">

@@ -174,8 +174,15 @@ const personalByGroup = computed(() => {
     <!-- Personal signatures grouped by project type -->
     <div v-if="!editing">
       <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Moje podpisy</h3>
-      <div v-if="personal.length === 0" class="text-sm text-gray-400 py-4">
-        Zatím nemáte žádný vlastní podpis. Vytvořte si nový nebo použijte šablonu výše.
+      <div v-if="personal.length === 0" class="flex flex-col items-center text-center gap-2 py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+        <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+        <p class="text-sm font-medium text-gray-600">Zatím nemáte žádný vlastní podpis</p>
+        <button
+          class="bg-primary text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity mt-1"
+          @click="startNew"
+        >+ Vytvořit podpis</button>
       </div>
       <div v-for="bucket in personalByGroup" :key="bucket.group.id" class="mb-4">
         <div

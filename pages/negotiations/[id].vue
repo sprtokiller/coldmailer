@@ -217,6 +217,14 @@ async function addToBlacklist() {
   blacklistError.value = ''
   const email = newBlacklistEmail.value.trim().toLowerCase()
   if (!email) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    blacklistError.value = `${email} nevypadá jako platná e-mailová adresa.`
+    return
+  }
+  if (blacklist.value.includes(email)) {
+    blacklistError.value = `${email} už je na blacklistu.`
+    return
+  }
   if (additionalAddresses.value.includes(email)) {
     blacklistError.value = `${email} je v přídavných adresách — nejprve ji odeberte.`
     return
@@ -732,21 +740,23 @@ const TYPE_COLORS: Record<string, string> = {
       <!-- Souhrnné přiřazení -->
       <div v-if="partner.assignees.length || canManageAssignees" class="mt-4 flex items-center gap-3 flex-wrap">
         <span class="text-xs text-gray-400 font-medium">Přiřazeni:</span>
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-2">
           <template v-for="a in partner.assignees" :key="a.id">
             <button
               v-if="canManageAssignees"
-              class="group relative"
+              class="group relative flex items-center gap-1.5"
               :title="a.name"
               @click="removeSolutionAssignee(a.id)"
             >
               <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover group-hover:opacity-60" referrerpolicy="no-referrer" />
               <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium group-hover:opacity-60">{{ a.name.charAt(0).toUpperCase() }}</div>
-              <span class="absolute -top-0.5 -right-0.5 hidden group-hover:flex w-3.5 h-3.5 bg-red-400 rounded-full items-center justify-center text-white text-[9px]">×</span>
+              <span class="text-xs text-gray-500 group-hover:text-red-400">{{ a.name }}</span>
+              <span class="absolute -top-0.5 -left-0.5 hidden group-hover:flex w-3.5 h-3.5 bg-red-400 rounded-full items-center justify-center text-white text-[9px]">×</span>
             </button>
-            <span v-else :title="a.name">
+            <span v-else :title="a.name" class="flex items-center gap-1.5">
               <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover" referrerpolicy="no-referrer" />
               <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium">{{ a.name.charAt(0).toUpperCase() }}</div>
+              <span class="text-xs text-gray-500">{{ a.name }}</span>
             </span>
           </template>
           <button
@@ -1103,7 +1113,7 @@ const TYPE_COLORS: Record<string, string> = {
 
       </div>
 
-      <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm">
+      <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm select-none">
         Žádná jednání tohoto typu
       </p>
     </div>
@@ -1177,6 +1187,7 @@ const TYPE_COLORS: Record<string, string> = {
             <span>Blacklist kontaktů{{ blacklist.length ? ` (${blacklist.length})` : '' }}</span>
           </button>
           <div v-if="showBlacklist" class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <p class="text-[11px] text-gray-400 mb-3">Blokuje se vždy celá e-mailová adresa (ne jen doména nebo jméno před @).</p>
             <div class="space-y-2 mb-4">
               <div
                 v-for="email in blacklist"
@@ -1196,6 +1207,7 @@ const TYPE_COLORS: Record<string, string> = {
               <input
                 v-model="newBlacklistEmail"
                 type="email"
+                list="partner-contacts-list"
                 placeholder="email@example.com"
                 class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-0"
                 @keydown.enter="addToBlacklist"

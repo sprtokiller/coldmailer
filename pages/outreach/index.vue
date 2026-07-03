@@ -11,6 +11,21 @@ provide(projectOutreachKey, ctx)
 
 const { syncError } = useGmailSync()
 
+// Prevent body/html from adding extra height or scrollbars while this page is
+// active — must be undone on unmount, since these are global (unscoped) styles
+// that Vue/Nuxt won't clean up automatically on client-side route navigation,
+// otherwise every other page becomes unscrollable for the rest of the session.
+onMounted(() => {
+  document.documentElement.style.overflow = 'hidden'
+  document.body.style.overflow = 'hidden'
+  document.getElementById('__nuxt')?.style.setProperty('overflow', 'hidden')
+})
+onUnmounted(() => {
+  document.documentElement.style.overflow = ''
+  document.body.style.overflow = ''
+  document.getElementById('__nuxt')?.style.removeProperty('overflow')
+})
+
 const unclaiming = ref(false)
 async function doUnclaim() {
   if (!confirm('Opravdu chcete odstoupit od tohoto partnera? Ztratíte přístup k jeho zpracování.')) return
@@ -168,7 +183,8 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
   padding: 12px 16px;
   gap: 12px;
   background: #f0f1f5;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   box-sizing: border-box;
 }
 
@@ -330,6 +346,6 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
 </style>
 
 <style>
-html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-#__nuxt { height: 100%; overflow: hidden; }
+html, body { margin: 0; padding: 0; height: 100%; }
+#__nuxt { height: 100%; }
 </style>

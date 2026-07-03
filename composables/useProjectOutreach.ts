@@ -227,16 +227,21 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
       })
       const reader = resp.body?.getReader(); if (!reader) throw new Error('No stream')
       const dec = new TextDecoder()
+      let gotDone = false
       while (true) {
         if (ctrl.signal.aborted) { reader.cancel(); break }
         const { done, value } = await reader.read(); if (done) break
         for (const line of dec.decode(value).split('\n')) {
           if (!line.startsWith('data:')) continue
-          let ev: { chunk?: string; error?: string }
+          let ev: { chunk?: string; error?: string; done?: boolean }
           try { ev = JSON.parse(line.slice(5)) } catch { continue }
           if (ev.chunk) alignmentStreamOutputs.value.set(gid, (alignmentStreamOutputs.value.get(gid) ?? '') + ev.chunk)
           if (ev.error) throw new Error(ev.error)
+          if (ev.done) gotDone = true
         }
+      }
+      if (!gotDone && !ctrl.signal.aborted) {
+        throw new Error('Spojení se serverem bylo přerušeno, zkuste to znovu.')
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -278,17 +283,21 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
       })
       const reader = resp.body?.getReader(); if (!reader) throw new Error('No stream')
       const dec = new TextDecoder()
+      let gotDone = false
       while (true) {
         if (ctrl.signal.aborted) { reader.cancel(); break }
         const { done, value } = await reader.read(); if (done) break
         for (const line of dec.decode(value).split('\n')) {
           if (!line.startsWith('data:')) continue
-          try {
-            const ev = JSON.parse(line.slice(5))
-            if (ev.chunk) streamOutput.value += ev.chunk
-            if (ev.error) throw new Error(ev.error)
-          } catch { /* skip parse errors */ }
+          let ev: { chunk?: string; error?: string; done?: boolean }
+          try { ev = JSON.parse(line.slice(5)) } catch { continue }
+          if (ev.chunk) streamOutput.value += ev.chunk
+          if (ev.error) throw new Error(ev.error)
+          if (ev.done) gotDone = true
         }
+      }
+      if (!gotDone && !ctrl.signal.aborted) {
+        throw new Error('Spojení se serverem bylo přerušeno, zkuste to znovu.')
       }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) throw err

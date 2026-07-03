@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const data: Record<string, unknown> = {}
-  if (body.contactBlacklist !== undefined) data.contactBlacklist = body.contactBlacklist
+  if (body.contactBlacklist !== undefined) data.contactBlacklist = [...new Set(body.contactBlacklist)]
   if (body.emailDisplayMode !== undefined) data.emailDisplayMode = body.emailDisplayMode
   if (body.additionalAddresses !== undefined) data.additionalAddresses = body.additionalAddresses
   if (body.autoIncludeDomain !== undefined) data.autoIncludeDomain = body.autoIncludeDomain

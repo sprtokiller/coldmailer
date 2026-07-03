@@ -85,6 +85,7 @@ const STATUS_META = {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a4 4 0 00-5.197-3.795M9 20H4v-2a4 4 0 015.197-3.795M15 7a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
       <span v-if="ctx.partners.value.length === 0">Žádní partneři<br/>v projektu</span>
+      <span v-else-if="!search.trim()">Žádní partneři<br/>přiřazení vám</span>
       <span v-else>Žádná shoda</span>
     </div>
 

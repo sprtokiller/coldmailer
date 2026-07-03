@@ -32,13 +32,15 @@ const records   = ref<GlobalRecord[]>([])
 const loading   = ref(false)
 const offset    = ref(0)
 const limit     = 100
+const search     = ref('')
+const filterSize = ref('')
 
 async function fetchRecords(reset = false) {
   if (reset) offset.value = 0
   loading.value = true
   try {
     const data = await $fetch<GlobalRecord[]>('/api/records', {
-      query: { type: activeTab.value, offset: offset.value, limit },
+      query: { type: activeTab.value, offset: offset.value, limit, search: search.value || undefined },
     })
     records.value = reset ? data : [...records.value, ...data]
   } finally {
@@ -47,6 +49,12 @@ async function fetchRecords(reset = false) {
 }
 
 onMounted(() => fetchRecords(true))
+
+let searchDebounce: ReturnType<typeof setTimeout> | undefined
+watch(search, () => {
+  clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => fetchRecords(true), 300)
+})
 
 const hasMore = computed(() => records.value.length > 0 && records.value.length === offset.value + limit)
 function loadMore() { offset.value += limit; fetchRecords(false) }
@@ -74,18 +82,15 @@ function getArr(rec: GlobalRecord, key: string): string[] {
 }
 
 // ── Client-side filters ───────────────────────────────────────────────────────
-
-const search     = ref('')
-const filterSize = ref('')
+// Name search is server-side (see fetchRecords/watch above) so it covers the
+// full dataset, not just the currently loaded page.
 
 const availableSizes = computed(() =>
   Object.keys(SIZE_LABELS).filter(s => records.value.some(r => String(r.payload.size ?? '') === s)),
 )
 
 const filteredRecords = computed(() => {
-  const q = search.value.toLowerCase()
   return records.value.filter(rec => {
-    if (q && !rec.canonicalName.toLowerCase().includes(q)) return false
     if (filterSize.value && String(rec.payload.size ?? '') !== filterSize.value) return false
     return true
   })

@@ -134,7 +134,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
                 >↗</a>
                 <span v-if="!p.inProject" class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 whitespace-nowrap">Mimo projekt</span>
               </div>
-              <div v-if="p.payload.summary" class="text-[11px] text-gray-400 mt-0.5 line-clamp-1 max-w-56">
+              <div v-if="p.payload.summary" :title="String(p.payload.summary)" class="text-[11px] text-gray-400 mt-0.5 line-clamp-1 max-w-56">
                 {{ p.payload.summary }}
               </div>
             </td>

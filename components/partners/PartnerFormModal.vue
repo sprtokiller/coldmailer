@@ -36,6 +36,7 @@ const form = reactive({
   socialInvolvement: String(payload.socialInvolvement ?? ''),
   researchNotes: String(payload.researchNotes ?? ''),
 })
+const originalForm = { ...form }
 
 const contacts = ref<ContactEntry[]>(
   Array.isArray(payload.contacts)
@@ -47,6 +48,7 @@ const contacts = ref<ContactEntry[]>(
       }))
     : [],
 )
+const originalContactsJSON = JSON.stringify(contacts.value)
 
 function addContact() {
   contacts.value.push({ firstName: '', lastName: '', role: '', email: '', type: 'General', priority: 3, note: '' })
@@ -65,10 +67,13 @@ const error = ref('')
 const duplicateLink = ref('')
 const toast = useToast()
 
-const canSubmit = computed(() => {
-  if (props.mode === 'create') return form.canonicalName.trim().length > 0
-  return true
-})
+const canSubmit = computed(() => form.canonicalName.trim().length > 0)
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close')
+}
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 async function deletePartner() {
   if (!props.partner || deleting.value) return
@@ -104,18 +109,36 @@ async function save() {
   const filteredContacts = contacts.value
 
   const payloadData: Record<string, unknown> = {}
-  if (form.website) payloadData.website = form.website
-  if (form.linkedinUrl) payloadData.linkedinUrl = form.linkedinUrl
-  if (form.instagramUrl) payloadData.instagramUrl = form.instagramUrl
-  if (form.industry) payloadData.industry = form.industry
-  if (form.size) payloadData.size = form.size
-  if (form.sizeNote) payloadData.sizeNote = form.sizeNote
-  if (form.parentCompany) payloadData.parentCompany = form.parentCompany
-  if (form.summary) payloadData.summary = form.summary
-  if (form.activities) payloadData.activities = form.activities
-  if (form.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
-  if (form.researchNotes) payloadData.researchNotes = form.researchNotes
-  if (filteredContacts.length > 0) payloadData.contacts = filteredContacts
+  if (props.mode === 'create') {
+    if (form.website) payloadData.website = form.website
+    if (form.linkedinUrl) payloadData.linkedinUrl = form.linkedinUrl
+    if (form.instagramUrl) payloadData.instagramUrl = form.instagramUrl
+    if (form.industry) payloadData.industry = form.industry
+    if (form.size) payloadData.size = form.size
+    if (form.sizeNote) payloadData.sizeNote = form.sizeNote
+    if (form.parentCompany) payloadData.parentCompany = form.parentCompany
+    if (form.summary) payloadData.summary = form.summary
+    if (form.activities) payloadData.activities = form.activities
+    if (form.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
+    if (form.researchNotes) payloadData.researchNotes = form.researchNotes
+    if (filteredContacts.length > 0) payloadData.contacts = filteredContacts
+  } else {
+    // Only send fields the user actually changed in this window — resending
+    // untouched fields from a stale-opened modal would silently clobber
+    // concurrent edits made to those fields in another window/tab.
+    if (form.website !== originalForm.website) payloadData.website = form.website
+    if (form.linkedinUrl !== originalForm.linkedinUrl) payloadData.linkedinUrl = form.linkedinUrl
+    if (form.instagramUrl !== originalForm.instagramUrl) payloadData.instagramUrl = form.instagramUrl
+    if (form.industry !== originalForm.industry) payloadData.industry = form.industry
+    if (form.size !== originalForm.size) payloadData.size = form.size
+    if (form.sizeNote !== originalForm.sizeNote) payloadData.sizeNote = form.sizeNote
+    if (form.parentCompany !== originalForm.parentCompany) payloadData.parentCompany = form.parentCompany
+    if (form.summary !== originalForm.summary) payloadData.summary = form.summary
+    if (form.activities !== originalForm.activities) payloadData.activities = form.activities
+    if (form.socialInvolvement !== originalForm.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
+    if (form.researchNotes !== originalForm.researchNotes) payloadData.researchNotes = form.researchNotes
+    if (JSON.stringify(filteredContacts) !== originalContactsJSON) payloadData.contacts = filteredContacts
+  }
 
   try {
     if (props.mode === 'create') {

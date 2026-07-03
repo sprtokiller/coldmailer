@@ -17,10 +17,15 @@ const SCHEMA_HINT = `{
   "canonicalName": "Název firmy (povinné)",
   "website": "https://...",
   "linkedinUrl": "https://linkedin.com/...",
+  "instagramUrl": "https://instagram.com/...",
   "industry": "Technologie",
   "size": "micro|small|medium|large|enterprise",
+  "sizeNote": "Poznámka k velikosti",
+  "parentCompany": "Mateřská společnost",
   "summary": "Popis firmy",
   "activities": "Aktivity a služby",
+  "socialInvolvement": "Společenská angažovanost",
+  "researchNotes": "Poznámky k výzkumu",
   "contacts": [
     { "firstName": "Jan", "lastName": "Novák", "role": "CEO", "email": "jan@firma.cz" }
   ]

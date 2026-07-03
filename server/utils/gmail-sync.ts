@@ -403,6 +403,7 @@ async function processMessage(
     const entries = partnerEmailMap.get(addr)
     if (entries) {
       for (const entry of entries) {
+        if (domainCtx.get(entry.globalRecordId)?.blacklistedEmails.has(addr)) continue
         matchedViaKnown.add(entry.globalRecordId)
         if (!seenRecords.has(entry.globalRecordId)) {
           seenRecords.add(entry.globalRecordId)
