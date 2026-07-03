@@ -371,10 +371,13 @@ async function createEmail() {
     },
   })
   if (toAddr && !partner.value?.contacts.some(c => c.address === toAddr)) {
-    await $fetch(`/api/partners/${id}/contacts`, {
-      method: 'POST',
-      body: { address: toAddr },
-    }).catch(() => {})
+    const updated = [...additionalAddresses.value, toAddr]
+    if (!additionalAddresses.value.includes(toAddr)) {
+      await $fetch(`/api/partners/${id}/settings`, {
+        method: 'PATCH',
+        body: { additionalAddresses: updated },
+      }).catch(() => {})
+    }
   }
   resetForms()
   toast.show('Email uložen', 'success')

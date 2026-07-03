@@ -3,6 +3,7 @@ import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { canEditNegotiation } from '~/server/utils/projectPermissions'
 import { sendGmailMessage, refreshAccessToken, getGmailMessage } from '~/server/utils/google'
+import { trackCustomRecipientAddress } from '~/server/utils/project-additional-addresses'
 
 const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
 
@@ -70,6 +71,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await sendGmailMessage(accessToken, body.toAddress, body.subject, fullBody, threading)
+
+  await trackCustomRecipientAddress(projectId, globalRecordId, body.toAddress)
 
   await prisma.outreachAssignment.upsert({
     where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: session.id } },

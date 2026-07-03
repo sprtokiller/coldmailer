@@ -6,6 +6,7 @@ import {
   type GmailMessage,
   type GmailMessagePart,
 } from '~/server/utils/google'
+import { appendProjectAdditionalAddress } from '~/server/utils/project-additional-addresses'
 
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 200
@@ -304,6 +305,21 @@ export async function syncGmailForPartnerEmail(
 
 type PartnerEmailEntry = { globalRecordId: string; projectId: string }
 
+function projectIdsForRecord(
+  partnerEmailMap: Map<string, PartnerEmailEntry[]>,
+  globalRecordId: string,
+): string[] {
+  const ids = new Set<string>()
+  for (const entries of partnerEmailMap.values()) {
+    for (const entry of entries) {
+      if (entry.globalRecordId === globalRecordId && entry.projectId) {
+        ids.add(entry.projectId)
+      }
+    }
+  }
+  return [...ids]
+}
+
 function addToMap(
   map: Map<string, PartnerEmailEntry[]>,
   email: string,
@@ -379,12 +395,15 @@ async function processMessage(
 
   const matchedEntries: PartnerEmailEntry[] = []
   const seenRecords = new Set<string>()
+  const matchedViaKnown = new Set<string>()
+  const newlyDiscovered = new Map<string, string>()
   const normalizedUserEmail = userEmail.toLowerCase()
 
   for (const addr of allAddresses) {
     const entries = partnerEmailMap.get(addr)
     if (entries) {
       for (const entry of entries) {
+        matchedViaKnown.add(entry.globalRecordId)
         if (!seenRecords.has(entry.globalRecordId)) {
           seenRecords.add(entry.globalRecordId)
           matchedEntries.push(entry)
@@ -397,23 +416,26 @@ async function processMessage(
       if (domain) {
         for (const [globalRecordId, ctx] of domainCtx.entries()) {
           if (ctx.autoIncludeDomain && ctx.domains.has(domain) && !ctx.blacklistedEmails.has(addr)) {
+            const projectIds = projectIdsForRecord(partnerEmailMap, globalRecordId)
+            const primaryProjectId = projectIds[0] ?? ctx.projectId
             if (!seenRecords.has(globalRecordId)) {
               seenRecords.add(globalRecordId)
-              matchedEntries.push({ globalRecordId, projectId: ctx.projectId })
+              matchedEntries.push({ globalRecordId, projectId: primaryProjectId })
             }
             if (!ctx.knownEmails.has(addr)) {
-              prisma.partnerContact.create({
-                data: {
-                  globalRecordId,
-                  address: addr,
-                  label: 'Auto-added (domain match)'
+              // ponytail: multi-project partners get additionalAddresses on every assigned project;
+              // matchedEntries still picks one primaryProjectId per message (pre-existing ceiling).
+              const targets = projectIds.length ? projectIds : (ctx.projectId ? [ctx.projectId] : [])
+              for (const projectId of targets) {
+                await appendProjectAdditionalAddress(projectId, globalRecordId, addr)
+                newlyDiscovered.set(`${globalRecordId}:${projectId}`, addr)
+                const existingMap = partnerEmailMap.get(addr) ?? []
+                if (!existingMap.some(e => e.globalRecordId === globalRecordId && e.projectId === projectId)) {
+                  existingMap.push({ globalRecordId, projectId })
                 }
-              }).catch(() => {})
+                partnerEmailMap.set(addr, existingMap)
+              }
               ctx.knownEmails.add(addr)
-              
-              const existingMap = partnerEmailMap.get(addr) ?? []
-              existingMap.push({ globalRecordId, projectId: ctx.projectId })
-              partnerEmailMap.set(addr, existingMap)
             }
           }
         }
@@ -439,6 +461,9 @@ async function processMessage(
 
   let created = 0
   for (const entry of matchedEntries) {
+    const unknownAddr = matchedViaKnown.has(entry.globalRecordId)
+      ? null
+      : (newlyDiscovered.get(`${entry.globalRecordId}:${entry.projectId}`) ?? null)
     try {
       await prisma.interaction.create({
         data: {
@@ -453,7 +478,8 @@ async function processMessage(
           gmailId: msg.id,
           content: htmlBody,
           createdBy: userId,
-          isUnknownContact: false,
+          isUnknownContact: !!unknownAddr,
+          unknownContactAddress: unknownAddr,
         },
       })
       created++

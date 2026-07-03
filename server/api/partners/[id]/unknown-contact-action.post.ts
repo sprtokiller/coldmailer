@@ -2,6 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveProjectId } from '~/server/utils/activeProject'
 import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
+import { removeProjectAdditionalAddress } from '~/server/utils/project-additional-addresses'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -30,6 +31,9 @@ export default defineEventHandler(async (event) => {
         unknownContactAddress: email,
       },
     })
+    if (projectId) {
+      await removeProjectAdditionalAddress(projectId, globalRecordId, email)
+    }
     return { ok: true }
   }
 
@@ -43,6 +47,8 @@ export default defineEventHandler(async (event) => {
     })
 
     if (projectId) {
+      await removeProjectAdditionalAddress(projectId, globalRecordId, email)
+
       const projRecord = await prisma.projectRecord.findUnique({
         where: { projectId_globalRecordId: { globalRecordId, projectId } },
         select: { contactBlacklist: true },
@@ -82,6 +88,10 @@ export default defineEventHandler(async (event) => {
         contactType: body.contactType || undefined,
       },
     })
+
+    if (projectId) {
+      await removeProjectAdditionalAddress(projectId, globalRecordId, email)
+    }
 
     await prisma.interaction.updateMany({
       where: {

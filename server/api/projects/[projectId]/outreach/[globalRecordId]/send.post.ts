@@ -10,6 +10,7 @@ import { requireProjectAccess } from '~/server/utils/permissions'
 import { getProjectPermissions } from '~/server/utils/projectPermissions'
 import { sendGmailMessage, refreshAccessToken } from '~/server/utils/google'
 import { scheduleOutreachSend } from '~/server/utils/outreach-scheduler'
+import { trackCustomRecipientAddress } from '~/server/utils/project-additional-addresses'
 
 const GRACE_PERIOD_MS = 20_000
 const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
@@ -98,32 +99,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // If the recipient is not a known global contact, track it as a project-level additional address
-    const normalizedTo = body.toAddress.toLowerCase()
-    const existingContact = await prisma.partnerContact.findUnique({
-      where: { globalRecordId_address: { globalRecordId, address: normalizedTo } },
-      select: { id: true },
-    })
-    if (!existingContact) {
-      const projRec = await prisma.projectRecord.findUnique({
-        where: { projectId_globalRecordId: { projectId, globalRecordId } },
-        select: { contactBlacklist: true, additionalAddresses: true },
-      })
-      const blacklisted = Array.isArray(projRec?.contactBlacklist)
-        ? (projRec.contactBlacklist as string[]).includes(normalizedTo)
-        : false
-      if (!blacklisted) {
-        const current = Array.isArray(projRec?.additionalAddresses)
-          ? (projRec.additionalAddresses as string[])
-          : []
-        if (!current.includes(normalizedTo)) {
-          await prisma.projectRecord.upsert({
-            where: { projectId_globalRecordId: { projectId, globalRecordId } },
-            create: { projectId, globalRecordId, additionalAddresses: [normalizedTo] },
-            update: { additionalAddresses: [...current, normalizedTo] },
-          }).catch(() => {})
-        }
-      }
-    }
+    await trackCustomRecipientAddress(projectId, globalRecordId, body.toAddress)
 
     // Create Interaction record
     await prisma.interaction.create({
