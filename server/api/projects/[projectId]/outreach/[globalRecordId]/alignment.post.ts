@@ -13,7 +13,7 @@ import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
-import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt, MODELS } from '~/config/pipeline'
 
 interface AlignmentBody {
   systemPromptId?: string
@@ -94,6 +94,12 @@ export default defineEventHandler(async (event) => {
     'X-Accel-Buffering': 'no',
   })
 
+  const abortController = new AbortController()
+  let finished = false
+  event.node.req.on('close', () => {
+    if (!finished) abortController.abort(new Error('Přerušeno klientem'))
+  })
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     start(controller) {
@@ -102,14 +108,15 @@ export default defineEventHandler(async (event) => {
       const execute = async () => {
         try {
           let output = ''
-          const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, contextParts: allContextParts, userMessage: userMsg })
+          const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, contextParts: allContextParts, userMessage: userMsg }, undefined, abortController.signal)
           for await (const chunk of aiStream) {
             output += chunk
             write({ chunk })
           }
+          finished = true
           try {
             const costUsd = await getCost()
-            await trackAIUsage({ userId: user.id, model: 'anthropic/claude-sonnet-4.6', costUsd, stepType: STEP })
+            await trackAIUsage({ userId: user.id, model: MODELS.CLAUDE_SONNET, costUsd, stepType: STEP })
           } catch { /* non-fatal */ }
 
           const parsed = parseAIOutput(output)

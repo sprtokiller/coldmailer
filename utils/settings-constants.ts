@@ -59,6 +59,7 @@ export const RESET_PERIOD_LABELS: Record<BudgetResetPeriod, string> = {
 export const MODEL_LABELS: Record<string, string> = {
   'anthropic/claude-sonnet-4-5': 'Claude Sonnet',
   'anthropic/claude-sonnet-4.6': 'Claude Sonnet 4.6',
+  'anthropic/claude-sonnet-5': 'Claude Sonnet 5',
   'openai/o4-mini': 'o4-mini',
   'openai/gpt-4o': 'GPT-4o',
   'pipeline/partner-identification': 'Partner Identification',

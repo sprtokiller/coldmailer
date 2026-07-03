@@ -72,7 +72,42 @@ function toggleProjectRole(id: string) {
   else selectedProjectRoleIds.value.add(id)
 }
 
-onMounted(() => { fetchEmailSyncDays(); fetchDefaultRoles() })
+type ReasoningStepType = 'VALUE_ALIGNMENT' | 'OUTREACH_PREPARATION'
+type ReasoningEffort = 'auto' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+const REASONING_EFFORT_LEVELS: ReasoningEffort[] = ['auto', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+const REASONING_STEP_LABELS: Record<ReasoningStepType, string> = {
+  VALUE_ALIGNMENT: 'Value Alignment',
+  OUTREACH_PREPARATION: 'Outreach Preparation (e-mail)',
+}
+
+const reasoningEffort = ref<Record<ReasoningStepType, ReasoningEffort>>({
+  VALUE_ALIGNMENT: 'auto',
+  OUTREACH_PREPARATION: 'auto',
+})
+const reasoningEffortSaving = ref(false)
+
+async function fetchReasoningEffort() {
+  try {
+    const data = await $fetch<{ effort: Record<ReasoningStepType, ReasoningEffort> }>('/api/settings/reasoning-effort')
+    reasoningEffort.value = data.effort
+  } catch {}
+}
+
+async function saveReasoningEffort() {
+  reasoningEffortSaving.value = true
+  try {
+    const data = await $fetch<{ effort: Record<ReasoningStepType, ReasoningEffort> }>('/api/settings/reasoning-effort', {
+      method: 'PUT',
+      body: { effort: reasoningEffort.value },
+    })
+    reasoningEffort.value = data.effort
+  } finally {
+    reasoningEffortSaving.value = false
+  }
+}
+
+onMounted(() => { fetchEmailSyncDays(); fetchDefaultRoles(); fetchReasoningEffort() })
 </script>
 
 <template>
@@ -98,6 +133,30 @@ onMounted(() => { fetchEmailSyncDays(); fetchDefaultRoles() })
             class="px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 disabled:opacity-40 transition-colors"
           >{{ emailSyncSaving ? 'Ukládám...' : 'Uložit' }}</button>
         </form>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100">
+        <h2 class="text-base font-semibold text-gray-800">Reasoning effort AI generování</h2>
+        <p class="text-sm text-gray-400 mt-1">Hloubka uvažování modelu (Claude Sonnet) pro jednotlivé případy užití. „Auto" nechá rozhodnutí na modelu (adaptivní thinking).</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div v-for="stepType in (Object.keys(REASONING_STEP_LABELS) as ReasoningStepType[])" :key="stepType" class="flex items-center justify-between gap-4">
+          <span class="text-sm text-gray-700">{{ REASONING_STEP_LABELS[stepType] }}</span>
+          <select
+            v-model="reasoningEffort[stepType]"
+            class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          >
+            <option v-for="level in REASONING_EFFORT_LEVELS" :key="level" :value="level">{{ level }}</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          :disabled="reasoningEffortSaving"
+          class="px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 disabled:opacity-40 transition-colors"
+          @click="saveReasoningEffort"
+        >{{ reasoningEffortSaving ? 'Ukládám...' : 'Uložit' }}</button>
       </div>
     </div>
 

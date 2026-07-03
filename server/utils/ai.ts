@@ -1,6 +1,16 @@
 ﻿import OpenAI from 'openai'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
-import { OPENROUTER, MODELS } from '~/config/pipeline'
+import { OPENROUTER, MODELS, REASONING_STEP_TYPES, DEFAULT_REASONING_EFFORT, type ReasoningEffort, type ReasoningStepType } from '~/config/pipeline'
+import { prisma } from '~/server/utils/prisma'
+
+const REASONING_EFFORT_CONFIG_KEY = 'ai.reasoningEffort'
+
+async function getReasoningEffort(stepType: string): Promise<ReasoningEffort> {
+  if (!(REASONING_STEP_TYPES as readonly string[]).includes(stepType)) return 'auto'
+  const row = await prisma.systemConfig.findUnique({ where: { key: REASONING_EFFORT_CONFIG_KEY } })
+  const overrides = (row?.value as Partial<Record<ReasoningStepType, ReasoningEffort>>) ?? {}
+  return overrides[stepType as ReasoningStepType] ?? DEFAULT_REASONING_EFFORT[stepType as ReasoningStepType]
+}
 
 function createClient(): OpenAI {
   const config = useRuntimeConfig()
@@ -34,20 +44,6 @@ export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, exte
     ? `\n\n<context>\n${input.contextParts.join('\n\n')}\n</context>`
     : ''
 
-  const params = {
-    model,
-    stream: true as const,
-    messages: [
-      { role: 'system' as const, content: input.systemPrompt + contextBlock },
-      { role: 'user' as const, content: input.userMessage },
-    ],
-    // Enable adaptive reasoning for Claude Sonnet 4.6.
-    // OpenRouter forwards provider-specific keys; not in OpenAI spec so cast needed.
-    ...(model.startsWith('anthropic/')
-      ? ({ reasoning: { enabled: true, effort: 'high' } } as object)
-      : {}),
-  }
-
   let capturedGenerationId: string | null = null
 
   const abortController = new AbortController()
@@ -66,6 +62,22 @@ export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, exte
 
   async function* generator(): AsyncGenerator<string> {
     try {
+      const effort = await getReasoningEffort(input.stepType)
+      const params = {
+        model,
+        stream: true as const,
+        messages: [
+          { role: 'system' as const, content: input.systemPrompt + contextBlock },
+          { role: 'user' as const, content: input.userMessage },
+        ],
+        // OpenRouter forwards provider-specific keys; not in OpenAI spec so cast needed.
+        // effort 'auto' omits the field entirely, letting the model's own default
+        // (adaptive thinking on Claude Sonnet 5) apply instead of forcing a level.
+        ...(model.startsWith('anthropic/') && effort !== 'auto'
+          ? ({ reasoning: { enabled: true, effort } } as object)
+          : {}),
+      }
+
       const stream = await client.chat.completions.create(
         { ...params, signal: abortController.signal } as Parameters<typeof client.chat.completions.create>[0],
       ) as AsyncIterable<ChatCompletionChunk>

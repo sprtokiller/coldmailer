@@ -15,9 +15,24 @@ export const OPENROUTER = {
 
 // ── Model identifiers ─────────────────────────────────────────────────────────
 export const MODELS = {
-  CLAUDE_SONNET: 'anthropic/claude-sonnet-4.6',
+  CLAUDE_SONNET: 'anthropic/claude-sonnet-5',
   CLAUDE_HAIKU:  'anthropic/claude-haiku-4.5',
 } as const
+
+// ── Reasoning effort (OpenRouter `reasoning.effort`) ──────────────────────────
+// 'auto' is an app-level sentinel (not sent to OpenRouter) meaning: omit the
+// `reasoning` param entirely and let the model's own default thinking behavior apply.
+export const REASONING_EFFORT_LEVELS = ['auto', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+export type ReasoningEffort = typeof REASONING_EFFORT_LEVELS[number]
+
+// Steps whose AI calls go through streamStepAI() and support configurable reasoning effort.
+export const REASONING_STEP_TYPES = ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as const
+export type ReasoningStepType = typeof REASONING_STEP_TYPES[number]
+
+export const DEFAULT_REASONING_EFFORT: Record<ReasoningStepType, ReasoningEffort> = {
+  VALUE_ALIGNMENT: 'auto',
+  OUTREACH_PREPARATION: 'auto',
+}
 
 // ── Group → font mapping (used in outreach email generation) ─────────────────
 export const GROUP_FONTS: Record<string, string> = {

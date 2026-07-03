@@ -1,5 +1,6 @@
 ﻿import { prisma } from '~/server/utils/prisma'
 import type { RecordType } from '@prisma/client'
+import { MODELS } from '~/config/pipeline'
 
 // â”€â”€ Jaro-Winkler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -107,7 +108,7 @@ async function llmAdjudicate(
   }))
 
   const response = await openai.chat.completions.create({
-    model: 'anthropic/claude-haiku-4-5-20251001',
+    model: MODELS.CLAUDE_HAIKU,
     max_tokens: 256,
     messages: [
       {
