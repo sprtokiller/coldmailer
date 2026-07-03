@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { DEFAULT_PROMPT_NAMES, STEP_OUTPUT_SCHEMAS } from '../config/pipeline'
+import { DEFAULT_PROMPT_NAMES, STEP_OUTPUT_SCHEMAS, REASONING_STEP_TYPES } from '../config/pipeline'
 import { readFileSync, readdirSync } from 'fs'
 import { join, basename, extname } from 'path'
 
@@ -41,6 +41,9 @@ async function main() {
   console.log(`Loaded ${Object.keys(prompts).length} prompts from prisma/system-prompts/`)
 
   for (const [stepType, content] of Object.entries(prompts)) {
+    // MARKET_SCANNING/PARTNER_IDENTIFICATION/PARTNER_PROFILING belong to a
+    // retired pipeline — the .txt files stay on disk but are no longer seeded.
+    if (!REASONING_STEP_TYPES.includes(stepType as never)) continue
     const name = DEFAULT_PROMPT_NAMES[stepType] ?? 'Výchozí'
     const outputSchema = STEP_OUTPUT_SCHEMAS[stepType] ?? null
     const existing = await prisma.systemPrompt.findFirst({
@@ -223,23 +226,8 @@ async function seedTdaContent() {
   const tdaGroup = await prisma.group.findUnique({ where: { slug: 'tda' } })
   if (!tdaGroup) { console.log('  ⚠ TdA group not found, skipping TdA content'); return }
 
-  // ── SystemPrompt: MARKET_SCANNING ───────────────────────────────────────
-  const msContent = readTdaFile('Tour de App - MARKET_SCANNING.txt')
-  await prisma.systemPrompt.upsert({
-    where: { id: 'tda-market-scanning-prompt' },
-    create: {
-      id: 'tda-market-scanning-prompt',
-      name: 'Tour de App',
-      content: msContent,
-      stepType: 'MARKET_SCANNING',
-      isSystem: false,
-      authorId: kriz.id,
-      groupId: tdaGroup.id,
-      outputSchema: STEP_OUTPUT_SCHEMAS.MARKET_SCANNING as any,
-    },
-    update: { content: msContent, outputSchema: STEP_OUTPUT_SCHEMAS.MARKET_SCANNING as any },
-  })
-  console.log('  ✓ SystemPrompt: MARKET_SCANNING (TdA)')
+  // Note: MARKET_SCANNING SystemPrompt is no longer seeded — that pipeline
+  // step is retired. 'Tour de App - MARKET_SCANNING.txt' stays on disk.
 
   // ── EmailDraft ────────────────────────────────────────────────────────────
   const emailRaw = readTdaFile('Tour de App - EMAIL_TEMPLATE.txt')
@@ -281,13 +269,12 @@ async function seedTdaContent() {
     { id: 'tda-context-struktura',   file: 'Tour de App - Struktura soutěže.txt',                           name: 'TdA – Struktura soutěže' },
     { id: 'tda-context-technologie', file: 'Tour de App - Technologie, dovednosti a charakter zadání.txt',  name: 'TdA – Technologie, dovednosti a charakter zadání' },
   ]
-  const ALL_STEP_KEYS = ['MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING', 'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION']
   for (const cp of contextFiles) {
     const content = readTdaFile(cp.file)
     await prisma.contextPart.upsert({
       where: { id: cp.id },
-      create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id, stepKeys: ALL_STEP_KEYS },
-      update: { content, stepKeys: ALL_STEP_KEYS },
+      create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id, stepKeys: [...REASONING_STEP_TYPES] },
+      update: { content, stepKeys: [...REASONING_STEP_TYPES] },
     })
     console.log(`  ✓ ContextPart: ${cp.name}`)
   }

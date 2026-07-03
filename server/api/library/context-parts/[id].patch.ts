@@ -2,6 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAdmin, requireResourceScopeAccess } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
+import { REASONING_STEP_TYPES } from '~/config/pipeline'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
     data: {
       name: body.name ?? part.name,
       content: body.content ?? part.content,
-      ...(body.stepKeys !== undefined ? { stepKeys: body.stepKeys } : {}),
+      ...(body.stepKeys !== undefined ? { stepKeys: body.stepKeys.filter(k => REASONING_STEP_TYPES.includes(k as never)) } : {}),
       ...scope,
     },
     include: {

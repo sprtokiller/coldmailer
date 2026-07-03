@@ -2,6 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAdmin, requireResourceScopeAccess } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
+import { REASONING_STEP_TYPES } from '~/config/pipeline'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
@@ -16,6 +17,10 @@ export default defineEventHandler(async (event) => {
 
   const prompt = await prisma.systemPrompt.findUnique({ where: { id } })
   if (!prompt) throw createError({ statusCode: 404, message: 'Prompt not found' })
+
+  if (!REASONING_STEP_TYPES.includes(prompt.stepType as never) || !REASONING_STEP_TYPES.includes(body.stepType as never)) {
+    throw createError({ statusCode: 400, message: 'Tento typ kroku už není podporovaný.' })
+  }
 
   // isSystem prompts require prompts.system.edit
   if (prompt.isSystem) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, REASONING_STEP_TYPES, formatSchemaForPrompt } from '~/config/pipeline'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 definePageMeta({ middleware: 'auth' })
@@ -65,10 +65,10 @@ function safeHtml(html: string): string {
   return sanitizeHtml(html)
 }
 
-const STEP_TYPES = [
-  'MARKET_SCANNING', 'PARTNER_IDENTIFICATION', 'PARTNER_PROFILING',
-  'VALUE_ALIGNMENT', 'OUTREACH_PREPARATION',
-]
+// Only step types with a working pipeline implementation are selectable —
+// MARKET_SCANNING/PARTNER_IDENTIFICATION/PARTNER_PROFILING belong to a
+// retired pipeline and can no longer be created, edited, or assigned.
+const STEP_TYPES: string[] = [...REASONING_STEP_TYPES]
 
 
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
@@ -140,7 +140,7 @@ const editingIsSystem = ref(false)
 const form = ref({
   name: '',
   content: '',
-  stepType: 'MARKET_SCANNING',
+  stepType: 'VALUE_ALIGNMENT',
   stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as string[],
   subject: '',
   body: '',
@@ -155,7 +155,7 @@ function resetForm() {
   form.value = {
     name: '',
     content: '',
-    stepType: 'MARKET_SCANNING',
+    stepType: 'VALUE_ALIGNMENT',
     stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'],
     subject: '',
     body: '',
@@ -179,13 +179,13 @@ onMounted(() => document.addEventListener('click', closeMenus))
 onBeforeUnmount(() => document.removeEventListener('click', closeMenus))
 
 onMounted(() => {
-  if (route.query.action === 'new' && typeof route.query.stepType === 'string') {
+  if (route.query.action === 'new' && typeof route.query.stepType === 'string' && STEP_TYPES.includes(route.query.stepType)) {
     form.value.stepType = route.query.stepType
     showForm.value = true
   }
   if (typeof route.query.editId === 'string') {
     const item = (prompts.value as LibraryItem[]).find(p => p.id === route.query.editId)
-    if (item) {
+    if (item && STEP_TYPES.includes(item.stepType ?? '')) {
       tab.value = 'prompts'
       startEdit(item)
     }
@@ -199,8 +199,9 @@ function startEdit(item: LibraryItem) {
   form.value.content = item.content ?? ''
   form.value.subject = (item as LibraryItem & { subject?: string }).subject ?? ''
   form.value.body = (item as LibraryItem & { body?: string }).body ?? ''
-  form.value.stepType = item.stepType ?? 'MARKET_SCANNING'
-  form.value.stepKeys = item.stepKeys?.length ? [...item.stepKeys] : ['VALUE_ALIGNMENT']
+  form.value.stepType = item.stepType ?? 'VALUE_ALIGNMENT'
+  const liveStepKeys = item.stepKeys?.filter(k => STEP_TYPES.includes(k)) ?? []
+  form.value.stepKeys = liveStepKeys.length ? liveStepKeys : ['VALUE_ALIGNMENT']
   form.value.signatureContent = item.content ?? ''
   form.value.signatureGroupId = (item as unknown as SignatureItem).groupId ?? ''
   form.value.scope = item.projectId
@@ -335,6 +336,7 @@ const allItems = computed(() => {
 const currentItems = computed(() => {
   return allItems.value
     .filter((item) => {
+      if (tab.value === 'prompts' && !STEP_TYPES.includes(item.stepType ?? '')) return false
       if (filterType.value && item.stepType !== filterType.value) return false
       const authorName = item.author?.name ?? ''
       if (filterAuthor.value && authorName !== filterAuthor.value) return false
