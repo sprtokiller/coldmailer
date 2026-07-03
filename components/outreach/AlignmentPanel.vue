@@ -11,11 +11,11 @@ const alignment = computed(() => {
 
 const alignmentOutput = computed(() => alignment.value?.outputData as Record<string, unknown> | null ?? null)
 
-const top3 = computed(() => {
+const topArguments = computed(() => {
   const a = alignmentOutput.value
   if (!a) return []
-  const t = a.top3Arguments
-  if (Array.isArray(t)) return t as Array<{ argumentId?: string; argumentLabel?: string; whyItFits?: string; rank?: number }>
+  const t = a.topArguments
+  if (Array.isArray(t)) return (t as Array<{ argumentId?: string; argumentLabel?: string; whyItFits?: string; rank?: number }>).filter(arg => Boolean(arg?.argumentId))
   return []
 })
 
@@ -197,10 +197,10 @@ function relTime(iso: string | null | undefined): string {
           <p class="result-card__body">{{ snapshot }}</p>
         </div>
 
-        <!-- Top 3 arguments -->
-        <div v-if="top3.length" class="result-section">
+        <!-- Top arguments -->
+        <div v-if="topArguments.length" class="result-section">
           <p class="result-section__title">Top argumenty</p>
-          <div v-for="arg in top3" :key="String(arg.argumentId)" class="result-card result-card--violet">
+          <div v-for="arg in topArguments" :key="String(arg.argumentId)" class="result-card result-card--violet">
             <div class="result-card__header">
               <span class="result-card__name">{{ arg.argumentLabel || arg.argumentId }}</span>
               <span v-if="arg.rank" class="result-card__rank">#{{ arg.rank }}</span>

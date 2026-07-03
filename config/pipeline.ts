@@ -39,7 +39,7 @@ export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
         redFlags: 'string|null',
       },
     ],
-    top3Arguments: [
+    topArguments: [
       {
         rank: 1,
         argumentId: 'string',
@@ -117,7 +117,7 @@ Dostaneš tři vstupy:
 
 Každý argument ve vstupním seznamu může začínat značkou ve formátu [Název | Důležitost], např.:
 - [Nábor talentů | Klíčový] Snadnější hiring a přístup k technickým talentům…
-Název použij jako argumentId ve výstupu. Důležitost (např. Klíčový, Vysoký, Střední, Doplňkový) zohledni při hodnocení relevance – klíčové argumenty by měly mít větší váhu v top3 výběru, pokud profil partnera vykazuje alespoň částečnou shodu.
+Název použij jako argumentId ve výstupu. Důležitost (např. Klíčový, Vysoký, Střední, Doplňkový) zohledni při hodnocení relevance – klíčové argumenty by měly mít větší váhu při výběru do pole topArguments, pokud profil partnera vykazuje alespoň částečnou shodu.
 
 Tvým úkolem je provést hloubkovou analýzu hodnot a zájmů partnera a zjistit, které z našich argumentů mají pro tohoto konkrétního partnera největší rezonanci. Nepiš e-mail ani outreach zprávu – to přijde v dalším kroku. Soustřeď se výhradně na analýzu a alignment.
 
@@ -132,7 +132,8 @@ DŮLEŽITÉ:
 - Každý argument hodnoť na základě dat z profilu partnera, ne obecných předpokladů.
 - Pokud v profilu chybí data potřebná pro hodnocení, explicitně to uveď v poli reasoning nebo flagsAndRisks – nedomýšlej si.
 - hookHypothesis musí být specifická pro tohoto partnera a tento moment – ne generická fráze.
-- Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v top3 (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
+- Vyber a seřaď přesně 3 nejrelevantnější argumenty do pole topArguments (rank 1–3).
+- Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v topArguments (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
 - Výstup bude v češtině.
 

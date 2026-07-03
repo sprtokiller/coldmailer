@@ -87,7 +87,19 @@ export default defineEventHandler(async (event) => {
     ? ['E-mailová šablona (respektuj tento formát, styl a délku):', `Předmět: ${emailDraft.subject}`, `Tělo:\n${emailDraft.body}`].join('\n')
     : ''
 
-  const partnerData = alignment.outputData as Record<string, unknown>
+  const rawPartnerData = alignment.outputData as Record<string, unknown>
+  const selectedIds = new Set(body.selectedArgumentIds ?? [])
+  const partnerData: Record<string, unknown> = selectedIds.size === 0
+    ? rawPartnerData
+    : {
+        ...rawPartnerData,
+        ...(Array.isArray(rawPartnerData.topArguments)
+          ? { topArguments: (rawPartnerData.topArguments as Array<Record<string, unknown>>).filter(a => selectedIds.has(String(a.argumentId))) }
+          : {}),
+        ...(Array.isArray(rawPartnerData.argumentAlignment)
+          ? { argumentAlignment: (rawPartnerData.argumentAlignment as Array<Record<string, unknown>>).filter(a => selectedIds.has(String(a.argumentId))) }
+          : {}),
+      }
   const partnerDataBlock = '```json\n' + JSON.stringify(partnerData, null, 2) + '\n```'
   const fontFamily = GROUP_FONTS[project.group?.slug ?? ''] ?? ''
 
@@ -102,10 +114,15 @@ export default defineEventHandler(async (event) => {
     ? `Adresát: ${[contactInfo.firstName, contactInfo.lastName].filter(Boolean).join(' ')}${contactInfo.role ? ' (' + contactInfo.role + ')' : ''}, e-mail: ${contactInfo.address}`
     : null
 
+  const selectedArgsLine = body.selectedArgumentIds?.length
+    ? `Použij výhradně tyto prodejní argumenty (podle argumentId): ${body.selectedArgumentIds.join(', ')}.`
+    : null
+
   const userMsg = [
     'Vytvoř personalizovaný cold e-mail pro tohoto partnera dle systémového promptu.',
     contactLine,
     fontFamily ? `Font pro HTML formátování: ${fontFamily}` : null,
+    selectedArgsLine,
   ].filter(Boolean).join('\n')
 
   setResponseHeaders(event, {

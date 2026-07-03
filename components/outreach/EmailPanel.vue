@@ -28,10 +28,11 @@ const alignment = computed(() => {
 const contacts = computed(() => ctx.selectedPartner.value?.contacts ?? [])
 const selectedContact = computed(() => contacts.value[selectedContactIdx.value ?? 0] ?? null)
 
-const top3 = computed(() => {
+const topArguments = computed(() => {
   const a = alignment.value
   if (!a) return []
-  return (Array.isArray(a.top3Arguments) ? a.top3Arguments : []) as Array<{ argumentId?: string; argumentLabel?: string; whyItFits?: string; rank?: number }>
+  const t = Array.isArray(a.topArguments) ? a.topArguments : []
+  return (t as Array<{ argumentId?: string; argumentLabel?: string; whyItFits?: string; rank?: number }>).filter(arg => Boolean(arg?.argumentId))
 })
 
 const opPrompts = computed(() => ctx.promptsForStep('OUTREACH_PREPARATION'))
@@ -80,7 +81,13 @@ watch(() => ctx.partnerDetail.value, (detail) => {
   emailTo.value = String(d?.toAddress ?? selectedContact.value?.address ?? '')
   emailSubject.value = String(d?.subject ?? '')
   emailBody.value = String(d?.body ?? '')
-  selectedArgumentIds.value = new Set()
+
+  const availableIds = new Set(topArguments.value.map(a => String(a.argumentId ?? '')).filter(id => id && id !== 'undefined'))
+  const savedConfig = d?.config as Record<string, unknown> | undefined
+  const savedIds = Array.isArray(savedConfig?.selectedArgumentIds) ? savedConfig.selectedArgumentIds.map(String) : []
+  const restored = savedIds.filter(id => availableIds.has(id))
+  selectedArgumentIds.value = new Set(restored.length > 0 ? restored : availableIds)
+
   const hasContent = !!emailBody.value.trim()
   configCollapsed.value = hasContent
   recsCollapsed.value = !hasContent
@@ -194,7 +201,12 @@ async function doSend() {
 
 function toggleArgument(id: string) {
   const s = new Set(selectedArgumentIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
+  if (s.has(id)) {
+    if (s.size <= 1) return
+    s.delete(id)
+  } else {
+    s.add(id)
+  }
   selectedArgumentIds.value = s
 }
 
@@ -294,16 +306,17 @@ function relTime(iso: string | null | undefined) {
           </div>
 
           <!-- Row 3: arguments -->
-          <div v-if="top3.length" class="field-group">
+          <div v-if="topArguments.length" class="field-group">
             <label class="field-label">Argumenty pro e-mail</label>
             <div class="arg-chips">
               <button
-                v-for="arg in top3"
+                v-for="arg in topArguments"
                 :key="String(arg.argumentId)"
                 type="button"
                 class="arg-chip"
                 :class="{ 'arg-chip--active': selectedArgumentIds.has(String(arg.argumentId)) }"
                 :disabled="isExecutingHere"
+                :title="selectedArgumentIds.size === 1 && selectedArgumentIds.has(String(arg.argumentId)) ? 'Musí zůstat vybrán alespoň jeden argument' : undefined"
                 @click="toggleArgument(String(arg.argumentId))"
               >
                 {{ arg.argumentLabel || arg.argumentId }}
