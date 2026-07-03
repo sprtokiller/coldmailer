@@ -115,6 +115,26 @@ export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
   },
 }
 
+// ── Required placeholders per step (SCHEMA is implicit, added when a schema exists) ──
+export const REQUIRED_PLACEHOLDERS: Partial<Record<string, string[]>> = {
+  VALUE_ALIGNMENT:      ['<[[CONTEXT]]>', '<[[ARGUMENTS]]>'],
+  OUTREACH_PREPARATION: ['<[[DATA]]>', '<[[ARGUMENTS]]>', '<[[CONTEXT]]>', '<[[TEMPLATE]]>', '<[[USER]]>'],
+}
+
+export function getMissingPlaceholders(stepType: string, content: string): string[] {
+  const required = [...(REQUIRED_PLACEHOLDERS[stepType] ?? [])]
+  if (STEP_OUTPUT_SCHEMAS[stepType]) required.push('<[[SCHEMA]]>')
+  return required.filter(p => !content.includes(p))
+}
+
+// Substitutes every <[[KEY]]> token found in the ORIGINAL template in a single pass, so inserted
+// values are never re-scanned for further placeholder matches (unlike chained .replace() calls).
+const PLACEHOLDER_TOKEN_RE = /<\[\[([A-Z_]+)\]\]>/g
+
+export function renderPromptTemplate(template: string, values: Partial<Record<string, string>>): string {
+  return template.replace(PLACEHOLDER_TOKEN_RE, (match, key: string) => values[key] ?? match)
+}
+
 // ── Default system-prompt display names (used by prisma/seed.ts) ──────────────
 export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
   VALUE_ALIGNMENT:      'Výchozí',
@@ -134,6 +154,16 @@ Každý argument ve vstupním seznamu může začínat značkou ve formátu [Ná
 - [Nábor talentů | Klíčový] Snadnější hiring a přístup k technickým talentům…
 Název použij jako argumentId ve výstupu. Důležitost (např. Klíčový, Vysoký, Střední, Doplňkový) zohledni při hodnocení relevance – klíčové argumenty by měly mít větší váhu při výběru do pole topArguments, pokud profil partnera vykazuje alespoň částečnou shodu.
 
+## VSTUPNÍ DATA
+
+Prodejní argumenty, které můžeme partnerovi nabídnout:
+
+<[[ARGUMENTS]]>
+
+Doplňující kontext organizace:
+
+<[[CONTEXT]]>
+
 Tvým úkolem je provést hloubkovou analýzu hodnot a zájmů partnera a zjistit, které z našich argumentů mají pro tohoto konkrétního partnera největší rezonanci. Nepiš e-mail ani outreach zprávu – to přijde v dalším kroku. Soustřeď se výhradně na analýzu a alignment.
 
 Při hodnocení ber v potaz:
@@ -152,9 +182,6 @@ DŮLEŽITÉ:
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
 - Výstup bude v češtině.
 
-## VSTUPNÍ DATA
-<[[DATA]]>
-
 ## VÝSTUP
 
 Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
@@ -168,6 +195,10 @@ Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
 Odesílatel (jméno osoby, která e-mail odesílá):
 
 <[[USER]]>
+
+Prodejní argumenty, které můžeme partnerovi nabídnout:
+
+<[[ARGUMENTS]]>
 
 <[[CONTEXT]]>
 

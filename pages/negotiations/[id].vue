@@ -309,8 +309,9 @@ async function toggleEmailDisplayMode() {
 
 function stripHtml(html: string): string {
   if (!html) return ''
-  if (typeof DOMParser === 'undefined') return html.replace(/<[^>]*>/g, '')
-  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const withBreaks = html.replace(/<br\s*\/?>/gi, '\n')
+  if (typeof DOMParser === 'undefined') return withBreaks.replace(/<[^>]*>/g, '')
+  const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
   return doc.body.textContent ?? ''
 }
 
@@ -985,6 +986,11 @@ const TYPE_COLORS: Record<string, string> = {
             <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">smazat</button>
           </div>
         </div>
+
+        <!-- Email recipients -->
+        <p v-if="i.type === 'EMAIL' && i.toAddress" class="text-[11px] text-gray-400 truncate mb-1" :title="i.toAddress">
+          Komu: <span class="text-gray-500">{{ i.toAddress }}</span>
+        </p>
 
         <!-- Email subject -->
         <p v-if="i.type === 'EMAIL' && i.subject" class="text-sm font-medium text-gray-800 mb-1">{{ i.subject }}</p>

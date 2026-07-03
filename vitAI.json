@@ -1,0 +1,85 @@
+{
+  "name": "VitAI s.r.o.",
+  "website": "https://www.vitakriz.cz/",
+  "linkedinUrl": null,
+  "instagramUrl": null,
+  "industry": "AI služby, vzdělávací technologie a IT poradenství",
+  "size": "micro",
+  "sizeNote": "VitAI s.r.o. je jednočlenná AI firma vedená zakladatelem a CEO Vítězslavem Křížem. Velikost proto spadá do kategorie micro / 1 zaměstnanec.",
+  "parentCompany": null,
+  "summary": "VitAI s.r.o. je česká AI firma zaměřená na praktické využití umělé inteligence ve vzdělávání, neziskových projektech a menších organizacích. Firma funguje jako flexibilní jednočlenné studio, které propojuje AI, automatizaci, vývoj jednoduchých webových nástrojů a metodickou podporu vzdělávacích akcí. Profiluje se jako dostupný partner pro školy, hackathony, soutěže, workshopy a komunitní iniciativy, kterým pomáhá s návrhem aktivit, tvorbou výukových materiálů, technickým zajištěním a zapojením moderních AI nástrojů do praxe.",
+  "activities": "Firma pomáhá s návrhem a realizací vzdělávacích akcí, zejména v oblastech AI gramotnosti, digitálních dovedností, programování, webového vývoje a projektového vzdělávání. Mezi typické aktivity patří příprava workshopů pro středoškoláky, tvorba zadání pro hackathony a studentské soutěže, konzultace k využití AI ve výuce, návrh jednoduchých prototypů a automatizačních nástrojů, metodická podpora učitelů a tvorba praktických výukových materiálů. VitAI s.r.o. se zapojuje také do akcí, kde je potřeba propojit technické know-how s přístupným vysvětlením pro začátečníky.",
+  "recentHighlights": [
+    "15.06.2026: firma pomohla připravit workshop „AI jako parťák při tvorbě webové aplikace“ pro středoškolské týmy pracující na vlastních projektech.",
+    "28.05.2026: VitAI s.r.o. navrhla sérii praktických úloh pro vzdělávací hackathon zaměřený na využití AI v každodenním životě studentů.",
+    "12.04.2026: firma podpořila komunitní akci pro učitele informatiky krátkým metodickým blokem o bezpečném používání generativní AI ve výuce.",
+    "03.03.2026: VitAI s.r.o. připravila ukázkový AI chatbot pro orientaci účastníků na studentské soutěži a automatické odpovídání na časté dotazy.",
+    "20.01.2026: firma vytvořila sadu pracovních listů pro začátečníky na téma promptování, ověřování informací a kritické práce s AI výstupy."
+  ],
+  "contacts": [
+    {
+      "firstName": "Vítězslav",
+      "lastName": "Kříž",
+      "role": "CEO",
+      "email": "jsem@vitakriz.cz",
+      "linkedin": null,
+      "alternativeContact": null,
+      "type": "CEO",
+      "priority": 1,
+      "confidence": "High",
+      "source": "Interní partnerský profil",
+      "sourceDate": "2026-07-03",
+      "note": "Hlavní rozhodovací kontakt pro partnerství, vzdělávací akce, AI workshopy, technické konzultace a individuální spolupráci."
+    },
+    {
+      "firstName": null,
+      "lastName": null,
+      "role": "Obecný kontakt",
+      "email": "info@vitakriz.cz",
+      "linkedin": null,
+      "alternativeContact": null,
+      "type": "General",
+      "priority": 2,
+      "confidence": "High",
+      "source": "Interní partnerský profil",
+      "sourceDate": "2026-07-03",
+      "note": "Obecný kontakt vhodný jako fallback pro první oslovení, administrativu, domluvu termínů nebo přeposlání nabídky spolupráce."
+    }
+  ],
+  "partnershipStyle": [
+    "AI workshop pro studenty nebo učitele",
+    "metodická podpora vzdělávací akce",
+    "tvorba hackathonového nebo soutěžního zadání",
+    "technický mentor pro studentské týmy",
+    "konzultant pro praktické využití AI ve škole",
+    "barterová spolupráce formou know-how, workshopu nebo prototypu"
+  ],
+  "partnershipEvidence": [
+    {
+      "event": "AI Starter Workshop pro střední školy",
+      "role": "návrh obsahu, vedení praktické části a příprava ukázek práce s generativní AI",
+      "year": "2026",
+      "source": "Interní partnerský profil"
+    },
+    {
+      "event": "Studentský hackathon „AI pro lepší školu“",
+      "role": "autor zadání, mentor týmů a konzultant k návrhu prototypů",
+      "year": "2026",
+      "source": "Interní partnerský profil"
+    },
+    {
+      "event": "Den digitálních dovedností",
+      "role": "krátká přednáška o AI nástrojích, kritickém ověřování výstupů a bezpečném používání chatbotů",
+      "year": "2025",
+      "source": "Interní partnerský profil"
+    },
+    {
+      "event": "Webový mini-hackathon pro začátečníky",
+      "role": "technická podpora, příprava šablon a pomoc týmům s jednoduchými webovými aplikacemi",
+      "year": "2025",
+      "source": "Interní partnerský profil"
+    }
+  ],
+  "socialInvolvement": "VitAI s.r.o. je malá, osobně vedená firma, která podporuje vzdělávací a komunitní akce, zejména pokud pomáhají mladým lidem lépe porozumět technologiím. Typická forma zapojení není velký finanční sponzoring, ale praktická pomoc: workshop, mentoring, tvorba zadání, konzultace, metodická příprava nebo rychlý technický prototyp. Firma má přirozenou vazbu na akce pro studenty, učitele, začínající programátory a organizátory vzdělávacích soutěží.",
+  "researchNotes": "Profil byl vytvořen jako interní partnerský podklad pro oslovení a vyhodnocení potenciální spolupráce. Web je veden jako https://www.vitakriz.cz/. Kontakty byly doplněny podle dostupných údajů: CEO Vítězslav Kříž na e-mailu jsem@vitakriz.cz a obecný kontakt info@vitakriz.cz. Charakter firmy, aktivity, příklady akcí a partnerství jsou formulovány tak, aby odpovídaly malé AI firmě zaměřené na podporu vzdělávacích aktivit."
+}

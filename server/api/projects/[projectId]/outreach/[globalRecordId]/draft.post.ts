@@ -13,7 +13,7 @@ import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
-import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, GROUP_FONTS, formatSchemaForPrompt, MODELS } from '~/config/pipeline'
+import { STEP_OUTPUT_SCHEMAS, GROUP_FONTS, formatSchemaForPrompt, getMissingPlaceholders, renderPromptTemplate, MODELS } from '~/config/pipeline'
 
 interface DraftBody {
   systemPromptId?: string
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
       ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds }, ...scopeFilter } })
       : Promise.resolve([]),
     body.systemPromptId
-      ? prisma.systemPrompt.findFirst({ where: { id: body.systemPromptId, OR: [{ isSystem: true }, scopeFilter] } })
+      ? prisma.systemPrompt.findFirst({ where: { id: body.systemPromptId, stepType: STEP as never, OR: [{ isSystem: true }, scopeFilter] } })
       : Promise.resolve(null),
     prisma.systemPrompt.findFirst({ where: { stepType: STEP as never, isSystem: true }, orderBy: { createdAt: 'desc' } }),
     body.emailDraftId
@@ -73,15 +73,21 @@ export default defineEventHandler(async (event) => {
       : Promise.resolve(null),
   ])
 
-  const rawPromptText = customPrompt?.content ?? dbSystemPrompt?.content ?? STEP_SYSTEM_PROMPTS[STEP] ?? 'You are a helpful assistant.'
+  const rawPromptText = customPrompt?.content ?? dbSystemPrompt?.content
+  if (!rawPromptText) {
+    throw createError({ statusCode: 500, message: `Chybí systémový prompt pro krok ${STEP} (databáze není nasazená, spusťte "bun run db:seed").` })
+  }
+  const missingPlaceholders = getMissingPlaceholders(STEP, rawPromptText)
+  if (missingPlaceholders.length) {
+    throw createError({ statusCode: 500, message: `Systémový prompt pro krok ${STEP} postrádá povinné placeholdery: ${missingPlaceholders.join(', ')}.` })
+  }
   const outputSchema = (customPrompt?.outputSchema as object | null) ?? (dbSystemPrompt?.outputSchema as object | null) ?? STEP_OUTPUT_SCHEMAS[STEP] ?? null
-  const systemPromptTextBase = outputSchema ? rawPromptText.replace('<[[SCHEMA]]>', formatSchemaForPrompt(outputSchema)) : rawPromptText
 
   const contextBlock = [
     ...contextParts.map(c => `${c.name}:\n${c.content}`),
-    ...(sellingPoint ? [`Prodejní argumenty (${sellingPoint.name}):\n${sellingPoint.content}`] : []),
     ...(body.manualContext?.trim() ? [`Vlastní kontext:\n${body.manualContext}`] : []),
   ].join('\n\n')
+  const argumentsBlock = sellingPoint?.content ?? ''
 
   const templateSection = emailDraft
     ? ['E-mailová šablona (respektuj tento formát, styl a délku):', `Předmět: ${emailDraft.subject}`, `Tělo:\n${emailDraft.body}`].join('\n')
@@ -103,11 +109,14 @@ export default defineEventHandler(async (event) => {
   const partnerDataBlock = '```json\n' + JSON.stringify(partnerData, null, 2) + '\n```'
   const fontFamily = GROUP_FONTS[project.group?.slug ?? ''] ?? ''
 
-  const systemPromptText = systemPromptTextBase
-    .replace('<[[DATA]]>', partnerDataBlock)
-    .replace('<[[CONTEXT]]>', contextBlock)
-    .replace('<[[TEMPLATE]]>', templateSection)
-    .replace('<[[USER]]>', user.name ?? '')
+  const systemPromptText = renderPromptTemplate(rawPromptText, {
+    SCHEMA: outputSchema ? formatSchemaForPrompt(outputSchema) : undefined,
+    DATA: partnerDataBlock,
+    CONTEXT: contextBlock,
+    ARGUMENTS: argumentsBlock,
+    TEMPLATE: templateSection,
+    USER: user.name ?? '',
+  })
 
   const contactInfo = body.selectedContact
   const contactLine = contactInfo?.address
@@ -146,7 +155,7 @@ export default defineEventHandler(async (event) => {
       const execute = async () => {
         try {
           let output = ''
-          const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, contextParts: [], userMessage: userMsg }, undefined, abortController.signal)
+          const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, userMessage: userMsg }, undefined, abortController.signal)
           for await (const chunk of aiStream) {
             output += chunk
             write({ chunk })

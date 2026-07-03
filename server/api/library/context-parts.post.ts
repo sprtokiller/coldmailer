@@ -16,11 +16,14 @@ export default defineEventHandler(async (event) => {
   const scope = await resolveLibraryScope(event, body)
   const stepKeys = (body.stepKeys ?? ['VALUE_ALIGNMENT']).filter(k => REASONING_STEP_TYPES.includes(k as never))
 
+  const maxOrder = await prisma.contextPart.aggregate({ _max: { order: true } })
+
   return prisma.contextPart.create({
     data: {
       name: body.name,
       content: body.content,
       stepKeys: stepKeys.length ? stepKeys : ['VALUE_ALIGNMENT'],
+      order: (maxOrder._max.order ?? -1) + 1,
       authorId: user.id,
       ...scope,
       derivedFromId: body.derivedFromId ?? null,

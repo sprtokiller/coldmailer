@@ -21,6 +21,12 @@ Odesílatel (jméno osoby, která e-mail odesílá):
 
 ---
 
+Prodejní argumenty, které můžeme partnerovi nabídnout:
+
+<[[ARGUMENTS]]>
+
+---
+
 Dodatečný kontext od uživatele:
 
 <[[CONTEXT]]>

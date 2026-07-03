@@ -244,7 +244,7 @@ async function seedTdaContent() {
       authorId: kriz.id,
       groupId: tdaGroup.id,
     },
-    update: { subject: emailSubject, body: emailBody },
+    update: {},
   })
   console.log('  ✓ EmailDraft: Tour de App – základní šablona')
 
@@ -259,7 +259,7 @@ async function seedTdaContent() {
       authorId: kriz.id,
       groupId: tdaGroup.id,
     },
-    update: { content: spContent },
+    update: {},
   })
   console.log('  ✓ SellingPoint: Tour de App – prodejní argumenty')
 
@@ -274,7 +274,7 @@ async function seedTdaContent() {
     await prisma.contextPart.upsert({
       where: { id: cp.id },
       create: { id: cp.id, name: cp.name, content, authorId: kriz.id, groupId: tdaGroup.id, stepKeys: [...REASONING_STEP_TYPES] },
-      update: { content, stepKeys: [...REASONING_STEP_TYPES] },
+      update: {},
     })
     console.log(`  ✓ ContextPart: ${cp.name}`)
   }
@@ -291,7 +291,7 @@ async function seedTdaContent() {
       groupId: tdaGroup.id,
       authorId: kriz.id,
     },
-    update: { content: sigContent, isTemplate: true, groupId: tdaGroup.id },
+    update: {},
   })
   console.log('  ✓ Signature: Tour de App (šablona)')
 }

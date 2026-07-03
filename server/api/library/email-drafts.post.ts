@@ -14,11 +14,14 @@ export default defineEventHandler(async (event) => {
   }>(event)
   const scope = await resolveLibraryScope(event, body)
 
+  const maxOrder = await prisma.emailDraft.aggregate({ _max: { order: true } })
+
   return prisma.emailDraft.create({
     data: {
       name: body.name,
       subject: body.subject,
       body: body.body,
+      order: (maxOrder._max.order ?? -1) + 1,
       authorId: user.id,
       ...scope,
       derivedFromId: body.derivedFromId ?? null,

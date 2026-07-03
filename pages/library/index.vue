@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, REASONING_STEP_TYPES, formatSchemaForPrompt } from '~/config/pipeline'
+import { STEP_SYSTEM_PROMPTS, STEP_OUTPUT_SCHEMAS, REASONING_STEP_TYPES, formatSchemaForPrompt, getMissingPlaceholders } from '~/config/pipeline'
 import { sanitizeAndNormalizeHtml, sanitizeHtml } from '~/utils/html-normalize'
 
 definePageMeta({ middleware: 'auth' })
@@ -21,6 +21,7 @@ type LibraryItem = {
   project?: { id: string; name: string; group: { id: string; name: string; color: string } } | null
   createdAt: string | Date
   derivedFromId: string | null
+  order?: number
 }
 
 type SignatureItem = {
@@ -74,12 +75,8 @@ const STEP_TYPES: string[] = [...REASONING_STEP_TYPES]
 const STEP_CONTENT_TEMPLATES: Partial<Record<string, string>> = STEP_SYSTEM_PROMPTS
 
 // ── Placeholder validation ────────────────────────────────────────────────────
-const VALID_PLACEHOLDERS = ['<[[SCHEMA]]>', '<[[CONTEXT]]>', '<[[DATA]]>', '<[[TEMPLATE]]>', '<[[USER]]>']
+const VALID_PLACEHOLDERS = ['<[[SCHEMA]]>', '<[[CONTEXT]]>', '<[[ARGUMENTS]]>', '<[[DATA]]>', '<[[TEMPLATE]]>', '<[[USER]]>']
 const PLACEHOLDER_RE = /<\[\[[A-Z_]+\]\]>/g
-
-const REQUIRED_PLACEHOLDERS: Partial<Record<string, string[]>> = {
-  OUTREACH_PREPARATION: ['<[[DATA]]>', '<[[CONTEXT]]>', '<[[TEMPLATE]]>', '<[[USER]]>'],
-}
 
 const contentPlaceholders = computed(() => {
   if (tab.value !== 'prompts' && tab.value !== 'context') return []
@@ -98,9 +95,7 @@ const duplicatePlaceholders = computed(() => {
 
 const missingPlaceholders = computed(() => {
   if (tab.value !== 'prompts') return []
-  const required: string[] = [...(REQUIRED_PLACEHOLDERS[form.value.stepType] ?? [])]
-  if (currentStepSchema.value) required.push('<[[SCHEMA]]>')
-  return required.filter(p => !contentPlaceholders.value.includes(p))
+  return getMissingPlaceholders(form.value.stepType, form.value.content)
 })
 
 const placeholderError = computed<string | null>(() => {
@@ -318,12 +313,81 @@ async function deleteSignature(id: string) {
   }
 }
 
+// ── Item delete (prompts / context / selling / drafts) ─────────────────────────
+const ITEM_DELETE_ENDPOINT: Record<Exclude<Tab, 'signatures'>, string> = {
+  prompts: '/api/library/prompts',
+  context: '/api/library/context-parts',
+  selling: '/api/library/selling-points',
+  drafts: '/api/library/email-drafts',
+}
+
+const ITEM_REFRESH: Record<Exclude<Tab, 'signatures'>, () => Promise<void>> = {
+  prompts: refreshPrompts,
+  context: refreshContext,
+  selling: refreshSelling,
+  drafts: refreshDrafts,
+}
+
+const deletingItemId = ref<string | null>(null)
+
+async function deleteItem(item: LibraryItem) {
+  if (!confirm(`Opravdu smazat „${item.name}“?`)) return
+  const currentTab = tab.value as Exclude<Tab, 'signatures'>
+  deletingItemId.value = item.id
+  try {
+    await $fetch(`${ITEM_DELETE_ENDPOINT[currentTab]}/${item.id}`, { method: 'DELETE' })
+    await ITEM_REFRESH[currentTab]()
+    if (editingId.value === item.id) resetForm()
+  } finally {
+    deletingItemId.value = null
+  }
+}
+
+// ── Reorder (prompts / context / selling / drafts) ──────────────────────────────
+const ITEM_REORDER_ENDPOINT: Record<Exclude<Tab, 'signatures'>, string> = {
+  prompts: '/api/library/prompts/reorder',
+  context: '/api/library/context-parts/reorder',
+  selling: '/api/library/selling-points/reorder',
+  drafts: '/api/library/email-drafts/reorder',
+}
+
+const draggedItemId = ref<string | null>(null)
+
+function onDragStart(item: LibraryItem) {
+  draggedItemId.value = item.id
+}
+
+async function onDrop(target: LibraryItem) {
+  const draggedId = draggedItemId.value
+  draggedItemId.value = null
+  if (!draggedId || draggedId === target.id) return
+  const dragged = currentItems.value.find(i => i.id === draggedId)
+  if (!dragged) return
+  // Reordering only makes sense within the same step-type group for prompts.
+  if (tab.value === 'prompts' && dragged.stepType !== target.stepType) return
+
+  const groupItems = tab.value === 'prompts'
+    ? currentItems.value.filter(i => i.stepType === dragged.stepType)
+    : currentItems.value
+  const ids = groupItems.map(i => i.id)
+  const fromIndex = ids.indexOf(draggedId)
+  const toIndex = ids.indexOf(target.id)
+  ids.splice(fromIndex, 1)
+  ids.splice(fromIndex < toIndex ? toIndex - 1 : toIndex, 0, draggedId)
+
+  const currentTab = tab.value as Exclude<Tab, 'signatures'>
+  await $fetch(ITEM_REORDER_ENDPOINT[currentTab], { method: 'POST', body: { ids } })
+  await ITEM_REFRESH[currentTab]()
+}
+
 // ── Filters ──────────────────────────────────────────────────────────────────
 const filterType   = ref('')
 const filterAuthor = ref('')
 const filterScope = ref('')
 
 watch(tab, () => { filterType.value = ''; filterAuthor.value = ''; filterScope.value = '' })
+
+const canReorder = computed(() => !filterType.value && !filterAuthor.value && !filterScope.value)
 
 const allItems = computed(() => {
   if (tab.value === 'prompts') return prompts.value as LibraryItem[]
@@ -353,6 +417,8 @@ const currentItems = computed(() => {
       const stepB = STEP_TYPES.indexOf(b.stepType ?? '')
       const stepOrder = (stepA === -1 ? Infinity : stepA) - (stepB === -1 ? Infinity : stepB)
       if (stepOrder !== 0) return stepOrder
+      const orderDiff = (a.order ?? 0) - (b.order ?? 0)
+      if (orderDiff !== 0) return orderDiff
       if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1
       return (a.name ?? '').localeCompare(b.name ?? '', 'cs')
     })
@@ -622,6 +688,7 @@ function handleNew() {
         <option value="">Všichni autoři</option>
         <option v-for="a in authorOptions" :key="a" :value="a">{{ a }}</option>
       </select>
+      <span v-if="!canReorder" class="text-xs text-gray-400 self-center">Vyčistěte filtry pro přeuspořádání pořadí</span>
     </div>
 
     <!-- Signatures list -->
@@ -697,11 +764,20 @@ function handleNew() {
         <div
           v-for="item in currentItems"
           :key="item.id"
+          :draggable="canReorder"
           class="bg-white rounded-xl border p-5 transition-colors cursor-pointer hover:border-primary/40 hover:shadow-sm"
-          :class="editingId === item.id ? 'border-primary ring-1 ring-primary/30' : (item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100')"
+          :class="[
+            editingId === item.id ? 'border-primary ring-1 ring-primary/30' : (item.isSystem ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'),
+            draggedItemId === item.id ? 'opacity-40' : '',
+          ]"
           @click="startEdit(item)"
+          @dragstart="onDragStart(item)"
+          @dragover.prevent
+          @drop.prevent="onDrop(item)"
+          @dragend="draggedItemId = null"
         >
           <div class="flex items-start gap-2 min-w-0" :class="(item.stepType || item.stepKeys?.length) ? 'mb-1.5' : 'mb-2'">
+            <span v-if="canReorder" class="text-gray-300 cursor-move shrink-0 leading-none select-none" title="Přetáhněte pro přeuspořádání">⠿</span>
             <h3 class="font-medium text-gray-800 text-sm truncate min-w-0 flex-1">{{ item.name }}</h3>
             <span
               v-if="item.project"
@@ -750,6 +826,13 @@ function handleNew() {
           <ClientOnly><div class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" /></ClientOnly>
           <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
             ↗ odvozeno z jiného dokumentu
+          </div>
+          <div class="flex justify-end mt-3">
+            <button
+              class="text-xs text-danger border border-danger/20 px-2.5 py-1 rounded-lg hover:bg-danger/5 transition-colors"
+              :disabled="deletingItemId === item.id"
+              @click.stop="deleteItem(item)"
+            >{{ deletingItemId === item.id ? '…' : 'Smazat' }}</button>
           </div>
         </div>
       </div>

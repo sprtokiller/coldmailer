@@ -13,10 +13,13 @@ export default defineEventHandler(async (event) => {
   }>(event)
   const scope = await resolveLibraryScope(event, body)
 
+  const maxOrder = await prisma.sellingPoint.aggregate({ _max: { order: true } })
+
   return prisma.sellingPoint.create({
     data: {
       name: body.name,
       content: body.content,
+      order: (maxOrder._max.order ?? -1) + 1,
       authorId: user.id,
       ...scope,
       derivedFromId: body.derivedFromId ?? null,

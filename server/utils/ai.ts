@@ -27,7 +27,6 @@ function createClient(): OpenAI {
 export interface StepAIInput {
   stepType: string
   systemPrompt: string
-  contextParts: string[]
   userMessage: string
 }
 
@@ -39,10 +38,6 @@ export interface StreamStepAIResult {
 export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, externalSignal?: AbortSignal): StreamStepAIResult {
   const client = createClient()
   const model = MODELS.CLAUDE_SONNET
-
-  const contextBlock = input.contextParts.length
-    ? `\n\n<context>\n${input.contextParts.join('\n\n')}\n</context>`
-    : ''
 
   let capturedGenerationId: string | null = null
 
@@ -67,7 +62,7 @@ export function streamStepAI(input: StepAIInput, timeoutMs = 8 * 60 * 1000, exte
         model,
         stream: true as const,
         messages: [
-          { role: 'system' as const, content: input.systemPrompt + contextBlock },
+          { role: 'system' as const, content: input.systemPrompt },
           { role: 'user' as const, content: input.userMessage },
         ],
         // OpenRouter forwards provider-specific keys; not in OpenAI spec so cast needed.

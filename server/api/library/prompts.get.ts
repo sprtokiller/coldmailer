@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
       group: true,
       project: { include: { group: true } },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
   })
 })
 

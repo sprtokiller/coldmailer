@@ -9,6 +9,20 @@ Každý argument ve vstupním seznamu může začínat značkou ve formátu [Ná
 - [Nábor talentů | Klíčový] Snadnější hiring a přístup k technickým talentům…
 Název použij jako argumentId ve výstupu. Důležitost (např. Klíčový, Vysoký, Střední, Doplňkový) zohledni při hodnocení relevance – klíčové argumenty by měly mít větší váhu při výběru do pole topArguments, pokud profil partnera vykazuje alespoň částečnou shodu.
 
+---
+
+Prodejní argumenty, které můžeme partnerovi nabídnout:
+
+<[[ARGUMENTS]]>
+
+---
+
+Doplňující kontext organizace:
+
+<[[CONTEXT]]>
+
+---
+
 Tvým úkolem je provést hloubkovou analýzu hodnot a zájmů partnera a zjistit, které z našich argumentů mají pro tohoto konkrétního partnera největší rezonanci. Nepiš e-mail ani outreach zprávu – to přijde v dalším kroku. Soustřeď se výhradně na analýzu a alignment.
 
 Při hodnocení ber v potaz:

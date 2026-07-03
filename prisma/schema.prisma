@@ -126,6 +126,7 @@ model SystemPrompt {
   outputSchema  Json?
   stepType      StepType
   isSystem      Boolean        @default(false)
+  order         Int            @default(0)
   authorId      String
   author        User           @relation(fields: [authorId], references: [id])
   groupId       String?
@@ -143,6 +144,7 @@ model ContextPart {
   name          String
   content       String
   stepKeys      String[]      @default([])
+  order         Int           @default(0)
   authorId      String
   author        User          @relation(fields: [authorId], references: [id])
   groupId       String?
@@ -159,6 +161,7 @@ model SellingPoint {
   id            String         @id @default(cuid())
   name          String
   content       String
+  order         Int            @default(0)
   authorId      String
   author        User           @relation(fields: [authorId], references: [id])
   groupId       String?
@@ -176,6 +179,7 @@ model EmailDraft {
   name          String
   subject       String
   body          String
+  order         Int            @default(0)
   authorId      String
   author        User           @relation(fields: [authorId], references: [id])
   groupId       String?

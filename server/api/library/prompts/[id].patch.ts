@@ -2,7 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAdmin, requireResourceScopeAccess } from '~/server/utils/permissions'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { resolveLibraryScope } from '~/server/utils/libraryScope'
-import { REASONING_STEP_TYPES } from '~/config/pipeline'
+import { REASONING_STEP_TYPES, getMissingPlaceholders } from '~/config/pipeline'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
@@ -31,10 +31,11 @@ export default defineEventHandler(async (event) => {
   }
   if (!prompt.isSystem) await requireResourceScopeAccess(event, prompt)
 
-  if (!body.content.includes('<[[SCHEMA]]>')) {
+  const missingPlaceholders = getMissingPlaceholders(body.stepType, body.content)
+  if (missingPlaceholders.length) {
     throw createError({
       statusCode: 400,
-      message: 'Prompt musí obsahovat placeholder <[[SCHEMA]]> pro vložení výstupního schématu.',
+      message: `Promptu chybí povinné placeholdery: ${missingPlaceholders.join(', ')}.`,
     })
   }
 
