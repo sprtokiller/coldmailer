@@ -64,6 +64,18 @@ async function toggleAdmin(user: AdminUser) {
   emit('refreshUsers')
 }
 
+// ── Delete user ──────────────────────────────────────────────────────────
+async function deleteUser(user: AdminUser) {
+  if (!confirm(`Opravdu smazat uživatele ${user.name} (${user.email})? Tuto akci nelze vrátit zpět.`)) return
+  try {
+    await $fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+    if (selectedUserId.value === user.id) selectedUserId.value = null
+    emit('refreshUsers')
+  } catch (err: any) {
+    alert(err?.data?.message ?? 'Uživatele se nepodařilo smazat.')
+  }
+}
+
 function availableProjectRoles(user: AdminUser) {
   const assigned = new Set(user.projectRoles.map(pr => pr.id))
   return allProjectRoles.value.filter(pr => !assigned.has(pr.id))
@@ -192,6 +204,16 @@ function availableProjectRoles(user: AdminUser) {
                     <p v-if="u.isAdmin && adminCount <= 1" class="text-[10px] text-amber-600 mt-1.5 text-center">
                       Nelze odebrat — jediný admin v systému.
                     </p>
+                  </div>
+
+                  <!-- Delete user -->
+                  <div v-if="isAdmin && u.id !== me?.user.id" class="mt-3 pt-3 border-t border-gray-100">
+                    <button
+                      class="text-xs px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors w-full"
+                      @click.stop="deleteUser(u)"
+                    >
+                      Smazat uživatele
+                    </button>
                   </div>
                 </div>
 
