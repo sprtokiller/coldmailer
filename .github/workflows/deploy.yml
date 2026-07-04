@@ -2,14 +2,14 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-main
+  group: deploy-master
   cancel-in-progress: true
 
 jobs:
