@@ -404,11 +404,11 @@ function relTime(iso: string | null | undefined) {
       <div class="email-fields">
         <div class="email-field-row">
           <span class="email-field-label">Předmět</span>
-          <input v-model="emailSubject" type="text" class="email-field-input" placeholder="Předmět e-mailu…" :disabled="isExecutingHere" />
+          <input v-model="emailSubject" type="text" autocomplete="off" class="email-field-input" placeholder="Předmět e-mailu…" :disabled="isExecutingHere" />
         </div>
         <div class="email-field-row">
           <span class="email-field-label">Komu</span>
-          <input v-model="emailTo" type="email" class="email-field-input" placeholder="E-mailová adresa…" :disabled="isExecutingHere" />
+          <input v-model="emailTo" type="text" autocomplete="off" class="email-field-input" placeholder="E-mailová adresa…" :disabled="isExecutingHere" />
         </div>
       </div>
 

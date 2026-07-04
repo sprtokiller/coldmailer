@@ -18,7 +18,7 @@ const CONTACT_TYPE_COLORS: Record<string, string> = {
 }
 interface Contact {
   id: string; address: string | null; firstName: string | null; lastName: string | null
-  role: string | null; contactType: string | null; note: string | null; priority: number; isPrimary: boolean
+  role: string | null; contactType: string | null; note: string | null; priority: number
 }
 interface GlobalRecord {
   id: string; type: string; canonicalName: string; createdAt: string

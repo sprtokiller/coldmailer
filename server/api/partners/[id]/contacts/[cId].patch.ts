@@ -7,13 +7,6 @@ export default defineEventHandler(async (event) => {
   const cId = getRouterParam(event, 'cId')!
   const body = await readBody(event)
 
-  if (body.isPrimary) {
-    await prisma.partnerContact.updateMany({
-      where: { globalRecordId },
-      data: { isPrimary: false },
-    })
-  }
-
   return prisma.partnerContact.update({
     where: { id: cId },
     data: {
@@ -25,7 +18,7 @@ export default defineEventHandler(async (event) => {
       ...(body.contactType !== undefined && { contactType: body.contactType || null }),
       ...(body.priority !== undefined && { priority: body.priority }),
       ...(body.note !== undefined && { note: body.note || null }),
-      ...(body.isPrimary !== undefined && { isPrimary: body.isPrimary }),
+
     },
   })
 })

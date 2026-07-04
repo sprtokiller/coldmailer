@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
       include: {
         contacts: {
           where: { address: { contains: '@' } },
-          orderBy: [{ isPrimary: 'desc' }, { priority: 'asc' }],
+          orderBy: [{ priority: 'asc' }],
         },
       },
     }),

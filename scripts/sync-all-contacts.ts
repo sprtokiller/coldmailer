@@ -1,6 +1,6 @@
 /**
  * Cleanup: pro každého partnera synchronizuje PartnerContact tabulku
- * s aktuálním stavem payload.contacts (full-replace, zachová isPrimary).
+ * s aktuálním stavem payload.contacts (full-replace).
  *
  * Run: npx tsx scripts/sync-all-contacts.ts
  */
@@ -66,7 +66,7 @@ async function main() {
     const deleted = await prisma.partnerContact.deleteMany({
       where: {
         globalRecordId: p.id,
-        isPrimary: false,
+
         address: { not: null, notIn: [...incomingAddresses] },
       },
     })

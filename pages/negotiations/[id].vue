@@ -9,7 +9,7 @@ const id = route.params.id as string
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Contact { id: string; address: string | null; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null; isPrimary: boolean }
+interface Contact { id: string; address: string | null; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface InteractionAssignee { userId: string; user: AssigneeUser }
 interface Interaction {
@@ -154,7 +154,7 @@ const showCrossProject = ref(false)
 const interactions = computed(() => interactionsData.value?.items ?? [])
 const crossProjectSummary = computed(() => interactionsData.value?.crossProjectSummary ?? [])
 const access = computed(() => interactionsData.value?.access ?? { canViewAll: false, canEditAll: false })
-const primaryContact = computed(() => partner.value?.contacts.find(c => c.isPrimary) ?? partner.value?.contacts[0] ?? null)
+const firstContact = computed(() => partner.value?.contacts[0] ?? null)
 
 // ── Unknown contacts ─────────────────────────────────────────────────────────
 
@@ -327,10 +327,17 @@ async function toggleEmailDisplayMode() {
 
 function stripHtml(html: string): string {
   if (!html) return ''
-  const withBreaks = html.replace(/<br\s*\/?>/gi, '\n')
-  if (typeof DOMParser === 'undefined') return withBreaks.replace(/<[^>]*>/g, '')
+  // Convert block-level elements and line breaks to newlines before stripping tags
+  const withBreaks = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+  if (typeof DOMParser === 'undefined') return withBreaks.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim()
   const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
-  return doc.body.textContent ?? ''
+  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────
@@ -605,7 +612,7 @@ const composerReplyToGmailId = ref<string | null>(null)
 const composerEditScheduled = ref<ScheduledEmailItem | null>(null)
 
 function openNewEmail() {
-  composerPrefilledTo.value = primaryContact.value?.address ?? ''
+  composerPrefilledTo.value = firstContact.value?.address ?? ''
   composerPrefilledSubject.value = ''
   composerReplyToGmailId.value = null
   composerEditScheduled.value = null
@@ -724,7 +731,7 @@ const TYPE_COLORS: Record<string, string> = {
             >{{ partner.payload.industry || partner.payload.type }}</span>
           </div>
           <div class="mt-1.5 flex items-center gap-3">
-            <span v-if="primaryContact?.address" class="text-sm font-mono text-gray-500">{{ primaryContact.address }}</span>
+            <span v-if="firstContact?.address" class="text-sm font-mono text-gray-500">{{ firstContact.address }}</span>
             <span v-else class="text-sm text-gray-300 italic">Bez emailu</span>
           </div>
         </div>

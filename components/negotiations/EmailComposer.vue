@@ -155,8 +155,8 @@ async function handleSend() {
             <span class="composer-field-label">Komu</span>
             <input
               v-model="to"
-              type="email"
-              multiple
+              type="text"
+              autocomplete="off"
               list="composer-contacts-list"
               class="composer-field-input"
               placeholder="Emailové adresy, odděl čárkou…"
@@ -173,8 +173,8 @@ async function handleSend() {
             <span class="composer-field-label">Cc</span>
             <input
               v-model="cc"
-              type="email"
-              multiple
+              type="text"
+              autocomplete="off"
               list="composer-contacts-list"
               class="composer-field-input"
               placeholder="Emailové adresy, odděl čárkou…"
@@ -185,8 +185,8 @@ async function handleSend() {
             <span class="composer-field-label">Bcc</span>
             <input
               v-model="bcc"
-              type="email"
-              multiple
+              type="text"
+              autocomplete="off"
               list="composer-contacts-list"
               class="composer-field-input"
               placeholder="Emailové adresy, odděl čárkou…"
@@ -267,8 +267,8 @@ async function handleSend() {
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 680px;
+  width: 80%;
+  max-width: 1200px;
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;

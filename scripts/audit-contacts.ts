@@ -38,6 +38,6 @@ async function main() {
   console.log(`Partners with duplicate emails in payload.contacts: ${payloadDupes}`)
   console.log(`Sample (last 5 PartnerContact rows):`)
   const sample = all.slice(-5)
-  for (const c of sample) { console.log(`  ${c.address} | ${c.firstName} ${c.lastName} | primary=${c.isPrimary}`) }
+  for (const c of sample) { console.log(`  ${c.address} | ${c.firstName} ${c.lastName}`) }
 }
 main().catch(console.error).finally(() => p.$disconnect())

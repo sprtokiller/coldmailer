@@ -58,11 +58,9 @@ export async function syncProfileContactsToDb(
   }
 
   // Remove contacts the user explicitly took out of the list in the editor.
-  // Contacts explicitly marked as primary are preserved regardless.
   await prisma.partnerContact.deleteMany({
     where: {
       globalRecordId,
-      isPrimary: false,
       id: { notIn: [...keepIds] },
     },
   })

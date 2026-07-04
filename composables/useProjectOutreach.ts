@@ -20,7 +20,7 @@ export interface OutreachPartner {
   payload: Record<string, unknown>
   contacts: Array<{
     id: string; address: string | null; label: string | null; firstName: string | null
-    lastName: string | null; role: string | null; contactType: string | null; priority: number; isPrimary: boolean
+    lastName: string | null; role: string | null; contactType: string | null; priority: number
   }>
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null

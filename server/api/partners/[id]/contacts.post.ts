@@ -14,7 +14,6 @@ export default defineEventHandler(async (event) => {
     contactType?: string
     priority?: number
     note?: string
-    isPrimary?: boolean
   }>(event)
 
   if (!body.address) throw createError({ statusCode: 400, message: 'address required' })
@@ -23,13 +22,6 @@ export default defineEventHandler(async (event) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(address)) {
     throw createError({ statusCode: 400, message: 'invalid email format' })
-  }
-
-  if (body.isPrimary) {
-    await prisma.partnerContact.updateMany({
-      where: { globalRecordId },
-      data: { isPrimary: false },
-    })
   }
 
   const contact = await prisma.partnerContact.upsert({
@@ -44,7 +36,7 @@ export default defineEventHandler(async (event) => {
       contactType: body.contactType || null,
       priority: body.priority ?? 3,
       note: body.note || null,
-      isPrimary: !!body.isPrimary,
+
     },
     update: {
       label: body.label || undefined,
@@ -54,7 +46,7 @@ export default defineEventHandler(async (event) => {
       contactType: body.contactType || undefined,
       priority: body.priority ?? undefined,
       note: body.note || undefined,
-      isPrimary: body.isPrimary ?? undefined,
+
     },
   })
 

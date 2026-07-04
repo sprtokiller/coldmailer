@@ -61,7 +61,14 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
   // FAILED/retryable and risk a duplicate send). Only the To: recipients become
   // tracked project contacts — Cc/Bcc addresses are often internal/incidental,
   // not the partner's own contact, so they're intentionally left untouched.
-  for (const addr of toAddress.split(',').map(a => a.trim()).filter(Boolean)) {
+  //
+  // toAddress may be in RFC 2822 display-name format: `"Name" <addr>` or `Name <addr>`
+  // Extract just the bare email address before storing it.
+  function extractEmail(raw: string): string {
+    const match = raw.match(/[^<\s]+@[^>\s]+/)
+    return match ? match[0].replace(/[<>]/g, '').trim() : raw.trim()
+  }
+  for (const addr of toAddress.split(',').map(a => extractEmail(a)).filter(Boolean)) {
     await trackCustomRecipientAddress(projectId, globalRecordId, addr)
       .catch(err => console.error('[send-partner-email] trackCustomRecipientAddress failed:', err))
   }

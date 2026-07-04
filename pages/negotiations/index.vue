@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
-interface Contact { id: string; address: string | null; isPrimary: boolean; label: string | null }
+interface Contact { id: string; address: string | null; label: string | null }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface Partner {
   id: string
@@ -26,9 +26,6 @@ const partners = computed(() => {
   )
 })
 
-function primaryEmail(p: Partner) {
-  return p.contacts.find(c => c.isPrimary)?.address ?? p.contacts[0]?.address ?? null
-}
 function lastContact(p: Partner) {
   if (!p.lastInteractionAt) return null
   return new Date(p.lastInteractionAt).toLocaleDateString('cs-CZ')
@@ -93,7 +90,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
           <tr class="border-b border-gray-100 bg-gray-50 text-left">
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav jednání</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Primární email</th>
+
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Poslední kontakt</th>
@@ -101,10 +98,10 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-if="pending">
-            <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
+            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
           </tr>
           <tr v-else-if="!partners?.length">
-            <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
+            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">
               {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
@@ -144,10 +141,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
               </span>
               <span v-else class="text-xs text-gray-300">—</span>
             </td>
-            <td class="px-4 py-3 text-xs text-gray-600">
-              <span v-if="primaryEmail(p)" class="font-mono">{{ primaryEmail(p) }}</span>
-              <span v-else class="text-gray-300">—</span>
-            </td>
+
             <td class="px-4 py-3">
               <div class="flex items-center -space-x-1">
                 <template v-for="a in p.assignees.slice(0, 4)" :key="a.id">

@@ -319,7 +319,6 @@ model PartnerContact {
   contactType    String?
   priority       Int          @default(3)
   note           String?
-  isPrimary      Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   @@unique([globalRecordId, address])

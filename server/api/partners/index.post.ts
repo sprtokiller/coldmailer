@@ -1,4 +1,4 @@
-﻿import { prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
           contactType: c.type || null,
           priority: c.priority ?? 3,
           note: c.note || null,
-          isPrimary: i === 0,
+
         },
       })
     } catch (e: any) {

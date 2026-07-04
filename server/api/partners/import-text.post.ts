@@ -60,7 +60,7 @@ async function createPartnerRecord(canonicalName: string, payload: Record<string
           contactType: (c.type as string) || null,
           priority: (c.priority as number) ?? 3,
           note: (c.note as string) || null,
-          isPrimary: i === 0,
+
         },
       })
     } catch (e: unknown) {

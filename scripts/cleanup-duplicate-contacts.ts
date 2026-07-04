@@ -2,7 +2,7 @@
  * Cleanup script: removes duplicate PartnerContact records.
  *
  * For each (globalRecordId, address) pair we keep:
- *   1. The record with isPrimary = true (if any)
+ *   1. The first record
  *   2. Otherwise the oldest record (lowest createdAt)
  *
  * Run with: npx tsx scripts/cleanup-duplicate-contacts.ts
@@ -33,7 +33,7 @@ async function main() {
     if (group.length <= 1) continue
 
     // Prefer the primary contact as the keeper; fall back to the oldest one.
-    const keeper = group.find(c => c.isPrimary) ?? group[0]
+    const keeper = group[0]
     const toDelete = group.filter(c => c.id !== keeper.id)
 
     console.log(
