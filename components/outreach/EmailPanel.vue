@@ -65,7 +65,8 @@ const draft = computed(() => {
 })
 
 const isRegeneration = computed(() => !!draft.value)
-const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value)
+const hasActiveCommunication = computed(() => !!ctx.partnerDetail.value?.hasActiveCommunication)
+const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value || hasActiveCommunication.value)
 const showConfirm = ref(false)
 const showCancelConfirm = ref(false)
 
@@ -155,10 +156,15 @@ async function doSave() {
   } finally { saving.value = false }
 }
 
-function handleSendClick() {
+const isSubstitutingSend = computed(() => {
   const draftSavedById = (draft.value as any)?.savedById as string | undefined
   const myId = ctx.currentUserId.value
-  if (draftSavedById && myId && draftSavedById !== myId && ctx.canManageAll.value) {
+  return !!(draftSavedById && myId && draftSavedById !== myId && ctx.canManageAll.value)
+})
+const needsSendConfirm = computed(() => isSubstitutingSend.value || hasActiveCommunication.value)
+
+function handleSendClick() {
+  if (needsSendConfirm.value) {
     showSenderConfirmModal.value = true
   } else {
     doSend()
@@ -468,7 +474,7 @@ function relTime(iso: string | null | undefined) {
       <div v-if="showSenderConfirmModal" class="modal-backdrop" @click.self="showSenderConfirmModal = false">
       <div class="modal-card">
         <div class="modal-header">
-          <h2 class="modal-title">Odeslat cizí e-mail</h2>
+          <h2 class="modal-title">Potvrdit odeslání</h2>
           <button class="modal-close" @click="showSenderConfirmModal = false">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -476,8 +482,11 @@ function relTime(iso: string | null | undefined) {
           </button>
         </div>
         <div class="modal-body">
-          <p class="modal-text">
+          <p v-if="isSubstitutingSend" class="modal-text">
             Tento e-mail připravil jiný uživatel. Zkontrolovali jste, zda v textu nebo podpisu nezůstalo jméno původního autora?
+          </p>
+          <p v-if="hasActiveCommunication" class="modal-text">
+            S tímto partnerem už probíhá <strong>aktivní komunikace</strong> — byl mu odeslán e-mail. Opravdu chcete odeslat další?
           </p>
         </div>
         <div class="modal-footer">
@@ -529,6 +538,9 @@ function relTime(iso: string | null | undefined) {
             <p v-if="isRegeneration" class="confirm-warn">
               Pro tohoto partnera už existuje vygenerovaný e-mail. Spuštěním dojde k jeho
               <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
+            </p>
+            <p v-if="hasActiveCommunication" class="confirm-warn">
+              S tímto partnerem už probíhá <strong>aktivní komunikace</strong> — byl mu odeslán e-mail. Zvažte, zda je další draft opravdu potřeba.
             </p>
           </div>
           <div class="confirm-actions">
@@ -1093,6 +1105,9 @@ function relTime(iso: string | null | undefined) {
 
 .modal-body {
   padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .modal-text {

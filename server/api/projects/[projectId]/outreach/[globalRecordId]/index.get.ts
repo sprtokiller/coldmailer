@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
-  const [globalRecord, alignment, draft, assignment] = await Promise.all([
+  const [globalRecord, alignment, draft, assignment, sentEmailCount] = await Promise.all([
     prisma.globalRecord.findUnique({
       where: { id: globalRecordId },
       include: {
@@ -38,6 +38,12 @@ export default defineEventHandler(async (event) => {
       where: { projectId, globalRecordId },
       include: { assignee: { select: { id: true, name: true, image: true } } },
     }),
+    // Any e-mail we've ever sent this partner in this project — via this workspace,
+    // the negotiations page, or discovered by Gmail sync — counts as active
+    // communication, regardless of whether an outreach draft was ever generated.
+    prisma.interaction.count({
+      where: { projectId, globalRecordId, type: 'EMAIL', direction: 'SENT' },
+    }),
   ])
 
   if (!globalRecord) throw createError({ statusCode: 404, message: 'Partner nenalezen.' })
@@ -54,5 +60,6 @@ export default defineEventHandler(async (event) => {
     alignment,
     draft,
     assignment,
+    hasActiveCommunication: sentEmailCount > 0,
   }
 })

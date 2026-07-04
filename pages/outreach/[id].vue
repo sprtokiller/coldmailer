@@ -90,6 +90,17 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
       <button class="auth-error-close" @click="syncError = null">×</button>
     </div>
 
+    <!-- Active communication banner -->
+    <div v-if="ctx.selectedPartner.value?.hasActiveCommunication" class="active-comm-banner">
+      <svg class="active-comm-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+      </svg>
+      <span>
+        S partnerem <strong>{{ ctx.selectedPartner.value.canonicalName }}</strong> už probíhá aktivní komunikace —
+        byl mu odeslán e-mail. Zvažte, zda je další oslovení opravdu potřeba.
+      </span>
+    </div>
+
     <!-- 3-column workspace -->
     <div class="outreach-workspace">
       <!-- Col 1: Partner list -->
@@ -426,6 +437,26 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
 }
 
 .auth-error-close:hover { color: #dc2626; }
+
+/* ── Active communication banner ─────────────────────────── */
+.active-comm-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.active-comm-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: #d97706;
+}
 </style>
 
 <!-- Global resets for outreach page (safe to leave applied after navigating away) -->

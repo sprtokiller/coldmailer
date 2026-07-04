@@ -118,6 +118,9 @@ const STATUS_META = {
             >
               {{ STATUS_META[getStatus(p)!].icon }} {{ STATUS_META[getStatus(p)!].label }}
             </span>
+            <span v-if="p.hasActiveCommunication" class="assignment-tag assignment-tag--active-comm" title="Již probíhá aktivní komunikace">
+              ⚠ aktivní
+            </span>
             <span v-if="p.assignment" class="assignment-tag assignment-tag--assigned" :title="p.assignment.assignee.name">
               {{ p.assignment.assigneeId === myId ? 'Moje' : p.assignment.assignee.name.split(' ')[0] }}
             </span>
@@ -326,5 +329,10 @@ const STATUS_META = {
 .assignment-tag--free {
   background: #f0fdf4;
   color: #15803d;
+}
+
+.assignment-tag--active-comm {
+  background: #fffbeb;
+  color: #b45309;
 }
 </style>

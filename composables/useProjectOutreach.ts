@@ -25,6 +25,7 @@ export interface OutreachPartner {
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null
   assignment: OutreachAssignment | null
+  hasActiveCommunication: boolean
 }
 
 export interface OutreachConfig {
@@ -43,7 +44,7 @@ export interface ProjectOutreachContext {
   loadingPartners: Ref<boolean>
   selectedPartnerId: Ref<string | null>
   selectedPartner: ComputedRef<OutreachPartner | null>
-  partnerDetail: Ref<{ globalRecord: Record<string, unknown>; profileData: Record<string, unknown> | null; alignment: Record<string, unknown> | null; draft: Record<string, unknown> | null; assignment: OutreachAssignment | null } | null>
+  partnerDetail: Ref<{ globalRecord: Record<string, unknown>; profileData: Record<string, unknown> | null; alignment: Record<string, unknown> | null; draft: Record<string, unknown> | null; assignment: OutreachAssignment | null; hasActiveCommunication: boolean } | null>
   loadingDetail: Ref<boolean>
   prompts: Ref<Array<{ id: string; name: string; content: string; stepType: string; isSystem: boolean; author: { name: string } }>>
   contextParts: Ref<Array<{ id: string; name: string; content: string; stepKeys: string[] }>>

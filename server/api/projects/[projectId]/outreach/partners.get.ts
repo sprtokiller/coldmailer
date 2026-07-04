@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }
 
-  const [globalRecords, alignments, drafts, assignments] = await Promise.all([
+  const [globalRecords, alignments, drafts, assignments, sentEmails] = await Promise.all([
     prisma.globalRecord.findMany({
       where: { id: { in: globalRecordIds } },
       include: {
@@ -55,11 +55,20 @@ export default defineEventHandler(async (event) => {
       where: { projectId, globalRecordId: { in: globalRecordIds } },
       select: { globalRecordId: true, assigneeId: true, assignee: { select: { id: true, name: true, image: true } } },
     }),
+    // Any e-mail we've ever sent this partner in this project — via this workspace,
+    // the negotiations page, or discovered by Gmail sync — counts as active
+    // communication, regardless of whether an outreach draft was ever generated.
+    prisma.interaction.findMany({
+      where: { projectId, globalRecordId: { in: globalRecordIds }, type: 'EMAIL', direction: 'SENT' },
+      select: { globalRecordId: true },
+      distinct: ['globalRecordId'],
+    }),
   ])
 
   const alignmentMap = new Map(alignments.map(a => [a.globalRecordId, a]))
   const draftMap = new Map(drafts.map(d => [d.globalRecordId, d]))
   const assignmentMap = new Map(assignments.map(a => [a.globalRecordId, a]))
+  const sentEmailSet = new Set(sentEmails.map(e => e.globalRecordId))
 
   const partners = globalRecords.map(gr => ({
     id: gr.id,
@@ -70,6 +79,7 @@ export default defineEventHandler(async (event) => {
     alignment: alignmentMap.get(gr.id) ?? null,
     draft: draftMap.get(gr.id) ?? null,
     assignment: assignmentMap.get(gr.id) ?? null,
+    hasActiveCommunication: sentEmailSet.has(gr.id),
   }))
 
   return { partners, canManageAll }

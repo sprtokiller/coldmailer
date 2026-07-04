@@ -40,7 +40,8 @@ function removeContext(id: string) { ctx.vaConfig.value.contextPartIds = ctx.vaC
 const selectedContextNames = computed(() => ctx.vaConfig.value.contextPartIds.map(id => vaContextParts.value.find(c => c.id === id)).filter(Boolean) as Array<{ id: string; name: string }>)
 
 const isRegeneration = computed(() => !!alignment.value)
-const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value)
+const hasActiveCommunication = computed(() => !!ctx.partnerDetail.value?.hasActiveCommunication)
+const needsConfirm = computed(() => ctx.isSubstituting.value || isRegeneration.value || hasActiveCommunication.value)
 const showConfirm = ref(false)
 const showCancelConfirm = ref(false)
 
@@ -253,6 +254,9 @@ function relTime(iso: string | null | undefined): string {
             <p v-if="isRegeneration" class="confirm-warn">
               Pro tohoto partnera už existuje hotová analýza Value Alignment. Spuštěním dojde k jejímu
               <strong>přepsání</strong> a akce spotřebuje <strong>kredity z budgetu</strong>.
+            </p>
+            <p v-if="hasActiveCommunication" class="confirm-warn">
+              S tímto partnerem už probíhá <strong>aktivní komunikace</strong> — byl mu odeslán e-mail. Zvažte, zda je další profilace opravdu potřeba.
             </p>
           </div>
           <div class="confirm-actions">
