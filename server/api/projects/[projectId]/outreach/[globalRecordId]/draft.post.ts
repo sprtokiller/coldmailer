@@ -151,6 +151,9 @@ export default defineEventHandler(async (event) => {
   const stream = new ReadableStream({
     start(controller) {
       const write = (data: object) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      // Keeps intermediary proxies from killing the connection with a 504 while the
+      // model is still "thinking" and no content chunks have been emitted yet.
+      const pingInterval = setInterval(() => controller.enqueue(encoder.encode(': ping\n\n')), 15000)
 
       const execute = async () => {
         try {
@@ -186,6 +189,7 @@ export default defineEventHandler(async (event) => {
         } catch (err) {
           write({ error: err instanceof Error ? err.message : String(err), done: true })
         } finally {
+          clearInterval(pingInterval)
           controller.close()
         }
       }
