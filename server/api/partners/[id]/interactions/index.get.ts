@@ -1,7 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
-import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { getInteractionAccess, canEditNegotiation } from '~/server/utils/projectPermissions'
 
 const META_SELECT = {
   id: true,
@@ -47,13 +47,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const access = await getInteractionAccess(session.id, projectId)
-
-  const outreachAssignment = await prisma.outreachAssignment.findFirst({
-    where: { projectId, globalRecordId, assigneeId: session.id },
-    select: { assigneeId: true },
-  })
-  const isOutreachAssignee = !!outreachAssignment
-  const effectiveCanEdit = access.canEditAll || access.isAdmin || isOutreachAssignee
+  const effectiveCanEdit = access.canEditAll || access.isAdmin || await canEditNegotiation(session.id, projectId, globalRecordId)
 
   let items
   if (access.canViewAll || access.isAdmin) {

@@ -25,9 +25,9 @@ export default defineEventHandler(async (event) => {
         orderBy: { sentAt: 'desc' },
         take: 1,
       },
-      outreachAssignments: {
+      negotiationAssignees: {
         where: projectId ? { projectId } : undefined,
-        select: { assignee: { select: { id: true, name: true, image: true } } },
+        select: { user: { select: { id: true, name: true, image: true } } },
       },
       projectRecords: {
         where: projectId ? { projectId } : undefined,
@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
       normalizedName: r.normalizedName,
       payload: r.payload,
       contacts: r.contacts,
-      assignees: r.outreachAssignments.map(a => a.assignee),
+      assignees: r.negotiationAssignees.map(a => a.user),
       lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
       interactionCount: r._count.interactions,
       negotiationStatus: projectRecord?.negotiationStatus ?? null,

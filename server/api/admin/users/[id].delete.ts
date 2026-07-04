@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
           partnerAlignments: true,
           outreachDraftsSaved: true,
           outreachAssignments: true,
+          negotiationAssignments: true,
         },
       },
     },
@@ -56,6 +57,7 @@ export default defineEventHandler(async (event) => {
     partnerAlignments: 'value alignmenty',
     outreachDraftsSaved: 'uložené outreach drafty',
     outreachAssignments: 'přiřazení outreach',
+    negotiationAssignments: 'přiřazení k jednání',
   }
 
   const blocking = Object.entries(counts?._count ?? {})

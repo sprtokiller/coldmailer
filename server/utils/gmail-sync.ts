@@ -332,30 +332,30 @@ function addToMap(
   map.set(email, existing)
 }
 
-async function collectPartnerEmails(
-  userId: string,
-  _isAdmin: boolean,
-): Promise<Map<string, PartnerEmailEntry[]>> {
-  const map = new Map<string, PartnerEmailEntry[]>()
-
-  // Outreach-based assignments + additionalAddresses
-  const outreachAssigned = await prisma.outreachAssignment.findMany({
-    where: { assigneeId: userId },
+const ASSIGNMENT_SELECT = {
+  globalRecordId: true,
+  projectId: true,
+  globalRecord: {
     select: {
-      globalRecordId: true,
-      projectId: true,
-      globalRecord: {
-        select: {
-          contacts: { select: { address: true } },
-          projectRecords: {
-            select: { projectId: true, additionalAddresses: true },
-          },
-        },
+      contacts: { select: { address: true } },
+      projectRecords: {
+        select: { projectId: true, additionalAddresses: true },
       },
     },
-  })
+  },
+} as const
 
-  for (const assign of outreachAssigned) {
+type AssignmentRow = {
+  globalRecordId: string
+  projectId: string
+  globalRecord: {
+    contacts: { address: string }[]
+    projectRecords: { projectId: string; additionalAddresses: unknown }[]
+  }
+}
+
+function populatePartnerEmailMap(map: Map<string, PartnerEmailEntry[]>, assignments: AssignmentRow[]) {
+  for (const assign of assignments) {
     const entry: PartnerEmailEntry = { globalRecordId: assign.globalRecordId, projectId: assign.projectId }
     for (const contact of assign.globalRecord.contacts) {
       addToMap(map, contact.address.toLowerCase(), entry)
@@ -367,6 +367,27 @@ async function collectPartnerEmails(
       }
     }
   }
+}
+
+async function collectPartnerEmails(
+  userId: string,
+  _isAdmin: boolean,
+): Promise<Map<string, PartnerEmailEntry[]>> {
+  const map = new Map<string, PartnerEmailEntry[]>()
+
+  // Outreach-based assignments (oslovení) + additionalAddresses
+  const outreachAssigned = await prisma.outreachAssignment.findMany({
+    where: { assigneeId: userId },
+    select: ASSIGNMENT_SELECT,
+  })
+  populatePartnerEmailMap(map, outreachAssigned)
+
+  // Negotiation-based assignments (jednání) + additionalAddresses
+  const negotiationAssigned = await prisma.negotiationAssignee.findMany({
+    where: { userId },
+    select: ASSIGNMENT_SELECT,
+  })
+  populatePartnerEmailMap(map, negotiationAssigned)
 
   return map
 }

@@ -14,6 +14,14 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'globalRecordId')!
   await requireProjectAccess(event, projectId)
 
+  const existing = await prisma.outreachAssignment.findFirst({
+    where: { projectId, globalRecordId },
+    select: { assigneeId: true },
+  })
+  if (existing && existing.assigneeId !== user.id) {
+    throw createError({ statusCode: 409, message: 'Partner už má přiřazeného jiného řešitele oslovení.' })
+  }
+
   const assignment = await prisma.outreachAssignment.upsert({
     where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: user.id } },
     create: { projectId, globalRecordId, assigneeId: user.id, assignedById: user.id },

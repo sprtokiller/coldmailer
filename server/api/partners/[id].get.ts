@@ -12,9 +12,9 @@ export default defineEventHandler(async (event) => {
     where: { id },
     include: {
       contacts: { orderBy: [{ isPrimary: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }] },
-      outreachAssignments: {
+      negotiationAssignees: {
         where: projectId ? { projectId } : undefined,
-        include: { assignee: { select: { id: true, name: true, image: true } } },
+        include: { user: { select: { id: true, name: true, image: true } } },
       },
       projectRecords: {
         where: projectId ? { projectId } : undefined,
@@ -26,8 +26,8 @@ export default defineEventHandler(async (event) => {
   if (!record) throw createError({ statusCode: 404, message: 'Not found' })
 
   const projectRecord = record.projectRecords[0] ?? null
-  const assignees = record.outreachAssignments.map(a => a.assignee)
-  const { projectRecords: _, outreachAssignments: __, ...rest } = record
+  const assignees = record.negotiationAssignees.map(a => a.user)
+  const { projectRecords: _, negotiationAssignees: __, ...rest } = record
 
   return {
     ...rest,

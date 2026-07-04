@@ -40,6 +40,8 @@ model User {
   outreachDraftsSent       PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
   outreachAssignments      OutreachAssignment[]   @relation("OutreachAssignee")
   outreachAssignmentsGiven OutreachAssignment[]   @relation("OutreachAssignedBy")
+  negotiationAssignments      NegotiationAssignee[] @relation("NegotiationAssignee")
+  negotiationAssignmentsGiven NegotiationAssignee[] @relation("NegotiationAssignedBy")
 }
 
 model Group {
@@ -75,6 +77,7 @@ model Project {
   partnerAlignments   PartnerAlignment[]
   outreachDrafts      PartnerOutreachDraft[]
   outreachAssignments OutreachAssignment[]
+  negotiationAssignees NegotiationAssignee[]
 
   @@unique([groupId, name])
   @@index([groupId])
@@ -245,6 +248,7 @@ model GlobalRecord {
   partnerAlignments   PartnerAlignment[]
   outreachDrafts      PartnerOutreachDraft[]
   outreachAssignments OutreachAssignment[]
+  negotiationAssignees NegotiationAssignee[]
 
   @@unique([normalizedName, type])
 }
@@ -488,7 +492,7 @@ model PartnerOutreachDraft {
   @@index([projectId])
 }
 
-// Přiřazení zodpovědnosti za zpracování partnera v outreach workflow a v Jednání
+// Přiřazení zodpovědnosti za oslovení partnera (outreach workflow) — vždy max. jeden uživatel na partnera v projektu.
 model OutreachAssignment {
   id             String       @id @default(cuid())
   projectId      String
@@ -502,6 +506,24 @@ model OutreachAssignment {
   assignedBy     User?        @relation("OutreachAssignedBy", fields: [assignedById], references: [id])
 
   @@unique([projectId, globalRecordId, assigneeId])
+  @@index([projectId])
+  @@index([projectId, globalRecordId])
+}
+
+// Přiřazení k jednání s partnerem — nezávislé na OutreachAssignment, může jich být více na partnera.
+model NegotiationAssignee {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId String
+  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("NegotiationAssignee", fields: [userId], references: [id])
+  assignedAt     DateTime     @default(now())
+  assignedById   String?
+  assignedBy     User?        @relation("NegotiationAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([projectId, globalRecordId, userId])
   @@index([projectId])
   @@index([projectId, globalRecordId])
 }

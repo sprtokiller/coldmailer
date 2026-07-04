@@ -11,6 +11,7 @@ import { getProjectPermissions } from '~/server/utils/projectPermissions'
 import { sendGmailMessage, refreshAccessToken } from '~/server/utils/google'
 import { scheduleOutreachSend } from '~/server/utils/outreach-scheduler'
 import { trackCustomRecipientAddress } from '~/server/utils/project-additional-addresses'
+import { assignNegotiationOnSend } from '~/server/utils/negotiation-assignment'
 
 const GRACE_PERIOD_MS = 20_000
 const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
@@ -47,18 +48,6 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 403, message: 'Nemáte oprávnění odeslat e-mail připravený jiným uživatelem.' })
       }
     }
-
-    // Sending on behalf of a colleague — assign both users so Gmail sync scans both mailboxes for this partner
-    await prisma.outreachAssignment.upsert({
-      where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: user.id } },
-      create: { projectId, globalRecordId, assigneeId: user.id, assignedById: user.id },
-      update: {},
-    })
-    await prisma.outreachAssignment.upsert({
-      where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: existingDraft.savedById } },
-      create: { projectId, globalRecordId, assigneeId: existingDraft.savedById, assignedById: user.id },
-      update: {},
-    })
   }
 
   // Save draft before sending; preserve savedById/savedAt of original author
@@ -117,6 +106,9 @@ export default defineEventHandler(async (event) => {
         createdBy: user.id,
       },
     }).catch(err => console.error(`[outreach] failed to create interaction:`, err))
+
+    await assignNegotiationOnSend(projectId, globalRecordId, user.id)
+      .catch(err => console.error(`[outreach] failed to assign negotiation:`, err))
 
     // Mark as sent
     await prisma.partnerOutreachDraft.update({

@@ -4,6 +4,7 @@ import { getActiveScope } from '~/server/utils/activeProject'
 import { canEditNegotiation } from '~/server/utils/projectPermissions'
 import { sendGmailMessage, refreshAccessToken, getGmailMessage } from '~/server/utils/google'
 import { trackCustomRecipientAddress } from '~/server/utils/project-additional-addresses'
+import { assignNegotiationOnSend } from '~/server/utils/negotiation-assignment'
 
 const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
 
@@ -74,11 +75,7 @@ export default defineEventHandler(async (event) => {
 
   await trackCustomRecipientAddress(projectId, globalRecordId, body.toAddress)
 
-  await prisma.outreachAssignment.upsert({
-    where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: session.id } },
-    create: { projectId, globalRecordId, assigneeId: session.id, assignedById: session.id },
-    update: {},
-  })
+  await assignNegotiationOnSend(projectId, globalRecordId, session.id)
 
   const interaction = await prisma.interaction.create({
     data: {
