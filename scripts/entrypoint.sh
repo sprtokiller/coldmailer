@@ -8,7 +8,7 @@ if [ "${SKIP_DB_SETUP:-}" != "true" ]; then
   fi
 
   echo "Syncing database schema..."
-  node node_modules/prisma/build/index.js db push --skip-generate
+  node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss
 
   echo "Running database seed..."
   node node_modules/prisma/build/index.js db seed
