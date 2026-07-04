@@ -81,12 +81,13 @@ After `bun install`, `postinstall` runs `nuxt prepare && prisma generate` automa
 
 Copy `.env.example` to `.env` and fill in:
 - `NUXT_GOOGLE_CLIENT_ID` / `NUXT_GOOGLE_CLIENT_SECRET` — Google OAuth 2.0 credentials (only `@scg.cz` emails are allowed to sign in)
-- `NUXT_GOOGLE_REDIRECT_URI` — defaults to `http://localhost:3000/api/auth/callback/google`; must match exactly what's registered in Google Cloud Console; requires scope `gmail.compose`
+- `NUXT_GOOGLE_REDIRECT_URI` — defaults to `http://localhost:3000/api/auth/callback/google`; must match exactly what's registered in Google Cloud Console; requires scopes `gmail.compose` and `gmail.readonly` (see `SCOPES` in `server/utils/google.ts`)
+- `NUXT_ADMIN_EMAILS` — comma-separated emails granted admin access on login (and pre-seeded as admins)
 - `DATABASE_URL` — PostgreSQL connection string, e.g. `postgresql://coldmailer:coldmailer@localhost:5432/coldmailer` (matches `docker-compose.yml` defaults)
 - `NUXT_SESSION_PASSWORD` — session encryption key, min 32 chars; generate with `openssl rand -base64 32`
 - `NUXT_OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
 - `NUXT_OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
-- `NUXT_SERP_API_KEYS` — comma-separated SerpAPI keys rotated in Round Robin order for the `PARTNER_IDENTIFICATION` step (e.g. `key1,key2,key3`)
+- `NUXT_SERP_API_KEYS` — comma-separated SerpAPI keys; read by `server/utils/serpapi.ts`, which is currently not imported by any active route (dead code left over from a removed partner-identification pipeline)
 
 ## Architecture
 
@@ -95,59 +96,67 @@ Copy `.env.example` to `.env` and fill in:
 - **Database**: PostgreSQL via Prisma 5
 - **Auth**: Manual Google OAuth — restricted to `@scg.cz` domain; tokens (access + refresh) are stored in the `User` row and the session cookie is managed by `nuxt-auth-utils`
 - **AI**: All LLM calls go through OpenRouter via the `openai` npm package (`baseURL: 'https://openrouter.ai/api/v1'`). There is no direct Anthropic SDK.
-- **Web scraping**: SerpAPI (Google search) + Crawlee/Playwright for fetching pages
 - **Styling**: Tailwind CSS + Parkinsans Google Font
 
-### Pipeline Model
-The app's core concept is a multi-step outreach pipeline stored as `PipelineRun` → `PipelineStep[]` in the DB. Steps run sequentially; output from one step is fed as input to the next.
+There is no `PipelineRun`/`PipelineStep` model and no visual pipeline canvas anymore — that sequential-pipeline design was replaced by the Groups → Projects structure described below. `StepType` (`MARKET_SCANNING`, `PARTNER_IDENTIFICATION`, `PARTNER_PROFILING`, `VALUE_ALIGNMENT`, `OUTREACH_PREPARATION`) survives only as a label on `SystemPrompt`/`ContextPart` for organizing the Library; only `VALUE_ALIGNMENT` and `OUTREACH_PREPARATION` are wired to an actual AI call. `server/utils/serpapi.ts` and `server/utils/page-fetcher.ts` (Crawlee/Playwright) are leftovers from the removed `PARTNER_IDENTIFICATION` step and are not imported by any active route.
 
-| Step | Model | Mechanism |
-|---|---|---|
-| `MARKET_SCANNING` | `copy-prompt` | Manual — UI shows the system prompt; user runs it externally and pastes JSON back |
-| `PARTNER_IDENTIFICATION` | `pipeline` | SerpAPI + Playwright + Claude Sonnet; `runPartnerIdentification()` generator |
-| `PARTNER_PROFILING` | `copy-prompt` | Manual — same copy-paste flow as `MARKET_SCANNING` |
-| `VALUE_ALIGNMENT` | `anthropic/claude-sonnet-4.6` | Streaming AI |
-| `OUTREACH_PREPARATION` | `anthropic/claude-sonnet-4.6` | Streaming AI |
+### Data Model
+Work is organized as **Groups → Projects** (`prisma/schema.prisma`). Each project tracks partner/sponsor records via a shared `GlobalRecord` table (deduplicated across projects), with per-project state layered on top:
 
-`COPY_PROMPT` steps have no auto-execution button. The UI shows the prompt for the user to run in an external tool (e.g. ChatGPT, Claude.ai) and paste the JSON result back via the import panel.
-
-All model/step mappings live in [`config/pipeline.ts`](config/pipeline.ts) — `STEP_MODEL`, `MODELS`, `MODEL_BADGE`, `STEP_SYSTEM_PROMPTS`.
+- `GlobalRecord` — canonical partner/competition/etc. record (`RecordType` enum), shared across projects; dedup via `normalizedName`+`type` and Jaro-Winkler matching in `server/utils/deduplication.ts`.
+- `ProjectRecord` — per-project state for a `GlobalRecord` (negotiation status, contact blacklist, address overrides).
+- `PartnerAlignment` / `PartnerOutreachDraft` — per-project, per-record output of the `VALUE_ALIGNMENT` / `OUTREACH_PREPARATION` AI calls (replaces the old `PipelineStep.outputData` storage).
+- `OutreachAssignment` / `NegotiationAssignee` — who owns outreach vs. who owns the negotiation for a record (independent, can differ).
+- `Interaction` — notes, Gmail-synced emails, and fulfillment entries logged against a record within a project.
+- `ScheduledEmail` — emails queued for a future send, polled by a background sender (independent of the immediate-send undo/grace-period flow).
+- `SystemPrompt` / `ContextPart` / `SellingPoint` / `EmailDraft` / `Signature` — reusable Library assets, scoped to a `Group`/`Project` or global, with a lineage tree via `derivedFromId`.
+- `UserBudget` / `UsageEvent` — per-user AI/SerpAPI spend tracking and optional budget caps, reset on `BudgetResetPeriod`.
+- `ProjectRole` / `UserProjectRole` — per-project permission roles (see `server/utils/projectPermissions.ts`); `User.isAdmin` grants global admin access (see `server/utils/permissions.ts`).
 
 ### Key Server Files
-- [`server/api/pipeline/[id]/steps/execute.post.ts`](server/api/pipeline/%5Bid%5D/steps/execute.post.ts) — main step execution endpoint; streams SSE (`data: <json>\n\n`). Handles special cases for `PARTNER_IDENTIFICATION` and `OUTREACH_EXECUTION`.
-- [`server/utils/partner-identification.ts`](server/utils/partner-identification.ts) — async generator that runs the SerpAPI → Playwright → AI extraction → DB dedup pipeline for step 2.
-- [`server/utils/ai.ts`](server/utils/ai.ts) — `streamStepAI()` generator; adds adaptive reasoning (`reasoning: { enabled: true, effort: 'high' }`) for Anthropic models via OpenRouter.
-- [`server/utils/google.ts`](server/utils/google.ts) — Google OAuth token exchange, token refresh, and Gmail draft creation.
-- [`server/api/pipeline/[id]/steps/import-ai.post.ts`](server/api/pipeline/%5Bid%5D/steps/import-ai.post.ts) — parses free-text/deep-research output into structured JSON and merges it into an existing step's `outputData`. Contains JSON repair logic and smart merging (dedup by name/URL/email).
-- [`server/utils/gmail-sync.ts`](server/utils/gmail-sync.ts) — syncs Gmail thread state into the DB for the outreach workspace.
-- [`server/utils/job-registry.ts`](server/utils/job-registry.ts) — manages background job lifecycle (multiple concurrent jobs, cancellation).
-- [`server/utils/permissions.ts`](server/utils/permissions.ts) / [`projectPermissions.ts`](server/utils/projectPermissions.ts) — user and project-level permission checks.
-- [`server/utils/outreach-scheduler.ts`](server/utils/outreach-scheduler.ts) — schedules queued outreach sends.
+- [`server/api/projects/[projectId]/outreach/[globalRecordId]/alignment.post.ts`](server/api/projects/%5BprojectId%5D/outreach/%5BglobalRecordId%5D/alignment.post.ts) — runs `VALUE_ALIGNMENT` for one partner and stores the result on `PartnerAlignment`.
+- [`server/api/projects/[projectId]/outreach/[globalRecordId]/draft.post.ts`](server/api/projects/%5BprojectId%5D/outreach/%5BglobalRecordId%5D/draft.post.ts) — runs `OUTREACH_PREPARATION` from a saved alignment and stores the result on `PartnerOutreachDraft`.
+- [`server/api/projects/[projectId]/outreach/[globalRecordId]/save.post.ts`](server/api/projects/%5BprojectId%5D/outreach/%5BglobalRecordId%5D/save.post.ts), `send.post.ts`, `cancel-send.post.ts`, `claim.post.ts` / `unclaim.post.ts` / `assign.post.ts` — draft persistence, Gmail send (with cancel grace period), and outreach ownership.
+- [`server/utils/ai.ts`](server/utils/ai.ts) — `streamStepAI()` generator; always calls `MODELS.CLAUDE_SONNET` via OpenRouter, with adaptive reasoning effort (configurable per step via `SystemConfig`, `anthropic/`-prefixed models only).
+- [`server/utils/google.ts`](server/utils/google.ts) — Google OAuth token exchange, token refresh, and Gmail draft/send.
+- [`server/utils/gmail-sync.ts`](server/utils/gmail-sync.ts) / [`server/api/gmail/sync.post.ts`](server/api/gmail/sync.post.ts) — syncs Gmail thread state into `Interaction` rows.
+- [`server/utils/global-record.ts`](server/utils/global-record.ts) / [`server/utils/deduplication.ts`](server/utils/deduplication.ts) — `GlobalRecord` payload updates and fuzzy-match dedup (Jaro-Winkler).
+- [`server/utils/record-events.ts`](server/utils/record-events.ts) — appends audit entries (`RecordEvent`) for changes to a `GlobalRecord`.
+- [`server/utils/permissions.ts`](server/utils/permissions.ts) — `requireAdmin()` and scope-access helpers; [`server/utils/projectPermissions.ts`](server/utils/projectPermissions.ts) — per-project role/permission checks.
+- [`server/utils/outreach-scheduler.ts`](server/utils/outreach-scheduler.ts) — in-memory timer map for `ScheduledEmail` sends and immediate-send cancellation.
+- [`server/utils/job-registry.ts`](server/utils/job-registry.ts) — `AbortController` registry so long-running AI calls can be cancelled by id.
 - [`server/utils/parse-ai-output.ts`](server/utils/parse-ai-output.ts) — shared JSON parsing helper (strips markdown fences, falls back to `{ raw: text }`).
 
 ### Key Client Files
-- [`composables/usePipelineRunPage.ts`](composables/usePipelineRunPage.ts) — single large composable that owns all pipeline page state and logic. Provided via `provide(pipelineRunKey, pipeline)` from the page and injected in child components.
-- [`composables/usePipelineCanvas.ts`](composables/usePipelineCanvas.ts) — composable for the visual pipeline canvas (node positions, step overlay state).
-- [`composables/useActiveProject.ts`](composables/useActiveProject.ts) — tracks the currently selected project across pages.
-- [`composables/useGmailSync.ts`](composables/useGmailSync.ts) — polls and syncs Gmail thread status for the outreach workspace.
-- [`components/pipeline/PipelineStepConfig.vue`](components/pipeline/PipelineStepConfig.vue) — step configuration UI (prompt selection, context parts, manual context, input data editor).
+- [`composables/useProjectOutreach.ts`](composables/useProjectOutreach.ts) — state and actions for the `/outreach` workspace (partner list, alignment/draft triggers, assignment).
+- [`composables/useActiveProject.ts`](composables/useActiveProject.ts) — tracks the currently selected project/group across pages.
+- [`composables/useGmailSync.ts`](composables/useGmailSync.ts) — polls `/api/gmail/sync` and exposes sync state.
+- [`composables/useSendNotifications.ts`](composables/useSendNotifications.ts) — countdown/undo UI state for the send grace period.
+- [`composables/useToast.ts`](composables/useToast.ts) — global toast notifications.
+- [`components/outreach/`](components/outreach) — `AlignmentPanel.vue`, `EmailPanel.vue`, `PartnerSidebar.vue`, `ClaimPanel.vue` for the outreach workspace.
+- [`components/negotiations/EmailComposer.vue`](components/negotiations/EmailComposer.vue) — composing replies/notes from the negotiation detail page.
+- [`components/settings/`](components/settings) — admin panels (`SettingsUsers.vue`, `SettingsProjects.vue`, `SettingsPermissions.vue`, `SettingsBudget.vue`, `SettingsSystem.vue`, `SettingsSignatures.vue`).
 
 ### Pages
-- `/pipeline/[id]` — visual pipeline canvas with DB panel, import panel, and outreach workspace (`components/canvas/`).
-- `/partners` — partner CRM: deal stages, action status, contact assignments, search (`pages/partners/`).
-- `/records` — global partner record browser across all pipeline runs (`pages/records.vue`).
+- `/outreach`, `/outreach/[id]` — outreach workspace: alignment + draft generation, claim/assign, send/schedule.
+- `/negotiations`, `/negotiations/[id]` — negotiation status board and per-record interaction log.
+- `/partners` — global `GlobalRecord` browser/CRM across all projects.
+- `/library` — reusable Library assets (see below).
+- `/settings` — current user's usage/credits; admin sections (users, groups/projects, roles, budgets) when `isAdmin`.
+- `/` redirects to `/outreach`.
 
 ### Library
-The `/library` page manages reusable assets: `SystemPrompt`, `ContextPart`, `SellingPoint`, and `EmailDraft`. All support a lineage tree (`derivedFromId`). System prompts are seeded by `prisma/seed.ts` with `isSystem: true`; step execution falls back to them when no custom prompt is selected.
+The `/library` page manages reusable assets: `SystemPrompt`, `ContextPart`, `SellingPoint`, `EmailDraft`, and `Signature`. All (except `Signature`) support a lineage tree (`derivedFromId`). System prompts are seeded by `prisma/seed.ts` with `isSystem: true`; the alignment/draft AI calls fall back to them when no custom prompt is selected.
 
 ### Auth Flow
 1. `/login` → `/api/auth/login` → Google consent screen
 2. `/api/auth/callback/google` validates `@scg.cz` domain, upserts `User`, sets session
 3. `middleware/auth.ts` redirects unauthenticated users to `/login`
 4. `server/utils/requireAuth.ts` guards all API routes
+5. `server/middleware/project-access.ts` enforces project-scoped access for project-nested routes
 
 ### Data Patterns
-- Step `outputData` is always JSON stored in a `Json` Prisma column. Most steps return a JSON array (the AI is instructed to always return arrays). `PARTNER_PROFILING` returns `Array<PartnerProfile>`.
-- `PARTNER_IDENTIFICATION` output shape: `{ items: Array<{ itemName, partners: [{ partnerId, name, isNew }] }> }`.
-- `parseAIOutput()` in `execute.post.ts` and the more robust version in `import-ai.post.ts` both strip markdown fences and fall back to `{ raw: text }` if JSON parsing fails.
-- Adaptive reasoning is only enabled for models whose ID starts with `anthropic/` (checked in `streamStepAI`).
+- `GlobalRecord.payload` is a `Json` column holding the record's structured data (schema varies by `RecordType`); status-style fields (e.g. `relevanceStatus`) live inside it rather than as columns.
+- `PartnerAlignment.outputData` and `PartnerOutreachDraft` fields hold the raw AI output for `VALUE_ALIGNMENT`/`OUTREACH_PREPARATION`, validated against `STEP_OUTPUT_SCHEMAS` in `config/pipeline.ts`.
+- `parseAIOutput()` / `parse-ai-output.ts` strips markdown fences and falls back to `{ raw: text }` if JSON parsing fails.
+- Adaptive reasoning is only enabled for models whose ID starts with `anthropic/` (checked in `streamStepAI`); effort level is configurable per step type via `SystemConfig` key `ai.reasoningEffort`, falling back to `DEFAULT_REASONING_EFFORT` in `config/pipeline.ts`.

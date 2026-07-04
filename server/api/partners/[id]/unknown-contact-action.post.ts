@@ -2,19 +2,20 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveProjectId } from '~/server/utils/activeProject'
 import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
-import { removeProjectAdditionalAddress } from '~/server/utils/project-additional-addresses'
+import { removeProjectAdditionalAddress, appendProjectAdditionalAddress } from '~/server/utils/project-additional-addresses'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
   const globalRecordId = getRouterParam(event, 'id')!
   const projectId = await getActiveProjectId(event)
   const body = await readBody<{
-    action: 'dismiss' | 'blacklist' | 'add_contact'
+    action: 'blacklist' | 'save_local' | 'add_contact'
     email: string
     firstName?: string
     lastName?: string
     role?: string
     contactType?: string
+    note?: string
   }>(event)
 
   if (!body.email || !body.action) {
@@ -23,17 +24,21 @@ export default defineEventHandler(async (event) => {
 
   const email = body.email.trim().toLowerCase()
 
-  if (body.action === 'dismiss') {
-    await prisma.interaction.deleteMany({
+  if (body.action === 'save_local') {
+    if (projectId) {
+      await appendProjectAdditionalAddress(projectId, globalRecordId, email)
+    }
+    await prisma.interaction.updateMany({
       where: {
         globalRecordId,
         isUnknownContact: true,
         unknownContactAddress: email,
       },
+      data: {
+        isUnknownContact: false,
+        unknownContactAddress: null,
+      },
     })
-    if (projectId) {
-      await removeProjectAdditionalAddress(projectId, globalRecordId, email)
-    }
     return { ok: true }
   }
 
@@ -80,12 +85,14 @@ export default defineEventHandler(async (event) => {
         lastName: body.lastName || null,
         role: body.role || null,
         contactType: body.contactType || null,
+        note: body.note || null,
       },
       update: {
         firstName: body.firstName || undefined,
         lastName: body.lastName || undefined,
         role: body.role || undefined,
         contactType: body.contactType || undefined,
+        note: body.note || undefined,
       },
     })
 

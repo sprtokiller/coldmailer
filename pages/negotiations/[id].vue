@@ -186,15 +186,17 @@ const composerContacts = computed(() => {
 })
 
 const unknownContactActionLoading = ref<string | null>(null)
+const CONTACT_TYPE_OPTIONS = ['PR', 'HR', 'Marketing', 'CEO', 'General']
 
-async function handleUnknownContactAction(action: 'dismiss' | 'blacklist' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string }) {
+async function handleUnknownContactAction(action: 'blacklist' | 'save_local' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string; contactType?: string; note?: string }) {
   unknownContactActionLoading.value = email
   try {
     await $fetch(`/api/partners/${id}/unknown-contact-action`, {
       method: 'POST',
       body: { action, email, ...extra },
     })
-    if (action === 'add_contact') toast.show('Kontakt přidán', 'success')
+    if (action === 'add_contact') toast.show('Kontakt uložen globálně', 'success')
+    else if (action === 'save_local') toast.show('Adresa uložena mezi přídavné adresy', 'success')
     else if (action === 'blacklist') toast.show('Kontakt přidán na blacklist', 'success')
     await refresh()
   } finally {
@@ -202,10 +204,10 @@ async function handleUnknownContactAction(action: 'dismiss' | 'blacklist' | 'add
   }
 }
 
-const addContactForm = ref<{ email: string; firstName: string; lastName: string; role: string } | null>(null)
+const addContactForm = ref<{ email: string; firstName: string; lastName: string; role: string; contactType: string; note: string } | null>(null)
 
 function openAddContactForm(email: string) {
-  addContactForm.value = { email, firstName: '', lastName: '', role: '' }
+  addContactForm.value = { email, firstName: '', lastName: '', role: '', contactType: 'General', note: '' }
 }
 
 async function submitAddContact() {
@@ -214,6 +216,8 @@ async function submitAddContact() {
     firstName: addContactForm.value.firstName || undefined,
     lastName: addContactForm.value.lastName || undefined,
     role: addContactForm.value.role || undefined,
+    contactType: addContactForm.value.contactType || undefined,
+    note: addContactForm.value.note || undefined,
   })
   addContactForm.value = null
 }
@@ -934,15 +938,19 @@ const TYPE_COLORS: Record<string, string> = {
             </p>
             <p class="text-xs text-amber-600 mt-0.5">
               Nalezeno {{ emails.length }} {{ emails.length === 1 ? 'email' : emails.length < 5 ? 'emaily' : 'emailů' }} se shodnou doménou.
-              Přidat jako kontakt partnera?
+              Je to validní kontakt pro toto jednání?
             </p>
 
-            <!-- Add contact inline form -->
+            <!-- Add contact globally inline form -->
             <div v-if="addContactForm?.email === email" class="mt-3 bg-white border border-amber-100 rounded-lg p-3 space-y-2">
-              <div class="flex gap-2">
-                <input v-model="addContactForm.firstName" type="text" placeholder="Jméno" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-                <input v-model="addContactForm.lastName" type="text" placeholder="Příjmení" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-                <input v-model="addContactForm.role" type="text" placeholder="Pozice" class="flex-1 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+              <div class="grid grid-cols-3 gap-2">
+                <input v-model="addContactForm.firstName" type="text" placeholder="Jméno" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="addContactForm.lastName" type="text" placeholder="Příjmení" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <input v-model="addContactForm.role" type="text" placeholder="Pozice" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                <select v-model="addContactForm.contactType" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300 bg-white">
+                  <option v-for="t in CONTACT_TYPE_OPTIONS" :key="t" :value="t">{{ t }}</option>
+                </select>
+                <input v-model="addContactForm.note" type="text" placeholder="Poznámka" class="col-span-2 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
               </div>
               <div class="flex justify-end gap-2">
                 <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="addContactForm = null">Zrušit</button>
@@ -950,7 +958,7 @@ const TYPE_COLORS: Record<string, string> = {
                   :disabled="unknownContactActionLoading === email"
                   class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
                   @click="submitAddContact"
-                >Uložit kontakt</button>
+                >Uložit globálně</button>
               </div>
             </div>
 
@@ -958,19 +966,19 @@ const TYPE_COLORS: Record<string, string> = {
             <div v-else class="flex items-center gap-2 mt-3">
               <button
                 :disabled="unknownContactActionLoading === email"
-                class="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                @click="handleUnknownContactAction('dismiss', email)"
+                class="text-xs px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-40 transition-colors"
+                @click="handleUnknownContactAction('blacklist', email)"
               >Ne</button>
               <button
                 :disabled="unknownContactActionLoading === email"
-                class="text-xs px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-40 transition-colors"
-                @click="handleUnknownContactAction('blacklist', email)"
-              >Ne, již neupozorňovat</button>
+                class="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                @click="handleUnknownContactAction('save_local', email)"
+              >Uložit</button>
               <button
                 :disabled="unknownContactActionLoading === email"
                 class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
                 @click="openAddContactForm(email)"
-              >Ano, přidat kontakt</button>
+              >Uložit globálně</button>
               <svg v-if="unknownContactActionLoading === email" class="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
             </div>
           </div>
