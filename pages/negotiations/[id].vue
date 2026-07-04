@@ -1393,7 +1393,7 @@ const TYPE_COLORS: Record<string, string> = {
   <PartnersPartnerFormModal
     v-if="showEditModal && partner"
     mode="edit"
-    :partner="{ id: partner.id, canonicalName: partner.canonicalName, payload: partner.payload }"
+    :partner="{ id: partner.id, canonicalName: partner.canonicalName, payload: partner.payload, contacts: partner.contacts }"
     @close="showEditModal = false"
     @saved="showEditModal = false; refreshPartner()"
   />

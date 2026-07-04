@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
       creator: { select: { id: true, name: true, image: true } },
       _count: { select: { events: true } },
       projectRecords: { select: { project: { select: { id: true, name: true } } } },
+      contacts: { select: { id: true, address: true, firstName: true, lastName: true, role: true, contactType: true, note: true, priority: true, isPrimary: true } },
     },
     orderBy: { createdAt: 'desc' },
     skip: offset,

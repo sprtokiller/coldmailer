@@ -17,12 +17,17 @@ const CONTACT_TYPE_COLORS: Record<string, string> = {
   Marketing: 'bg-orange-100 text-orange-700', CEO: 'bg-red-100 text-red-700',
   General: 'bg-gray-100 text-gray-600',
 }
+interface Contact {
+  id: string; address: string; firstName: string | null; lastName: string | null
+  role: string | null; contactType: string | null; note: string | null; priority: number; isPrimary: boolean
+}
 interface GlobalRecord {
   id: string; type: string; canonicalName: string; createdAt: string
   payload: Record<string, unknown>
   creator: { id: string; name: string; image: string | null }
   _count: { events: number }
   projectRecords: Array<{ project: { id: string; name: string } }>
+  contacts: Contact[]
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -69,9 +74,8 @@ function getStr(rec: GlobalRecord, key: string): string {
   return String(rec.payload[key] ?? '')
 }
 
-function getContacts(rec: GlobalRecord): Array<Record<string, unknown>> {
-  const c = rec.payload.contacts
-  return Array.isArray(c) ? c as Array<Record<string, unknown>> : []
+function getContacts(rec: GlobalRecord): Contact[] {
+  return rec.contacts ?? []
 }
 
 function getArr(rec: GlobalRecord, key: string): string[] {
@@ -331,12 +335,11 @@ function onImportClose() {
                       <div v-if="getContacts(rec).length > 0">
                         <p class="text-xs font-medium text-gray-500 mb-1">Kontakty</p>
                         <div class="space-y-1">
-                          <div v-for="(c, i) in getContacts(rec)" :key="i" class="flex items-center gap-2 text-xs text-gray-600">
-                            <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[String(c.type || '')] ?? 'bg-gray-100 text-gray-500']">{{ c.type || 'kontakt' }}</span>
-                            <span class="font-medium">{{ [String(c.firstName || ''), String(c.lastName || c.name || '')].filter(Boolean).join(' ') || 'generický' }}</span>
-                            <span v-if="(c.role || c.position) && (c.firstName || c.lastName || c.name)" class="text-gray-400">{{ c.role || c.position }}</span>
-                            <a v-if="c.email" :href="`mailto:${c.email}`" class="text-indigo-500 hover:underline ml-auto" @click.stop>{{ c.email }}</a>
-                            <span v-else-if="c.firstName || c.lastName || c.name" class="text-red-400 ml-auto italic">chybí e-mail</span>
+                          <div v-for="c in getContacts(rec)" :key="c.id" class="flex items-center gap-2 text-xs text-gray-600">
+                            <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[String(c.contactType || '')] ?? 'bg-gray-100 text-gray-500']">{{ c.contactType || 'kontakt' }}</span>
+                            <span class="font-medium">{{ [c.firstName, c.lastName].filter(Boolean).join(' ') || 'generický' }}</span>
+                            <span v-if="c.role && (c.firstName || c.lastName)" class="text-gray-400">{{ c.role }}</span>
+                            <a :href="`mailto:${c.address}`" class="text-indigo-500 hover:underline ml-auto" @click.stop>{{ c.address }}</a>
                           </div>
                         </div>
                       </div>

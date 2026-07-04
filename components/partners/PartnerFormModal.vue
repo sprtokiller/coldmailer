@@ -1,7 +1,11 @@
 <script setup lang="ts">
+interface PartnerContact {
+  address: string; firstName: string | null; lastName: string | null
+  role: string | null; contactType: string | null; note: string | null; priority: number
+}
 const props = defineProps<{
   mode: 'create' | 'edit'
-  partner?: { id: string; canonicalName: string; payload: Record<string, unknown> }
+  partner?: { id: string; canonicalName: string; payload: Record<string, unknown>; contacts?: PartnerContact[] }
   duplicateBehavior?: 'show-error' | 'use-existing'
 }>()
 const emit = defineEmits<{ close: []; saved: [{ id: string }]; deleted: [] }>()
@@ -39,14 +43,12 @@ const form = reactive({
 const originalForm = { ...form }
 
 const contacts = ref<ContactEntry[]>(
-  Array.isArray(payload.contacts)
-    ? (payload.contacts as any[]).map(c => ({
-        firstName: c.firstName ?? '', lastName: c.lastName ?? '',
-        role: c.role ?? '', email: c.email ?? '',
-        type: c.type ?? 'General', priority: c.priority ?? 3,
-        note: c.note ?? '',
-      }))
-    : [],
+  (props.partner?.contacts ?? []).map(c => ({
+    firstName: c.firstName ?? '', lastName: c.lastName ?? '',
+    role: c.role ?? '', email: c.address ?? '',
+    type: c.contactType ?? 'General', priority: c.priority ?? 3,
+    note: c.note ?? '',
+  })),
 )
 const originalContactsJSON = JSON.stringify(contacts.value)
 
