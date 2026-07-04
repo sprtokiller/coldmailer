@@ -355,6 +355,18 @@ function relTime(iso: string | null | undefined) {
             </div>
           </div>
 
+          <!-- Row 5: manual context -->
+          <div class="field-group">
+            <label class="field-label">Vlastní kontext</label>
+            <textarea
+              v-model="ctx.opConfig.value.manualContext"
+              rows="2"
+              class="field-input field-textarea"
+              placeholder="Zadejte vlastní kontext…"
+              :disabled="isExecutingHere"
+            />
+          </div>
+
           <!-- Generate / Stop button -->
           <button
             v-if="isExecutingHere"
@@ -652,6 +664,11 @@ function relTime(iso: string | null | undefined) {
 .field-select--warn {
   border-color: #fbbf24;
   background-color: #fffbeb;
+}
+
+.field-textarea {
+  resize: none;
+  line-height: 1.5;
 }
 
 .no-contact {
