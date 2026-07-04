@@ -1,0 +1,23 @@
+vars:
+  - name: "GIT_REPO"
+    value: "https://github.com/sprtokiller/coldmailer.git"
+  - name: "GIT_BRANCH"
+    value: "master"
+  - name: "APP_DIR"
+    value: "/opt/coldmailer"
+
+steps:
+  - name: "Update repository"
+    run: "if [ -d {{!APP_DIR!}}/.git ]; then cd {{!APP_DIR!}} && git fetch origin && git reset --hard origin/{{!GIT_BRANCH!}}; else git clone --branch {{!GIT_BRANCH!}} --depth 1 {{!GIT_REPO!}} {{!APP_DIR!}}; fi"
+
+  - name: "Build application image"
+    run: "cd {{!APP_DIR!}} && docker compose build --pull app"
+
+  - name: "Deploy containers"
+    run: "cd {{!APP_DIR!}} && docker compose up -d"
+
+  - name: "Wait for application"
+    run: "for i in $(seq 1 60); do curl -sf http://localhost:3000/ >/dev/null && exit 0; sleep 5; done; echo 'Application did not become healthy within 5 minutes' >&2; exit 1"
+
+  - name: "Prune dangling images"
+    run: "docker image prune -f"
