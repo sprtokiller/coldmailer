@@ -13,12 +13,21 @@ interface SigItem {
   groupId?: string | null
 }
 
+interface EditScheduled {
+  id: string
+  toAddress: string
+  subject: string
+  body: string
+  scheduledFor: string
+}
+
 interface Props {
   globalRecordId: string
   contacts: Contact[]
   prefilledTo?: string
   prefilledSubject?: string
   inReplyToGmailId?: string
+  editScheduled?: EditScheduled | null
 }
 
 const props = defineProps<Props>()
@@ -26,12 +35,23 @@ const emit = defineEmits<{ close: []; sent: [] }>()
 
 const { activeProject, groupFont } = useActiveProject()
 
-const to = ref(props.prefilledTo ?? '')
-const subject = ref(props.prefilledSubject ?? '')
-const body = ref('')
+const isEdit = computed(() => !!props.editScheduled)
+
+const to = ref(props.editScheduled?.toAddress ?? props.prefilledTo ?? '')
+const subject = ref(props.editScheduled?.subject ?? props.prefilledSubject ?? '')
+const body = ref(props.editScheduled?.body ?? '')
 const selectedSignatureId = ref('')
 const sending = ref(false)
 const error = ref('')
+
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+
+const scheduleEnabled = ref(!!props.editScheduled)
+const scheduledFor = ref(props.editScheduled ? toDatetimeLocal(props.editScheduled.scheduledFor) : '')
 
 const activeProjectId = computed(() => activeProject.value?.id ?? '')
 
@@ -46,28 +66,55 @@ const signatures = computed<SigItem[]>(() => {
 })
 
 watch(signatures, (val) => {
-  if (!selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0].id
+  if (!isEdit.value && !selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0].id
 }, { immediate: true })
 
-const title = computed(() => props.inReplyToGmailId ? 'Odpovědět' : 'Nový e-mail')
-const canSend = computed(() => !!to.value.trim() && !!subject.value.trim() && !!body.value.trim() && !!selectedSignatureId.value && !sending.value)
+const title = computed(() => isEdit.value ? 'Upravit naplánovaný e-mail' : props.inReplyToGmailId ? 'Odpovědět' : 'Nový e-mail')
+
+const scheduledForDate = computed(() => scheduledFor.value ? new Date(scheduledFor.value) : null)
+const scheduleValid = computed(() => !scheduleEnabled.value || (!!scheduledForDate.value && scheduledForDate.value.getTime() > Date.now()))
+
+const canSend = computed(() =>
+  !!to.value.trim() && !!subject.value.trim() && !!body.value.trim() &&
+  (isEdit.value || !!selectedSignatureId.value) &&
+  scheduleValid.value && !sending.value,
+)
+
+const submitLabel = computed(() => {
+  if (isEdit.value) return 'Uložit změny'
+  return scheduleEnabled.value ? 'Naplánovat odeslání' : 'Odeslat'
+})
 
 async function handleSend() {
   if (!canSend.value) return
   error.value = ''
   sending.value = true
   try {
-    const sig = signatures.value.find(s => s.id === selectedSignatureId.value)
-    await $fetch(`/api/partners/${props.globalRecordId}/send-email`, {
-      method: 'POST',
-      body: {
-        toAddress: to.value.trim(),
-        subject: subject.value.trim(),
-        body: body.value,
-        signatureContent: sig?.content,
-        inReplyToGmailId: props.inReplyToGmailId,
-      },
-    })
+    if (isEdit.value) {
+      const scheduledForChanged = scheduledFor.value !== toDatetimeLocal(props.editScheduled!.scheduledFor)
+      await $fetch(`/api/partners/${props.globalRecordId}/scheduled-emails/${props.editScheduled!.id}`, {
+        method: 'PATCH',
+        body: {
+          toAddress: to.value.trim(),
+          subject: subject.value.trim(),
+          body: body.value,
+          ...(scheduledForChanged ? { scheduledFor: scheduledForDate.value!.toISOString() } : {}),
+        },
+      })
+    } else {
+      const sig = signatures.value.find(s => s.id === selectedSignatureId.value)
+      await $fetch(`/api/partners/${props.globalRecordId}/send-email`, {
+        method: 'POST',
+        body: {
+          toAddress: to.value.trim(),
+          subject: subject.value.trim(),
+          body: body.value,
+          signatureContent: sig?.content,
+          inReplyToGmailId: props.inReplyToGmailId,
+          scheduledFor: scheduleEnabled.value ? scheduledForDate.value!.toISOString() : undefined,
+        },
+      })
+    }
     emit('sent')
     emit('close')
   } catch (err) {
@@ -113,15 +160,33 @@ async function handleSend() {
             <span class="composer-field-label">Předmět</span>
             <input v-model="subject" type="text" class="composer-field-input" placeholder="Předmět e-mailu…" />
           </div>
-          <div v-if="signatures.length" class="composer-field-row">
-            <span class="composer-field-label">Podpis</span>
-            <select v-model="selectedSignatureId" class="composer-field-input composer-field-select">
-              <option v-for="sig in signatures" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
-            </select>
-          </div>
-          <div v-else class="composer-field-row">
-            <span class="composer-field-label">Podpis</span>
-            <span class="composer-no-signature">Nemáte podpis pro tento typ projektu — vytvořte jej v Knihovně.</span>
+          <template v-if="!isEdit">
+            <div v-if="signatures.length" class="composer-field-row">
+              <span class="composer-field-label">Podpis</span>
+              <select v-model="selectedSignatureId" class="composer-field-input composer-field-select">
+                <option v-for="sig in signatures" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
+              </select>
+            </div>
+            <div v-else class="composer-field-row">
+              <span class="composer-field-label">Podpis</span>
+              <span class="composer-no-signature">Nemáte podpis pro tento typ projektu — vytvořte jej v Knihovně.</span>
+            </div>
+          </template>
+
+          <!-- Scheduling -->
+          <div class="composer-field-row">
+            <span class="composer-field-label">Naplánovat</span>
+            <label v-if="!isEdit" class="composer-schedule-toggle">
+              <input v-model="scheduleEnabled" type="checkbox" />
+              odeslat později
+            </label>
+            <input
+              v-if="scheduleEnabled"
+              v-model="scheduledFor"
+              type="datetime-local"
+              class="composer-field-input"
+              :class="{ 'composer-field-input--error': scheduledFor && !scheduleValid }"
+            />
           </div>
         </div>
 
@@ -141,7 +206,7 @@ async function handleSend() {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ sending ? 'Odesílám…' : 'Odeslat' }}
+            {{ sending ? 'Odesílám…' : submitLabel }}
           </button>
         </div>
       </div>
@@ -245,6 +310,20 @@ async function handleSend() {
 .composer-no-signature {
   font-size: 12px;
   color: #dc2626;
+}
+
+.composer-schedule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.composer-field-input--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
 }
 
 .composer-field-select {

@@ -72,8 +72,20 @@ const { user: me } = useUserSession()
 const canEdit = computed(() => interactionsData.value?.access.canEdit ?? false)
 const canManageAssignees = computed(() => interactionsData.value?.access.canManageAssignees ?? false)
 
+interface ScheduledEmailItem {
+  id: string
+  toAddress: string
+  subject: string
+  body: string
+  scheduledFor: string
+  status: 'PENDING' | 'SENDING' | 'FAILED'
+  errorMessage: string | null
+  createdBy: AppUser
+}
+const { data: scheduledEmails, refresh: refreshScheduledEmails } = await useFetch<ScheduledEmailItem[]>(`/api/partners/${id}/scheduled-emails`)
+
 async function refresh() {
-  await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist()])
+  await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist(), refreshScheduledEmails()])
 }
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
@@ -584,11 +596,13 @@ const composerOpen = ref(false)
 const composerPrefilledTo = ref('')
 const composerPrefilledSubject = ref('')
 const composerReplyToGmailId = ref<string | null>(null)
+const composerEditScheduled = ref<ScheduledEmailItem | null>(null)
 
 function openNewEmail() {
   composerPrefilledTo.value = primaryContact.value?.address ?? ''
   composerPrefilledSubject.value = ''
   composerReplyToGmailId.value = null
+  composerEditScheduled.value = null
   composerOpen.value = true
 }
 
@@ -597,7 +611,47 @@ function openReply(i: Interaction) {
   const subj = i.subject ?? ''
   composerPrefilledSubject.value = /^re:/i.test(subj) ? subj : `Re: ${subj}`
   composerReplyToGmailId.value = i.gmailId
+  composerEditScheduled.value = null
   composerOpen.value = true
+}
+
+function editScheduledEmail(se: ScheduledEmailItem) {
+  composerEditScheduled.value = se
+  composerOpen.value = true
+}
+
+const scheduledActionLoading = ref<string | null>(null)
+
+async function sendScheduledNow(se: ScheduledEmailItem) {
+  if (!confirm(`Odeslat tento e-mail hned partnerovi na ${se.toAddress}?`)) return
+  scheduledActionLoading.value = se.id
+  try {
+    await $fetch(`/api/partners/${id}/scheduled-emails/${se.id}/send-now`, { method: 'POST' })
+    toast.show('E-mail odeslán', 'success')
+    await refresh()
+  } catch (err) {
+    toast.show(err instanceof Error ? err.message : 'Odeslání selhalo', 'error')
+  } finally {
+    scheduledActionLoading.value = null
+  }
+}
+
+async function cancelScheduledEmail(se: ScheduledEmailItem) {
+  if (!confirm('Opravdu zrušit toto naplánované odeslání?')) return
+  scheduledActionLoading.value = se.id
+  try {
+    await $fetch(`/api/partners/${id}/scheduled-emails/${se.id}`, { method: 'DELETE' })
+    toast.show('Naplánované odeslání zrušeno', 'success')
+    await refreshScheduledEmails()
+  } catch (err) {
+    toast.show(err instanceof Error ? err.message : 'Zrušení selhalo', 'error')
+  } finally {
+    scheduledActionLoading.value = null
+  }
+}
+
+function fmtScheduled(iso: string) {
+  return new Date(iso).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -821,6 +875,47 @@ const TYPE_COLORS: Record<string, string> = {
           HTML
         </button>
       </div>
+      </div>
+    </div>
+
+    <!-- ── Scheduled emails (not yet sent) ── -->
+    <div v-if="scheduledEmails?.length" class="mb-6 space-y-2">
+      <div
+        v-for="se in scheduledEmails"
+        :key="se.id"
+        class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start justify-between gap-3"
+      >
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
+              {{ se.status === 'FAILED' ? 'Selhalo' : se.status === 'SENDING' ? 'Odesílá se…' : 'Naplánováno' }}
+            </span>
+            <span class="text-sm font-medium text-amber-900">{{ se.subject }}</span>
+          </div>
+          <p class="text-xs text-amber-700 mt-1">
+            Komu: <span class="font-mono">{{ se.toAddress }}</span> · odejde
+            <strong>{{ fmtScheduled(se.scheduledFor) }}</strong> · připravil/a {{ se.createdBy.name }}
+          </p>
+          <p v-if="se.status === 'FAILED' && se.errorMessage" class="text-xs text-red-600 mt-1">{{ se.errorMessage }}</p>
+        </div>
+        <div v-if="(se.status === 'PENDING' || se.status === 'FAILED') && canEdit" class="flex items-center gap-2 flex-shrink-0">
+          <button
+            v-if="se.status === 'PENDING'"
+            :disabled="scheduledActionLoading === se.id"
+            class="text-xs px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-colors"
+            @click="editScheduledEmail(se)"
+          >Upravit</button>
+          <button
+            :disabled="scheduledActionLoading === se.id"
+            class="text-xs px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+            @click="sendScheduledNow(se)"
+          >{{ se.status === 'FAILED' ? 'Zkusit znovu' : 'Odeslat nyní' }}</button>
+          <button
+            :disabled="scheduledActionLoading === se.id"
+            class="text-xs px-2.5 py-1.5 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            @click="cancelScheduledEmail(se)"
+          >{{ se.status === 'FAILED' ? 'Zavřít' : 'Zrušit' }}</button>
+        </div>
       </div>
     </div>
 
@@ -1302,8 +1397,9 @@ const TYPE_COLORS: Record<string, string> = {
     :prefilled-to="composerPrefilledTo"
     :prefilled-subject="composerPrefilledSubject"
     :in-reply-to-gmail-id="composerReplyToGmailId ?? undefined"
+    :edit-scheduled="composerEditScheduled"
     @close="composerOpen = false"
-    @sent="composerOpen = false; refreshInteractions()"
+    @sent="composerOpen = false; refreshInteractions(); refreshScheduledEmails()"
   />
 </template>
 

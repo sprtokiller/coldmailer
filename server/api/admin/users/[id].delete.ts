@@ -39,6 +39,7 @@ export default defineEventHandler(async (event) => {
           outreachDraftsSaved: true,
           outreachAssignments: true,
           negotiationAssignments: true,
+          scheduledEmails: true,
         },
       },
     },
@@ -58,6 +59,7 @@ export default defineEventHandler(async (event) => {
     outreachDraftsSaved: 'uložené outreach drafty',
     outreachAssignments: 'přiřazení outreach',
     negotiationAssignments: 'přiřazení k jednání',
+    scheduledEmails: 'naplánované e-maily',
   }
 
   const blocking = Object.entries(counts?._count ?? {})

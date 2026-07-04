@@ -2,9 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { canEditNegotiation } from '~/server/utils/projectPermissions'
-import { sendGmailMessage, refreshAccessToken, getGmailMessage } from '~/server/utils/google'
-import { trackCustomRecipientAddress } from '~/server/utils/project-additional-addresses'
-import { assignNegotiationOnSend } from '~/server/utils/negotiation-assignment'
+import { sendPartnerEmailNow } from '~/server/utils/send-partner-email'
 
 const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
 
@@ -14,6 +12,7 @@ interface SendEmailBody {
   body: string
   signatureContent?: string
   inReplyToGmailId?: string
+  scheduledFor?: string // ISO datetime — if set and in the future, schedules instead of sending now
 }
 
 export default defineEventHandler(async (event) => {
@@ -37,71 +36,42 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Nemáte oprávnění odeslat e-mail. Nejste přiřazeni k tomuto partnerovi.' })
   }
 
-  const dbUser = await prisma.user.findUnique({ where: { id: session.id } })
-  if (!dbUser?.accessToken) {
-    throw createError({ statusCode: 400, message: 'Chybí Google přihlašovací token. Přihlaste se znovu.' })
-  }
-
-  let accessToken = dbUser.accessToken
-  if (dbUser.refreshToken && (!dbUser.tokenExpiry || dbUser.tokenExpiry < new Date())) {
-    const config = useRuntimeConfig()
-    const refreshed = await refreshAccessToken(dbUser.refreshToken, config.googleClientId, config.googleClientSecret)
-    accessToken = refreshed.access_token
-    await prisma.user.update({
-      where: { id: session.id },
-      data: { accessToken: refreshed.access_token, tokenExpiry: new Date(Date.now() + refreshed.expires_in * 1000) },
-    })
-  }
-
   const fullBody = body.signatureContent
     ? body.body + SIGNATURE_SEPARATOR + body.signatureContent
     : body.body
 
-  let threading: { threadId: string; inReplyTo: string; references: string } | undefined
-
-  if (body.inReplyToGmailId) {
-    try {
-      const origMsg = await getGmailMessage(accessToken, body.inReplyToGmailId, 'metadata')
-      const rfcMessageId = (origMsg.payload.headers ?? []).find(h => h.name.toLowerCase() === 'message-id')?.value
-      if (rfcMessageId && origMsg.threadId) {
-        threading = { threadId: origMsg.threadId, inReplyTo: rfcMessageId, references: rfcMessageId }
-      }
-    } catch {
-      // Threading info unavailable — send without thread linking
+  if (body.scheduledFor) {
+    const scheduledFor = new Date(body.scheduledFor)
+    if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() <= Date.now()) {
+      throw createError({ statusCode: 400, message: 'Naplánovaný čas musí být v budoucnosti.' })
     }
+
+    const scheduledEmail = await prisma.scheduledEmail.create({
+      data: {
+        projectId,
+        globalRecordId,
+        toAddress: body.toAddress,
+        subject: body.subject,
+        body: fullBody,
+        inReplyToGmailId: body.inReplyToGmailId ?? null,
+        scheduledFor,
+        createdById: session.id,
+      },
+      include: { createdBy: { select: { id: true, name: true, image: true } } },
+    })
+
+    return { scheduled: true, scheduledEmail }
   }
 
-  const result = await sendGmailMessage(accessToken, body.toAddress, body.subject, fullBody, threading)
-
-  await trackCustomRecipientAddress(projectId, globalRecordId, body.toAddress)
-
-  await assignNegotiationOnSend(projectId, globalRecordId, session.id)
-
-  const interaction = await prisma.interaction.create({
-    data: {
-      globalRecordId,
-      projectId,
-      type: 'EMAIL',
-      direction: 'SENT',
-      subject: body.subject,
-      sentAt: new Date(),
-      fromAddress: dbUser.email,
-      toAddress: body.toAddress,
-      gmailId: result.id,
-      content: fullBody,
-      createdBy: session.id,
-    },
-    include: {
-      creator: { select: { id: true, name: true, image: true } },
-      assignees: {
-        select: {
-          userId: true,
-          user: { select: { id: true, name: true, image: true } },
-        },
-      },
-      project: { select: { id: true, name: true } },
-    },
+  const interaction = await sendPartnerEmailNow({
+    userId: session.id,
+    projectId,
+    globalRecordId,
+    toAddress: body.toAddress,
+    subject: body.subject,
+    fullBody,
+    inReplyToGmailId: body.inReplyToGmailId,
   })
 
-  return interaction
+  return { scheduled: false, interaction }
 })

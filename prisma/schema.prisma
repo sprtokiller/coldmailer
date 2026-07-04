@@ -42,6 +42,7 @@ model User {
   outreachAssignmentsGiven OutreachAssignment[]   @relation("OutreachAssignedBy")
   negotiationAssignments      NegotiationAssignee[] @relation("NegotiationAssignee")
   negotiationAssignmentsGiven NegotiationAssignee[] @relation("NegotiationAssignedBy")
+  scheduledEmails             ScheduledEmail[]
 }
 
 model Group {
@@ -78,6 +79,7 @@ model Project {
   outreachDrafts      PartnerOutreachDraft[]
   outreachAssignments OutreachAssignment[]
   negotiationAssignees NegotiationAssignee[]
+  scheduledEmails      ScheduledEmail[]
 
   @@unique([groupId, name])
   @@index([groupId])
@@ -249,6 +251,7 @@ model GlobalRecord {
   outreachDrafts      PartnerOutreachDraft[]
   outreachAssignments OutreachAssignment[]
   negotiationAssignees NegotiationAssignee[]
+  scheduledEmails      ScheduledEmail[]
 
   @@unique([normalizedName, type])
 }
@@ -526,4 +529,36 @@ model NegotiationAssignee {
   @@unique([projectId, globalRecordId, userId])
   @@index([projectId])
   @@index([projectId, globalRecordId])
+}
+
+enum ScheduledEmailStatus {
+  PENDING
+  SENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+// E-mail naplánovaný na budoucí datum/čas — odeslán na pozadí pollerem, mimo 20s grace-period undo mechaniku.
+model ScheduledEmail {
+  id               String               @id @default(cuid())
+  projectId        String
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId   String
+  globalRecord     GlobalRecord         @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  toAddress        String
+  subject          String
+  body             String // plné HTML tělo včetně podpisu
+  inReplyToGmailId String?
+  scheduledFor     DateTime
+  status           ScheduledEmailStatus @default(PENDING)
+  createdById      String
+  createdBy        User                 @relation(fields: [createdById], references: [id])
+  createdAt        DateTime             @default(now())
+  sentAt           DateTime?
+  gmailId          String?
+  errorMessage     String?
+
+  @@index([projectId, globalRecordId])
+  @@index([status, scheduledFor])
 }
