@@ -120,7 +120,7 @@ All model/step mappings live in [`config/pipeline.ts`](config/pipeline.ts) — `
 - [`server/utils/google.ts`](server/utils/google.ts) — Google OAuth token exchange, token refresh, and Gmail draft creation.
 - [`server/api/pipeline/[id]/steps/import-ai.post.ts`](server/api/pipeline/%5Bid%5D/steps/import-ai.post.ts) — parses free-text/deep-research output into structured JSON and merges it into an existing step's `outputData`. Contains JSON repair logic and smart merging (dedup by name/URL/email).
 - [`server/utils/gmail-sync.ts`](server/utils/gmail-sync.ts) — syncs Gmail thread state into the DB for the outreach workspace.
-- [`server/utils/job-registry.ts`](server/utils/job-registry.ts) — manages background job lifecycle (multiple concurrent jobs, cancellation).
+- [`server/utils/work-registry.ts`](server/utils/work-registry.ts) — in-memory registry of running/recent background work (gmail sync, scheduled sends, AI jobs); powers the `/work` page and cancellation.
 - [`server/utils/permissions.ts`](server/utils/permissions.ts) / [`projectPermissions.ts`](server/utils/projectPermissions.ts) — user and project-level permission checks.
 - [`server/utils/outreach-scheduler.ts`](server/utils/outreach-scheduler.ts) — schedules queued outreach sends.
 - [`server/utils/parse-ai-output.ts`](server/utils/parse-ai-output.ts) — shared JSON parsing helper (strips markdown fences, falls back to `{ raw: text }`).

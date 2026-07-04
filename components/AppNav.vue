@@ -14,6 +14,19 @@ function isNavActive(prefix: string) {
 // email draft) is still running even after navigating away from the Oslovení page.
 const outreachExecuting = useState<'alignment' | 'draft' | null>('outreachExecuting', () => null)
 
+// Badge počtu běžících úloh na serveru pro záložku Práce. Stránka /work si
+// polluje rychleji sama; tady stačí pomalý tep, sdílený stav je stejný.
+const { activeCount: workActiveCount, refresh: refreshWork } = useWork()
+let workTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  if (!loggedIn.value) return
+  refreshWork()
+  workTimer = setInterval(refreshWork, 30_000)
+})
+onBeforeUnmount(() => {
+  if (workTimer) clearInterval(workTimer)
+})
+
 const projectMenuOpen = ref(false)
 
 const projects = computed(() =>
@@ -167,6 +180,20 @@ async function logout() {
             active-class="text-gray-800 font-medium"
           >
             Databáze
+          </NuxtLink>
+          <NuxtLink
+            to="/work"
+            class="text-sm transition-colors inline-flex items-center gap-1.5"
+            :class="isNavActive('/work') ? 'text-gray-800 font-medium' : 'text-gray-500 hover:text-gray-800'"
+          >
+            Práce
+            <span
+              v-if="workActiveCount > 0"
+              class="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold leading-none"
+              :title="`${workActiveCount} běžících úloh`"
+            >
+              {{ workActiveCount }}
+            </span>
           </NuxtLink>
           <NuxtLink
             to="/settings"

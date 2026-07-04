@@ -1,6 +1,6 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
-import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
+import { startTrackedPartnerEmailSyncs } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -58,10 +58,7 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  getEmailSyncHistoryDays().then(historyDays =>
-    syncGmailForPartnerEmail(session.id, globalRecordId, address, historyDays)
-      .catch(err => console.warn('[gmail-sync] Targeted sync failed:', err.message ?? err)),
-  )
+  startTrackedPartnerEmailSyncs(session.id, globalRecordId, [address])
 
   return contact
 })

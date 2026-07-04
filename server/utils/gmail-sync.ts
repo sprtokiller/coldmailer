@@ -7,6 +7,7 @@ import {
   type GmailMessagePart,
 } from '~/server/utils/google'
 import { appendProjectAdditionalAddress } from '~/server/utils/project-additional-addresses'
+import { runWork, mapWithConcurrency } from '~/server/utils/work-registry'
 
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 200
@@ -108,7 +109,21 @@ async function buildDomainContext(
   return result
 }
 
-export async function syncGmailForUser(userId: string, options?: { forceLookbackDays?: number }): Promise<{ synced: number }> {
+export interface GmailSyncOptions {
+  forceLookbackDays?: number
+  /** Přeruší synchronizaci na hranici dávky (např. zrušení ze záložky Práce). */
+  signal?: AbortSignal
+  /** Hlášení průběhu: počet zpracovaných zpráv a počet nově uložených interakcí. */
+  onProgress?: (processed: number, synced: number) => void
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error('Synchronizace byla zrušena')
+  }
+}
+
+export async function syncGmailForUser(userId: string, options?: GmailSyncOptions): Promise<{ synced: number }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -150,14 +165,17 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   const query = `after:${afterTimestamp} -in:draft`
 
   let synced = 0
+  let processed = 0
   let pageToken: string | undefined
 
   do {
+    throwIfAborted(options?.signal)
     const listing = await listGmailMessages(accessToken, query, pageToken)
     const messageIds = listing.messages ?? []
     pageToken = listing.nextPageToken
 
     for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      throwIfAborted(options?.signal)
       const batch = messageIds.slice(i, i + BATCH_SIZE)
       const results = await Promise.all(
         batch.map(m => getGmailMessage(accessToken, m.id).catch(() => null)),
@@ -167,6 +185,9 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
         if (!msg) continue
         synced += await processMessage(msg, user.id, user.email, partnerEmailMap, domainCtx)
       }
+
+      processed += batch.length
+      options?.onProgress?.(processed, synced)
 
       if (i + BATCH_SIZE < messageIds.length) {
         await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
@@ -229,6 +250,7 @@ export async function syncGmailForPartnerEmail(
   emailAddress: string,
   lookbackDays: number,
   knownProjectId?: string,
+  signal?: AbortSignal,
 ): Promise<{ synced: number }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -279,11 +301,13 @@ export async function syncGmailForPartnerEmail(
   let pageToken: string | undefined
 
   do {
+    throwIfAborted(signal)
     const listing = await listGmailMessages(accessToken, query, pageToken)
     const messageIds = listing.messages ?? []
     pageToken = listing.nextPageToken
 
     for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      throwIfAborted(signal)
       const batch = messageIds.slice(i, i + BATCH_SIZE)
       const results = await Promise.all(
         batch.map(m => getGmailMessage(accessToken, m.id).catch(() => null)),
@@ -301,6 +325,63 @@ export async function syncGmailForPartnerEmail(
   } while (pageToken)
 
   return { synced }
+}
+
+const PARTNER_EMAIL_SYNC_CONCURRENCY = 2
+
+/**
+ * Fire-and-forget dohledání historie komunikace pro nově přidané kontaktní
+ * adresy partnera. Běží jako trackovaná práce (záložka Práce) s omezenou
+ * souběžností, aby N kontaktů nespustilo N paralelních průchodů Gmail API.
+ */
+export function startTrackedPartnerEmailSyncs(
+  userId: string,
+  globalRecordId: string,
+  emailAddresses: string[],
+  knownProjectId?: string,
+): void {
+  const emails = [...new Set(emailAddresses.map(e => e.trim()).filter(Boolean))]
+  if (emails.length === 0) return
+
+  ;(async () => {
+    const [historyDays, record] = await Promise.all([
+      getEmailSyncHistoryDays(),
+      prisma.globalRecord.findUnique({ where: { id: globalRecordId }, select: { canonicalName: true } }),
+    ])
+    const partnerName = record?.canonicalName ?? 'partner'
+
+    await runWork(
+      {
+        kind: 'PARTNER_EMAIL_SYNC',
+        label: `Dohledání e-mailů — ${partnerName}`,
+        userId,
+        globalRecordId,
+        projectId: knownProjectId ?? null,
+        cancellable: true,
+        total: emails.length,
+      },
+      async (handle) => {
+        let done = 0
+        const failures: string[] = []
+        await mapWithConcurrency(emails, PARTNER_EMAIL_SYNC_CONCURRENCY, async (email) => {
+          if (handle.signal.aborted) return
+          try {
+            await syncGmailForPartnerEmail(userId, globalRecordId, email, historyDays, knownProjectId, handle.signal)
+          } catch (err) {
+            if (!handle.signal.aborted) failures.push(email)
+            console.warn(`[gmail-sync] Targeted sync for ${email} failed:`, err instanceof Error ? err.message : err)
+          } finally {
+            handle.setProgress(++done, emails.length, email)
+          }
+        })
+        if (failures.length > 0) {
+          throw new Error(`Nepodařilo se synchronizovat ${failures.length} z ${emails.length} adres (${failures.join(', ')})`)
+        }
+      },
+    )
+  })().catch(err =>
+    console.warn('[gmail-sync] Targeted sync job failed:', err instanceof Error ? err.message : err),
+  )
 }
 
 type PartnerEmailEntry = { globalRecordId: string; projectId: string }

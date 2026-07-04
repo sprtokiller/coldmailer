@@ -5,7 +5,7 @@ import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { OPENROUTER, MODELS } from '~/config/pipeline'
 import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
-import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
+import { startTrackedPartnerEmailSyncs } from '~/server/utils/gmail-sync'
 
 const PARTNER_PAYLOAD_FIELDS = [
   'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
@@ -71,12 +71,7 @@ async function createPartnerRecord(canonicalName: string, payload: Record<string
   }
 
   if (emailContacts.length > 0) {
-    getEmailSyncHistoryDays().then((historyDays) => {
-      for (const c of emailContacts) {
-        syncGmailForPartnerEmail(userId, record.id, (c.email as string).trim(), historyDays)
-          .catch(() => {})
-      }
-    })
+    startTrackedPartnerEmailSyncs(userId, record.id, emailContacts.map(c => c.email as string))
   }
 
   return record

@@ -13,6 +13,7 @@ import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
 import { libraryScopeForProject } from '~/server/utils/libraryScope'
+import { startWork } from '~/server/utils/work-registry'
 import { STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt, getMissingPlaceholders, renderPromptTemplate, MODELS } from '~/config/pipeline'
 
 interface AlignmentBody {
@@ -112,6 +113,17 @@ export default defineEventHandler(async (event) => {
     if (!finished) abortController.abort(new Error('Přerušeno klientem'))
   })
 
+  // Trackování v registru práce — zrušení ze záložky Práce přeruší AI stream.
+  const work = startWork({
+    kind: 'AI_ALIGNMENT',
+    label: `Value Alignment — ${globalRecord.canonicalName}`,
+    userId: user.id,
+    projectId,
+    globalRecordId,
+    cancellable: true,
+    onCancel: () => abortController.abort(new Error('Zrušeno uživatelem')),
+  })
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     start(controller) {
@@ -123,6 +135,7 @@ export default defineEventHandler(async (event) => {
           const { stream: aiStream, getCost } = streamStepAI({ stepType: STEP, systemPrompt: systemPromptText, userMessage: userMsg }, undefined, abortController.signal)
           for await (const chunk of aiStream) {
             output += chunk
+            work.setProgress(output.length, null, 'Generuje se…')
             write({ chunk })
           }
           finished = true
@@ -159,7 +172,12 @@ export default defineEventHandler(async (event) => {
           })
 
           write({ done: true, alignmentId: saved.id })
+          work.complete()
         } catch (err) {
+          // Přerušení klientem (zavřený tab / tlačítko Zrušit v UI) není chyba —
+          // záznam zahodíme; zrušení ze záložky Práce už mezitím označil cancelWork.
+          if (abortController.signal.aborted) work.discard()
+          else work.fail(err)
           write({ error: err instanceof Error ? err.message : String(err), done: true })
         } finally {
           controller.close()

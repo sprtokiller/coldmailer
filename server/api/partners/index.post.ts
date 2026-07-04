@@ -4,7 +4,7 @@ import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { getInteractionAccess } from '~/server/utils/projectPermissions'
-import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
+import { startTrackedPartnerEmailSyncs } from '~/server/utils/gmail-sync'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -103,12 +103,7 @@ export default defineEventHandler(async (event) => {
 
   if (emailContacts.length > 0) {
     const syncProjectId = interaction?.projectId ?? undefined
-    getEmailSyncHistoryDays().then(historyDays => {
-      for (const c of emailContacts) {
-        syncGmailForPartnerEmail(session.id, record.id, c.email.trim(), historyDays, syncProjectId)
-          .catch(err => console.warn('[gmail-sync] Targeted sync failed:', err.message ?? err))
-      }
-    })
+    startTrackedPartnerEmailSyncs(session.id, record.id, emailContacts.map((c: any) => c.email as string), syncProjectId)
   }
 
   return { record, interaction }

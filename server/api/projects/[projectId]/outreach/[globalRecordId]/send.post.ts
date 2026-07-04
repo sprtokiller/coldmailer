@@ -59,6 +59,11 @@ export default defineEventHandler(async (event) => {
 
   const scheduledId = `project:${projectId}:${globalRecordId}`
 
+  const partnerName = (await prisma.globalRecord.findUnique({
+    where: { id: globalRecordId },
+    select: { canonicalName: true },
+  }))?.canonicalName
+
   scheduleOutreachSend(scheduledId, projectId, user.id, GRACE_PERIOD_MS, async () => {
     const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
     if (!dbUser?.accessToken) throw new Error('No Gmail access token')
@@ -117,6 +122,9 @@ export default defineEventHandler(async (event) => {
     }).catch(() => {})
 
     console.log(`[outreach-send] sent to ${body.toAddress} for globalRecord ${globalRecordId}`)
+  }, {
+    label: `Oslovení — ${partnerName ?? body.toAddress}`,
+    globalRecordId,
   })
 
   return { scheduledId, gracePeriodMs: GRACE_PERIOD_MS }
