@@ -4,7 +4,7 @@ vars:
   - name: "GIT_BRANCH"
     value: "master"
   - name: "APP_DIR"
-    value: "/opt/coldmailer"
+    value: "~/coldmailer"
 
 steps:
   - name: "Update repository"
