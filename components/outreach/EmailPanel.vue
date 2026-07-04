@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { projectOutreachKey } from '~/composables/useProjectOutreach'
+import { projectOutreachKey, type OutreachPartner } from '~/composables/useProjectOutreach'
 import { GROUP_FONTS } from '~/config/pipeline'
+
+type ContactWithAddress = OutreachPartner['contacts'][number] & { address: string }
 
 const ctx = inject(projectOutreachKey)!
 const { notifications: sendNotifs, add: notifAdd, markSent: notifMarkSent, markError: notifMarkError } = useSendNotifications()
@@ -25,7 +27,7 @@ const alignment = computed(() => {
   return (d.alignment as Record<string, unknown>).outputData as Record<string, unknown> | null
 })
 
-const contacts = computed(() => ctx.selectedPartner.value?.contacts ?? [])
+const contacts = computed(() => (ctx.selectedPartner.value?.contacts ?? []).filter((c): c is ContactWithAddress => !!c.address))
 const selectedContact = computed(() => contacts.value[selectedContactIdx.value ?? 0] ?? null)
 
 const topArguments = computed(() => {
@@ -95,7 +97,7 @@ watch(() => ctx.partnerDetail.value, (detail) => {
 }, { immediate: true })
 
 watch(selectedContactIdx, () => {
-  if (!emailTo.value && selectedContact.value) emailTo.value = selectedContact.value.address
+  if (selectedContact.value) emailTo.value = selectedContact.value.address
 })
 
 watch(sigs, (val) => {

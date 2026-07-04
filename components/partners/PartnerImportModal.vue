@@ -8,10 +8,7 @@ const error = ref('')
 const showSchema = ref(false)
 const toast = useToast()
 
-const PARTNER_PAYLOAD_FIELDS = [
-  'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
-  'parentCompany', 'summary', 'activities', 'socialInvolvement', 'researchNotes', 'contacts',
-]
+const RESERVED_PARTNER_KEYS = ['canonicalName', 'name']
 
 const SCHEMA_HINT = `{
   "canonicalName": "Název firmy (povinné)",
@@ -29,7 +26,9 @@ const SCHEMA_HINT = `{
   "contacts": [
     { "firstName": "Jan", "lastName": "Novák", "role": "CEO", "email": "jan@firma.cz" }
   ]
-}`
+}
+
+// Libovolná další pole (kromě canonicalName/name) se importují také.`
 
 function stripFences(raw: string): string {
   const t = raw.trim()
@@ -52,8 +51,9 @@ function buildPartnerBody(obj: Record<string, unknown>): { canonicalName: string
   const canonicalName = String(obj.canonicalName ?? obj.name ?? '').trim()
   if (!canonicalName) return null
   const payload: Record<string, unknown> = {}
-  for (const key of PARTNER_PAYLOAD_FIELDS) {
-    if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') payload[key] = obj[key]
+  for (const [key, value] of Object.entries(obj)) {
+    if (RESERVED_PARTNER_KEYS.includes(key)) continue
+    if (value !== undefined && value !== null && value !== '') payload[key] = value
   }
   return { canonicalName, payload }
 }

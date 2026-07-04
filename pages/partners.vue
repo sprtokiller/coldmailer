@@ -4,8 +4,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 
-const { user: sessionUser } = useUserSession()
-const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
+const isAdmin = await useIsAdmin()
 const { activeProject } = useActiveProject()
 const toast = useToast()
 
@@ -18,7 +17,7 @@ const CONTACT_TYPE_COLORS: Record<string, string> = {
   General: 'bg-gray-100 text-gray-600',
 }
 interface Contact {
-  id: string; address: string; firstName: string | null; lastName: string | null
+  id: string; address: string | null; firstName: string | null; lastName: string | null
   role: string | null; contactType: string | null; note: string | null; priority: number; isPrimary: boolean
 }
 interface GlobalRecord {
@@ -339,7 +338,8 @@ function onImportClose() {
                             <span :class="['px-1.5 py-0.5 rounded flex-shrink-0 text-xs', CONTACT_TYPE_COLORS[String(c.contactType || '')] ?? 'bg-gray-100 text-gray-500']">{{ c.contactType || 'kontakt' }}</span>
                             <span class="font-medium">{{ [c.firstName, c.lastName].filter(Boolean).join(' ') || 'generický' }}</span>
                             <span v-if="c.role && (c.firstName || c.lastName)" class="text-gray-400">{{ c.role }}</span>
-                            <a :href="`mailto:${c.address}`" class="text-indigo-500 hover:underline ml-auto" @click.stop>{{ c.address }}</a>
+                            <a v-if="c.address" :href="`mailto:${c.address}`" class="text-indigo-500 hover:underline ml-auto" @click.stop>{{ c.address }}</a>
+                            <span v-else class="text-gray-300 italic ml-auto">bez emailu</span>
                           </div>
                         </div>
                       </div>

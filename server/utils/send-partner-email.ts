@@ -8,6 +8,8 @@ interface SendPartnerEmailOptions {
   projectId: string
   globalRecordId: string
   toAddress: string
+  cc?: string | null
+  bcc?: string | null
   subject: string
   fullBody: string // already includes the signature, if any
   inReplyToGmailId?: string | null
@@ -20,7 +22,7 @@ interface SendPartnerEmailOptions {
  * paths stay in sync.
  */
 export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
-  const { userId, projectId, globalRecordId, toAddress, subject, fullBody, inReplyToGmailId } = opts
+  const { userId, projectId, globalRecordId, toAddress, cc, bcc, subject, fullBody, inReplyToGmailId } = opts
 
   const dbUser = await prisma.user.findUnique({ where: { id: userId } })
   if (!dbUser?.accessToken) {
@@ -52,13 +54,17 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
     }
   }
 
-  const result = await sendGmailMessage(accessToken, toAddress, subject, fullBody, threading)
+  const result = await sendGmailMessage(accessToken, toAddress, subject, fullBody, threading, cc ?? undefined, bcc ?? undefined)
 
   // The e-mail is now irreversibly sent — a hiccup in this bookkeeping must not
   // surface as a send failure (that would mark an already-delivered e-mail as
-  // FAILED/retryable and risk a duplicate send).
-  await trackCustomRecipientAddress(projectId, globalRecordId, toAddress)
-    .catch(err => console.error('[send-partner-email] trackCustomRecipientAddress failed:', err))
+  // FAILED/retryable and risk a duplicate send). Only the To: recipients become
+  // tracked project contacts — Cc/Bcc addresses are often internal/incidental,
+  // not the partner's own contact, so they're intentionally left untouched.
+  for (const addr of toAddress.split(',').map(a => a.trim()).filter(Boolean)) {
+    await trackCustomRecipientAddress(projectId, globalRecordId, addr)
+      .catch(err => console.error('[send-partner-email] trackCustomRecipientAddress failed:', err))
+  }
   await assignNegotiationOnSend(projectId, globalRecordId, userId)
     .catch(err => console.error('[send-partner-email] assignNegotiationOnSend failed:', err))
 

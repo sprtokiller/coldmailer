@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
     if (adminCount === 0) await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } })
   }
 
-  const finalUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, email: true, name: true, image: true, isAdmin: true } })
+  const finalUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, email: true, name: true, image: true } })
 
   await setUserSession(event, {
     user: {
@@ -83,7 +83,6 @@ export default defineEventHandler(async (event) => {
       email: finalUser!.email,
       name: finalUser!.name,
       image: finalUser!.image,
-      isAdmin: finalUser!.isAdmin,
     },
   })
 

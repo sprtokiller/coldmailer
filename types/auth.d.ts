@@ -4,7 +4,6 @@ declare module '#auth-utils' {
     email: string
     name: string
     image: string | null
-    isAdmin: boolean
   }
 }
 

@@ -1,4 +1,4 @@
-﻿import { prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import {
   refreshAccessToken,
   listGmailMessages,
@@ -65,6 +65,7 @@ async function buildDomainContext(
     const blacklistedEmails = new Set<string>()
 
     for (const c of rec.contacts) {
+      if (!c.address) continue
       const addr = c.address.toLowerCase()
       knownEmails.add(addr)
       const domain = getDomainFromEmail(addr)
@@ -349,7 +350,7 @@ type AssignmentRow = {
   globalRecordId: string
   projectId: string
   globalRecord: {
-    contacts: { address: string }[]
+    contacts: { address: string | null }[]
     projectRecords: { projectId: string; additionalAddresses: unknown }[]
   }
 }
@@ -358,6 +359,7 @@ function populatePartnerEmailMap(map: Map<string, PartnerEmailEntry[]>, assignme
   for (const assign of assignments) {
     const entry: PartnerEmailEntry = { globalRecordId: assign.globalRecordId, projectId: assign.projectId }
     for (const contact of assign.globalRecord.contacts) {
+      if (!contact.address) continue
       addToMap(map, contact.address.toLowerCase(), entry)
     }
     const projRecord = assign.globalRecord.projectRecords.find(pr => pr.projectId === assign.projectId)
@@ -424,7 +426,7 @@ async function processMessage(
     const entries = partnerEmailMap.get(addr)
     if (entries) {
       for (const entry of entries) {
-        if (domainCtx.get(entry.globalRecordId)?.blacklistedEmails.has(addr)) continue
+        if (domainCtx?.get(entry.globalRecordId)?.blacklistedEmails.has(addr)) continue
         matchedViaKnown.add(entry.globalRecordId)
         if (!seenRecords.has(entry.globalRecordId)) {
           seenRecords.add(entry.globalRecordId)

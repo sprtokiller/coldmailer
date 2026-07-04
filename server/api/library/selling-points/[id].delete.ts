@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
 
   await prisma.$transaction([
     prisma.sellingPoint.updateMany({ where: { derivedFromId: id }, data: { derivedFromId: null } }),
-    prisma.pipelineStep.updateMany({ where: { sellingPointId: id }, data: { sellingPointId: null } }),
     prisma.sellingPoint.delete({ where: { id } }),
   ])
 

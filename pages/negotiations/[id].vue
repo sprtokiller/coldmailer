@@ -9,7 +9,7 @@ const id = route.params.id as string
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Contact { id: string; address: string; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null; isPrimary: boolean }
+interface Contact { id: string; address: string | null; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null; isPrimary: boolean }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface InteractionAssignee { userId: string; user: AssigneeUser }
 interface Interaction {
@@ -75,6 +75,8 @@ const canManageAssignees = computed(() => interactionsData.value?.access.canMana
 interface ScheduledEmailItem {
   id: string
   toAddress: string
+  cc: string | null
+  bcc: string | null
   subject: string
   body: string
   scheduledFor: string
@@ -172,7 +174,7 @@ const unknownContacts = computed(() => {
 // addresses + manually-used addresses from Oslovování/interactions that aren't saved as a
 // contact yet — minus anything explicitly blacklisted for this partner.
 const composerContacts = computed(() => {
-  const known = partner.value?.contacts ?? []
+  const known = (partner.value?.contacts ?? []).filter((c): c is Contact & { address: string } => !!c.address)
   const knownAddresses = new Set(known.map(c => c.address))
   const blacklisted = new Set(blacklist.value)
   const extraAddresses = new Set([
@@ -722,7 +724,7 @@ const TYPE_COLORS: Record<string, string> = {
             >{{ partner.payload.industry || partner.payload.type }}</span>
           </div>
           <div class="mt-1.5 flex items-center gap-3">
-            <span v-if="primaryContact" class="text-sm font-mono text-gray-500">{{ primaryContact.address }}</span>
+            <span v-if="primaryContact?.address" class="text-sm font-mono text-gray-500">{{ primaryContact.address }}</span>
             <span v-else class="text-sm text-gray-300 italic">Bez emailu</span>
           </div>
         </div>
@@ -1019,7 +1021,7 @@ const TYPE_COLORS: Record<string, string> = {
             class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
           />
           <datalist id="partner-contacts-list">
-            <option v-for="c in partner.contacts" :key="c.id" :value="c.address">
+            <option v-for="c in partner.contacts.filter(c => c.address)" :key="c.id" :value="c.address">
               {{ [c.firstName, c.lastName].filter(Boolean).join(' ') }}{{ c.role ? ` — ${c.role}` : '' }}
             </option>
           </datalist>

@@ -19,7 +19,7 @@ export interface OutreachPartner {
   type: string
   payload: Record<string, unknown>
   contacts: Array<{
-    id: string; address: string; label: string | null; firstName: string | null
+    id: string; address: string | null; label: string | null; firstName: string | null
     lastName: string | null; role: string | null; contactType: string | null; priority: number; isPrimary: boolean
   }>
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
@@ -109,7 +109,6 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
   const opConfig = ref<OutreachConfig>({ systemPromptId: '', contextPartIds: [], sellingPointId: '', emailDraftId: '', manualContext: '' })
 
   const { user: sessionUser } = useUserSession()
-  const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
   const currentUserId = computed(() => (sessionUser.value as any)?.id as string | undefined)
 
   const canManageAll = ref(false)
@@ -158,6 +157,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     if (!pid || !gid) { partnerDetail.value = null; return }
     loadingDetail.value = true
     try {
+      // @ts-expect-error - dynamic URL causes TS2321 excessive stack depth in Nuxt route type inference
       partnerDetail.value = await $fetch(`/api/projects/${pid}/outreach/${gid}`) as ProjectOutreachContext['partnerDetail']['value']
     } finally {
       loadingDetail.value = false

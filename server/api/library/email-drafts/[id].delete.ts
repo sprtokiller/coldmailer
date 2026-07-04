@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
 
   await prisma.$transaction([
     prisma.emailDraft.updateMany({ where: { derivedFromId: id }, data: { derivedFromId: null } }),
-    prisma.pipelineStep.updateMany({ where: { emailDraftId: id }, data: { emailDraftId: null } }),
     prisma.emailDraft.delete({ where: { id } }),
   ])
 

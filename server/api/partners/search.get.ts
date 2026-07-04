@@ -1,4 +1,4 @@
-import { prisma, Prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
   // but findMany with 'in' doesn't preserve order. Since we sort by canonicalName ASC in both, it's fine.
 
   return records.map((r) => {
-    const payload = r.payload as Record<string, unknown> | null
+    const payload = r.payload as unknown as Record<string, unknown> | null
     return {
       id: r.id,
       canonicalName: r.canonicalName,

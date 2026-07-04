@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
 
   await prisma.$transaction([
     prisma.systemPrompt.updateMany({ where: { derivedFromId: id }, data: { derivedFromId: null } }),
-    prisma.pipelineStep.updateMany({ where: { systemPromptId: id }, data: { systemPromptId: null } }),
     prisma.systemPrompt.delete({ where: { id } }),
   ])
 

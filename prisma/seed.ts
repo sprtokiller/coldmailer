@@ -5,6 +5,7 @@ import { join, basename, extname } from 'path'
 
 const prisma = new PrismaClient()
 
+// @ts-ignore - import.meta.dir is Bun-specific
 const PROMPTS_DIR = join(import.meta.dir, 'system-prompts')
 
 function loadPromptsFromDisk(): Record<string, string> {
@@ -211,6 +212,7 @@ async function seedTags() {
   console.log(`  ✓ ${merged.length} tags (${merged.length - currentTags.length} new)`)
 }
 
+// @ts-ignore - import.meta.dir is Bun-specific
 const TDA_CONTENT_DIR = join(import.meta.dir, 'tda-content')
 
 function readTdaFile(filename: string) {

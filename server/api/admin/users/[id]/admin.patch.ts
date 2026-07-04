@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const targetUserId = getRouterParam(event, 'id')!
   const body = await readBody<{ isAdmin: boolean }>(event)
 
-  const user = await prisma.user.findUnique({ where: { id: targetUserId, googleId: { not: 'system' } } })
+  const user = await prisma.user.findFirst({ where: { id: targetUserId, googleId: { not: 'system' } } })
   if (!user) throw createError({ statusCode: 404, message: 'Uživatel nenalezen' })
 
   if (!body.isAdmin) {

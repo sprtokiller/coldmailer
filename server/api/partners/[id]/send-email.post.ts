@@ -8,6 +8,8 @@ const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
 
 interface SendEmailBody {
   toAddress: string
+  cc?: string
+  bcc?: string
   subject: string
   body: string
   signatureContent?: string
@@ -51,6 +53,8 @@ export default defineEventHandler(async (event) => {
         projectId,
         globalRecordId,
         toAddress: body.toAddress,
+        cc: body.cc || null,
+        bcc: body.bcc || null,
         subject: body.subject,
         body: fullBody,
         inReplyToGmailId: body.inReplyToGmailId ?? null,
@@ -68,6 +72,8 @@ export default defineEventHandler(async (event) => {
     projectId,
     globalRecordId,
     toAddress: body.toAddress,
+    cc: body.cc,
+    bcc: body.bcc,
     subject: body.subject,
     fullBody,
     inReplyToGmailId: body.inReplyToGmailId,

@@ -22,9 +22,17 @@ export default defineEventHandler(async (event) => {
     nameUpdate.normalizedName = normalizeName(nameUpdate.canonicalName)
   }
 
-  const payloadUpdate = body.payload
-    ? { payload: { ...(existing.payload as Record<string, unknown>), ...body.payload } }
-    : {}
+  let payloadUpdate: { payload?: any } = {}
+  if (body.payload) {
+    const merged = { ...(existing.payload as Record<string, unknown>) }
+    for (const [key, value] of Object.entries(body.payload)) {
+      // A null value means "remove this field" — lets the free-form JSON editor delete keys,
+      // since a plain merge can only add/overwrite and never unset a key.
+      if (value === null) delete merged[key]
+      else merged[key] = value
+    }
+    payloadUpdate = { payload: merged as any }
+  }
 
   try {
     const updated = await prisma.globalRecord.update({

@@ -16,6 +16,8 @@ interface SigItem {
 interface EditScheduled {
   id: string
   toAddress: string
+  cc: string | null
+  bcc: string | null
   subject: string
   body: string
   scheduledFor: string
@@ -38,6 +40,10 @@ const { activeProject, groupFont } = useActiveProject()
 const isEdit = computed(() => !!props.editScheduled)
 
 const to = ref(props.editScheduled?.toAddress ?? props.prefilledTo ?? '')
+const cc = ref(props.editScheduled?.cc ?? '')
+const bcc = ref(props.editScheduled?.bcc ?? '')
+const showCc = ref(!!cc.value)
+const showBcc = ref(!!bcc.value)
 const subject = ref(props.editScheduled?.subject ?? props.prefilledSubject ?? '')
 const body = ref(props.editScheduled?.body ?? '')
 const selectedSignatureId = ref('')
@@ -96,6 +102,8 @@ async function handleSend() {
         method: 'PATCH',
         body: {
           toAddress: to.value.trim(),
+          cc: cc.value.trim(),
+          bcc: bcc.value.trim(),
           subject: subject.value.trim(),
           body: body.value,
           ...(scheduledForChanged ? { scheduledFor: scheduledForDate.value!.toISOString() } : {}),
@@ -107,6 +115,8 @@ async function handleSend() {
         method: 'POST',
         body: {
           toAddress: to.value.trim(),
+          cc: cc.value.trim() || undefined,
+          bcc: bcc.value.trim() || undefined,
           subject: subject.value.trim(),
           body: body.value,
           signatureContent: sig?.content,
@@ -146,15 +156,42 @@ async function handleSend() {
             <input
               v-model="to"
               type="email"
+              multiple
               list="composer-contacts-list"
               class="composer-field-input"
-              placeholder="Emailová adresa…"
+              placeholder="Emailové adresy, odděl čárkou…"
             />
+            <button v-if="!showCc" type="button" class="composer-cc-toggle" @click="showCc = true">Cc</button>
+            <button v-if="!showBcc" type="button" class="composer-cc-toggle" @click="showBcc = true">Bcc</button>
             <datalist id="composer-contacts-list">
               <option v-for="c in contacts" :key="c.id" :value="c.address">
                 {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
               </option>
             </datalist>
+          </div>
+          <div v-if="showCc" class="composer-field-row">
+            <span class="composer-field-label">Cc</span>
+            <input
+              v-model="cc"
+              type="email"
+              multiple
+              list="composer-contacts-list"
+              class="composer-field-input"
+              placeholder="Emailové adresy, odděl čárkou…"
+            />
+            <button type="button" class="composer-cc-toggle" @click="showCc = false; cc = ''">✕</button>
+          </div>
+          <div v-if="showBcc" class="composer-field-row">
+            <span class="composer-field-label">Bcc</span>
+            <input
+              v-model="bcc"
+              type="email"
+              multiple
+              list="composer-contacts-list"
+              class="composer-field-input"
+              placeholder="Emailové adresy, odděl čárkou…"
+            />
+            <button type="button" class="composer-cc-toggle" @click="showBcc = false; bcc = ''">✕</button>
           </div>
           <div class="composer-field-row">
             <span class="composer-field-label">Předmět</span>
@@ -306,6 +343,20 @@ async function handleSend() {
   border-color: #818cf8;
   box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
 }
+
+.composer-cc-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+
+.composer-cc-toggle:hover { color: #4338ca; }
 
 .composer-no-signature {
   font-size: 12px;

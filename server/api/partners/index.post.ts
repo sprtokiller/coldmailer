@@ -53,14 +53,14 @@ export default defineEventHandler(async (event) => {
   const contacts = Array.isArray((body.payload as any)?.contacts) ? (body.payload as any).contacts : []
   const emailContacts = contacts.filter((c: any) => c.email?.trim())
 
-  for (let i = 0; i < emailContacts.length; i++) {
-    const c = emailContacts[i]
-    const email = c.email.trim().toLowerCase()
+  for (let i = 0; i < contacts.length; i++) {
+    const c = contacts[i]
+    const address = c.email?.trim() ? c.email.trim().toLowerCase() : null
     try {
       await prisma.partnerContact.create({
         data: {
           globalRecordId: record.id,
-          address: email,
+          address,
           label: [c.firstName, c.lastName].filter(Boolean).join(' ') || null,
           firstName: c.firstName || null,
           lastName: c.lastName || null,

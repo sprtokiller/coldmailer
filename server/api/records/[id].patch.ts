@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     : {}
 
   const payloadUpdate = payloadPatch
-    ? { payload: { ...(existing.payload as Record<string, unknown>), ...payloadPatch } }
+    ? { payload: { ...(existing.payload as Record<string, unknown>), ...payloadPatch } as any }
     : {}
 
   return prisma.globalRecord.update({

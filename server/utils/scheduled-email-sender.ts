@@ -24,6 +24,8 @@ export async function trySendScheduledEmail(scheduledEmailId: string): Promise<b
       projectId: email.projectId,
       globalRecordId: email.globalRecordId,
       toAddress: email.toAddress,
+      cc: email.cc,
+      bcc: email.bcc,
       subject: email.subject,
       fullBody: email.body,
       inReplyToGmailId: email.inReplyToGmailId,

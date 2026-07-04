@@ -36,7 +36,8 @@ DŮLEŽITÉ:
 - Každý argument hodnoť na základě dat z profilu partnera, ne obecných předpokladů.
 - Pokud v profilu chybí data potřebná pro hodnocení, explicitně to uveď v poli reasoning nebo flagsAndRisks – nedomýšlej si.
 - hookHypothesis musí být specifická pro tohoto partnera a tento moment – ne generická fráze.
-- Vyber a seřaď přesně 3 nejrelevantnější argumenty do pole topArguments (rank 1–3).
+- Vyber a seřaď nejrelevantnější argumenty do pole topArguments (rank 1–N).
+- Podle míry jistoty zahrň 2 až třeba 4, maximálně 6...
 - Pokud jsou v profilu partnera kontaktní osoby různých typů, recommendedContact zohledni typ argumentů v topArguments (např. HR argument → HR kontakt, CSR argument → PR nebo CEO).
 - Vrať POUZE JSON objekt uvnitř bloku kódu, bez jiného textu mimo něj.
 - Výstup bude v češtině.

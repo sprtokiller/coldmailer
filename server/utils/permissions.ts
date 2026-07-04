@@ -1,4 +1,4 @@
-﻿import type { H3Event } from 'h3'
+import type { H3Event } from 'h3'
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 
@@ -61,18 +61,9 @@ export async function requireProjectAccess(event: H3Event, projectId: string) {
   return { session, project }
 }
 
-export async function requirePipelineAccess(event: H3Event, pipelineRunId: string) {
+export async function requirePipelineAccess(event: H3Event, _pipelineRunId: string) {
   await requireAuth(event)
-  const run = await prisma.pipelineRun.findUnique({
-    where: { id: pipelineRunId },
-    select: { id: true, projectId: true },
-  })
-  if (!run) {
-    throw createError({ statusCode: 404, message: 'Pipeline nebyla nalezena.' })
-  }
-
-  await requireProjectAccess(event, run.projectId)
-  return run
+  throw createError({ statusCode: 404, message: 'Pipeline nebyla nalezena.' })
 }
 
 export async function requireLibraryScopeAccess(event: H3Event, scope: ScopedResource) {

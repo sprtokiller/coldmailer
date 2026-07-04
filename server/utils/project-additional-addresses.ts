@@ -1,4 +1,5 @@
 import { prisma } from '~/server/utils/prisma'
+import { Prisma } from '@prisma/client'
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -57,7 +58,7 @@ export async function removeProjectAdditionalAddress(
   const updated = current.filter(a => a !== normalized)
   await prisma.projectRecord.update({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    data: { additionalAddresses: updated.length ? updated : null },
+    data: { additionalAddresses: updated.length ? updated : Prisma.DbNull },
   }).catch(() => {})
 }
 

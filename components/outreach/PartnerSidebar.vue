@@ -4,7 +4,6 @@ import { projectOutreachKey } from '~/composables/useProjectOutreach'
 const ctx = inject(projectOutreachKey)!
 
 const { user: sessionUser } = useUserSession()
-const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
 const myId = computed(() => (sessionUser.value as any)?.id as string | undefined)
 const showAssignModal = ref(false)
 

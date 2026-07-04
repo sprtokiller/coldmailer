@@ -14,6 +14,8 @@ type LibraryItem = {
   stepType?: string
   stepKeys?: string[]
   isTemplate?: boolean
+  isSystem?: boolean
+  authorId?: string
   author?: Author
   groupId?: string | null
   group?: { id: string; name: string; color: string } | null
@@ -56,11 +58,10 @@ const { data: contextParts, refresh: refreshContext } = await useFetch('/api/lib
 const { data: sellingPoints, refresh: refreshSelling } = await useFetch('/api/library/selling-points', { default: () => [] })
 const { data: emailDrafts, refresh: refreshDrafts } = await useFetch('/api/library/email-drafts', { default: () => [] })
 const { data: sigData, refresh: refreshSignatures } = await useFetch<SignaturesResponse>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
-const { session } = useUserSession()
+const canEditSystemSignatures = await useIsAdmin()
 
 const signatureTemplates = computed(() => sigData.value?.templates ?? [])
 const signaturePersonal = computed(() => sigData.value?.personal ?? [])
-const canEditSystemSignatures = computed(() => session.value?.user?.isAdmin ?? false)
 
 function safeHtml(html: string): string {
   return sanitizeHtml(html)

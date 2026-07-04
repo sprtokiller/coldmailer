@@ -1,11 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'auth' })
 
-const { session } = useUserSession()
-const sessionUser = computed(() => (session.value as any)?.user)
-const isAdmin = computed(() => !!(sessionUser.value as any)?.isAdmin)
-
-interface Contact { id: string; address: string; isPrimary: boolean; label: string | null }
+interface Contact { id: string; address: string | null; isPrimary: boolean; label: string | null }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface Partner {
   id: string

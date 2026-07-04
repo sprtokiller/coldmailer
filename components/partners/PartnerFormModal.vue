@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface PartnerContact {
-  address: string; firstName: string | null; lastName: string | null
+  id: string; address: string | null; firstName: string | null; lastName: string | null
   role: string | null; contactType: string | null; note: string | null; priority: number
 }
 const props = defineProps<{
@@ -11,7 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; saved: [{ id: string }]; deleted: [] }>()
 
 interface ContactEntry {
-  firstName: string; lastName: string; role: string; email: string
+  id?: string; firstName: string; lastName: string; role: string; email: string
   type: string; priority: number; note: string
 }
 
@@ -42,9 +42,21 @@ const form = reactive({
 })
 const originalForm = { ...form }
 
+// Fields not covered by the named inputs above (legacy data from imports/old pipeline
+// runs, or anything a pasted JSON adds) — shown as raw JSON so nothing is hidden or
+// silently dropped when saving.
+const NAMED_PAYLOAD_KEYS = [
+  'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
+  'parentCompany', 'summary', 'activities', 'socialInvolvement', 'researchNotes', 'contacts',
+]
+const extraPayloadEntries = Object.entries(payload).filter(([key]) => !NAMED_PAYLOAD_KEYS.includes(key))
+const extraJson = ref(extraPayloadEntries.length > 0 ? JSON.stringify(Object.fromEntries(extraPayloadEntries), null, 2) : '')
+const originalExtraJson = extraJson.value
+const extraJsonError = ref('')
+
 const contacts = ref<ContactEntry[]>(
   (props.partner?.contacts ?? []).map(c => ({
-    firstName: c.firstName ?? '', lastName: c.lastName ?? '',
+    id: c.id, firstName: c.firstName ?? '', lastName: c.lastName ?? '',
     role: c.role ?? '', email: c.address ?? '',
     type: c.contactType ?? 'General', priority: c.priority ?? 3,
     note: c.note ?? '',
@@ -108,6 +120,20 @@ async function save() {
     return
   }
 
+  extraJsonError.value = ''
+  let extraPayload: Record<string, unknown> = {}
+  if (extraJson.value.trim()) {
+    try {
+      const parsed = JSON.parse(extraJson.value)
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error()
+      extraPayload = parsed
+    } catch {
+      extraJsonError.value = 'Pole "Další data" musí být validní JSON objekt.'
+      saving.value = false
+      return
+    }
+  }
+
   const filteredContacts = contacts.value
 
   const payloadData: Record<string, unknown> = {}
@@ -124,6 +150,7 @@ async function save() {
     if (form.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
     if (form.researchNotes) payloadData.researchNotes = form.researchNotes
     if (filteredContacts.length > 0) payloadData.contacts = filteredContacts
+    Object.assign(payloadData, extraPayload)
   } else {
     // Only send fields the user actually changed in this window — resending
     // untouched fields from a stale-opened modal would silently clobber
@@ -140,6 +167,14 @@ async function save() {
     if (form.socialInvolvement !== originalForm.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
     if (form.researchNotes !== originalForm.researchNotes) payloadData.researchNotes = form.researchNotes
     if (JSON.stringify(filteredContacts) !== originalContactsJSON) payloadData.contacts = filteredContacts
+    if (extraJson.value !== originalExtraJson) {
+      // Keys removed from the JSON box must be sent as null so the backend deletes
+      // them — a plain merge PATCH can only add/overwrite, never unset a key.
+      for (const [key] of extraPayloadEntries) {
+        if (!(key in extraPayload)) payloadData[key] = null
+      }
+      Object.assign(payloadData, extraPayload)
+    }
   }
 
   try {
@@ -302,6 +337,20 @@ async function save() {
                 <input v-model="c.note" type="text" placeholder="Poznámka" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
               </div>
             </div>
+          </section>
+
+          <!-- Section: Další data -->
+          <section>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Další data (JSON)</h3>
+            <p class="text-xs text-gray-400 mb-2">Pole, která nejsou pokryta formulářem výše (např. z importu nebo staršího profilování). Lze přidat i vlastní pole.</p>
+            <textarea
+              v-model="extraJson"
+              rows="5"
+              placeholder="{}"
+              class="w-full text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y font-mono"
+              :class="{ 'border-red-300': extraJsonError }"
+            />
+            <p v-if="extraJsonError" class="text-xs text-red-500 mt-1">{{ extraJsonError }}</p>
           </section>
 
           <!-- Section: Přiřazení do projektu (create only) -->

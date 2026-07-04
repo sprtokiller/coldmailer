@@ -4,12 +4,13 @@ import { getActiveProjectId } from '~/server/utils/activeProject'
 import { FREE_EMAIL_DOMAINS, getDomainFromEmail, getDomainFromUrl } from '~/server/utils/gmail-sync'
 
 export function detectCompanyDomain(
-  contacts: { address: string }[],
+  contacts: { address: string | null }[],
   payload: Record<string, unknown> | null,
 ): string | null {
   const domainCounts = new Map<string, number>()
 
   for (const c of contacts) {
+    if (!c.address) continue
     const domain = getDomainFromEmail(c.address.toLowerCase())
     if (domain && !FREE_EMAIL_DOMAINS.has(domain)) {
       domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1)
@@ -52,6 +53,7 @@ export default defineEventHandler(async (event) => {
   const domains = new Set<string>()
   if (record) {
     for (const c of record.contacts) {
+      if (!c.address) continue
       const domain = getDomainFromEmail(c.address.toLowerCase())
       if (domain && !FREE_EMAIL_DOMAINS.has(domain)) {
         domains.add(domain)

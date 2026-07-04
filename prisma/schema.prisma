@@ -311,7 +311,7 @@ model PartnerContact {
   id             String       @id @default(cuid())
   globalRecordId String
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  address        String
+  address        String?
   label          String?
   firstName      String?
   lastName       String?
@@ -547,6 +547,8 @@ model ScheduledEmail {
   globalRecordId   String
   globalRecord     GlobalRecord         @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
   toAddress        String
+  cc               String?
+  bcc              String?
   subject          String
   body             String // plné HTML tělo včetně podpisu
   inReplyToGmailId String?

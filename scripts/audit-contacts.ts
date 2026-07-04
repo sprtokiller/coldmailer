@@ -9,6 +9,7 @@ async function main() {
   // Find duplicates by (globalRecordId, address)
   const seen = new Map<string, number>()
   for (const c of all) {
+    if (!c.address) continue // name-only contacts have no address to dedupe on
     const key = `${c.globalRecordId}||${c.address}`
     seen.set(key, (seen.get(key) ?? 0) + 1)
   }

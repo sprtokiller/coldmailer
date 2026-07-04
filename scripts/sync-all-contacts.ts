@@ -61,12 +61,13 @@ async function main() {
       totalUpserted++
     }
 
-    // Delete stale non-primary contacts not in payload
+    // Delete stale non-primary contacts not in payload. Name-only contacts (address: null)
+    // aren't represented in payload.contacts entries here, so never touch those.
     const deleted = await prisma.partnerContact.deleteMany({
       where: {
         globalRecordId: p.id,
         isPrimary: false,
-        address: { notIn: [...incomingAddresses] },
+        address: { not: null, notIn: [...incomingAddresses] },
       },
     })
     if (deleted.count > 0) {

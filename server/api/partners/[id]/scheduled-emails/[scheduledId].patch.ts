@@ -3,6 +3,8 @@ import { requireScheduledEmailAccess } from '~/server/utils/scheduled-email-acce
 
 interface UpdateBody {
   toAddress?: string
+  cc?: string
+  bcc?: string
   subject?: string
   body?: string
   scheduledFor?: string
@@ -22,6 +24,8 @@ export default defineEventHandler(async (event) => {
     if (!body.toAddress.trim()) throw createError({ statusCode: 400, message: 'toAddress je povinné.' })
     data.toAddress = body.toAddress.trim()
   }
+  if (body.cc !== undefined) data.cc = body.cc.trim() || null
+  if (body.bcc !== undefined) data.bcc = body.bcc.trim() || null
   if (body.subject !== undefined) {
     if (!body.subject.trim()) throw createError({ statusCode: 400, message: 'subject je povinné.' })
     data.subject = body.subject.trim()

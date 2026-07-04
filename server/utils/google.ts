@@ -160,9 +160,13 @@ export async function sendGmailMessage(
   subject: string,
   body: string,
   threading?: { threadId: string; inReplyTo: string; references: string },
+  cc?: string,
+  bcc?: string,
 ): Promise<{ id: string; threadId: string }> {
   const headerLines = [
     `To: ${to}`,
+    ...(cc ? [`Cc: ${cc}`] : []),
+    ...(bcc ? [`Bcc: ${bcc}`] : []),
     `Subject: ${encodeRfc2047(subject)}`,
     'Content-Type: text/html; charset=UTF-8',
     'MIME-Version: 1.0',

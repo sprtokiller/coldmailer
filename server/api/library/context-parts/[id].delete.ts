@@ -14,18 +14,7 @@ export default defineEventHandler(async (event) => {
   }
   await requireResourceScopeAccess(event, part)
 
-  const stepsWithPart = await prisma.pipelineStep.findMany({
-    where: { contextPartIds: { has: id } },
-    select: { id: true, contextPartIds: true },
-  })
-
   await prisma.$transaction([
-    ...stepsWithPart.map(step =>
-      prisma.pipelineStep.update({
-        where: { id: step.id },
-        data: { contextPartIds: step.contextPartIds.filter(cid => cid !== id) },
-      }),
-    ),
     prisma.contextPart.updateMany({ where: { derivedFromId: id }, data: { derivedFromId: null } }),
     prisma.contextPart.delete({ where: { id } }),
   ])

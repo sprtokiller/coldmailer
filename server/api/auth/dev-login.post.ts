@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     where: { email: cfg.email },
     create: { googleId: cfg.googleId, email: cfg.email, name: cfg.name, isAdmin: false },
     update: {},
-    select: { id: true, email: true, name: true, image: true, isAdmin: true },
+    select: { id: true, email: true, name: true, image: true },
   })
 
   const projectRoles = await prisma.projectRole.findMany({ where: { name: cfg.roleName } })

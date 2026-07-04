@@ -21,6 +21,7 @@ async function main() {
   // Group by composite key
   const groups = new Map<string, typeof contacts>()
   for (const c of contacts) {
+    if (!c.address) continue // name-only contacts have no address to dedupe on
     const key = `${c.globalRecordId}||${c.address}`
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(c)

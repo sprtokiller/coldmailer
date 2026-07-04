@@ -7,16 +7,14 @@ import { normalizeName } from '~/server/utils/deduplication'
 import { logEvent } from '~/server/utils/record-events'
 import { syncGmailForPartnerEmail, getEmailSyncHistoryDays } from '~/server/utils/gmail-sync'
 
-const PARTNER_PAYLOAD_FIELDS = [
-  'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
-  'parentCompany', 'summary', 'activities', 'socialInvolvement', 'researchNotes', 'contacts',
-] as const
+const RESERVED_PARTNER_KEYS = ['canonicalName', 'name'] as const
 
 function extractPartner(obj: Record<string, unknown>): { canonicalName: string; payload: Record<string, unknown> } {
   const canonicalName = String(obj.canonicalName ?? obj.name ?? '').trim()
   const payload: Record<string, unknown> = {}
-  for (const key of PARTNER_PAYLOAD_FIELDS) {
-    if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') payload[key] = obj[key]
+  for (const [key, value] of Object.entries(obj)) {
+    if ((RESERVED_PARTNER_KEYS as readonly string[]).includes(key)) continue
+    if (value !== undefined && value !== null && value !== '') payload[key] = value
   }
   return { canonicalName, payload }
 }
@@ -47,14 +45,14 @@ async function createPartnerRecord(canonicalName: string, payload: Record<string
 
   const contacts = Array.isArray(payload.contacts) ? (payload.contacts as Record<string, unknown>[]) : []
   const emailContacts = contacts.filter((c) => (c.email as string)?.trim())
-  for (let i = 0; i < emailContacts.length; i++) {
-    const c = emailContacts[i]
-    const email = (c.email as string).trim().toLowerCase()
+  for (let i = 0; i < contacts.length; i++) {
+    const c = contacts[i]
+    const address = (c.email as string)?.trim() ? (c.email as string).trim().toLowerCase() : null
     try {
       await prisma.partnerContact.create({
         data: {
           globalRecordId: record.id,
-          address: email,
+          address,
           label: [c.firstName, c.lastName].filter(Boolean).join(' ') || null,
           firstName: (c.firstName as string) || null,
           lastName: (c.lastName as string) || null,
@@ -98,7 +96,7 @@ Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku v tomto formátu:
 }
 \`\`\`
 
-Pole bez informací vynech. Vrať POUZE \`\`\`json blok, žádný jiný text.`
+Pole bez informací vynech. Pokud v textu najdeš další relevantní informace, které se nevejdou do výše uvedených polí, přidej je jako vlastní pojmenovaná pole na stejné úrovni. Vrať POUZE \`\`\`json blok, žádný jiný text.`
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
