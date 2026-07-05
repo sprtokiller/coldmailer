@@ -166,7 +166,7 @@ const personalByGroup = computed(() => {
               @click="startFromTemplate(t)"
             >Použít jako základ</button>
           </div>
-          <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(t.content)" /></ClientOnly>
+          <ClientOnly><div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(t.content)" /></ClientOnly>
         </div>
       </div>
     </div>
@@ -214,10 +214,16 @@ const personalByGroup = computed(() => {
                 >Smazat</button>
               </div>
             </div>
-            <ClientOnly><div class="text-xs text-gray-600 leading-relaxed max-h-24 overflow-hidden" v-html="sanitizeHtml(s.content)" /></ClientOnly>
+            <ClientOnly><div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(s.content)" /></ClientOnly>
           </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.signature-preview::-webkit-scrollbar { width: 4px; }
+.signature-preview::-webkit-scrollbar-track { background: transparent; }
+.signature-preview::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
+</style>
