@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MeResponse, AdminUser, GroupInfo, BudgetResponse } from '~/utils/settings-constants'
+import type { MeResponse, AdminUser, GroupInfo, BudgetResponse, ManagedProject } from '~/utils/settings-constants'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -45,8 +45,16 @@ const { data: budgetData, refresh: refreshBudget } = isAdmin.value
   ? await useFetch<BudgetResponse>('/api/admin/budget')
   : { data: ref<BudgetResponse | null>(null), refresh: async () => {} }
 
+// ── Project members (for users with pipeline.manage role) ────────────────────
+const { data: managedProjects } = await useFetch<ManagedProject[]>('/api/settings/project-members')
+
+// Uživatel má vedoucí roli v alespoň jednom projektu?
+const isProjectManager = computed(() =>
+  !isAdmin.value && (managedProjects.value?.length ?? 0) > 0,
+)
+
 // ── Sidebar navigation ────────────────────────────────────────────────────────
-type NavSection = 'permissions' | 'signatures' | 'users' | 'projects' | 'budget' | 'system'
+type NavSection = 'permissions' | 'signatures' | 'users' | 'projects' | 'budget' | 'system' | 'team'
 
 interface NavItem {
   id: NavSection
@@ -59,13 +67,14 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'permissions', label: 'Moje oprávnění', icon: 'shield' },
   { id: 'signatures',  label: 'Můj podpis',     icon: 'pen' },
+  { id: 'team',        label: 'Tým projektu',    icon: 'users', permission: 'manager' },
   { id: 'users',       label: 'Správa uživatelů', icon: 'users',  adminOnly: true },
   { id: 'projects',    label: 'Správa projektů',  icon: 'folder', adminOnly: true },
   { id: 'budget',      label: 'Správa limitů',    icon: 'chart',  adminOnly: true },
   { id: 'system',      label: 'Systémová nastavení', icon: 'cog', adminOnly: true },
 ]
 
-const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'projects', 'budget', 'system']
+const VALID_SECTIONS: NavSection[] = ['permissions', 'signatures', 'users', 'projects', 'budget', 'system', 'team']
 const initialSection = VALID_SECTIONS.includes(route.query.tab as NavSection) ? (route.query.tab as NavSection) : 'permissions'
 const activeSection = ref<NavSection>(initialSection)
 
@@ -76,6 +85,7 @@ watch(activeSection, (newSection) => {
 const visibleNav = computed(() =>
   NAV_ITEMS.filter(item => {
     if (item.adminOnly && !isAdmin.value) return false
+    if (item.permission === 'manager' && !isProjectManager.value) return false
     return true
   }),
 )
@@ -239,6 +249,11 @@ const visibleNav = computed(() =>
           v-else-if="activeSection === 'projects'"
           :admin-groups="adminGroups"
           @refresh="async () => { await refreshGroups(); refreshProjects() }"
+        />
+
+        <SettingsProjectMembers
+          v-else-if="activeSection === 'team'"
+          :projects="managedProjects ?? []"
         />
 
         <SettingsSystem

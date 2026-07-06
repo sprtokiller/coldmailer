@@ -8,7 +8,7 @@ const emit = defineEmits<{ close: []; assigned: [{ partnerId: string }] }>()
 interface SearchResult {
   id: string; canonicalName: string
   industry: string | null; size: string | null; website: string | null
-  hasInteractionsInProject: boolean
+  hasNegotiation: boolean
 }
 interface AppUser { id: string; name: string; image: string | null; email: string }
 
@@ -58,9 +58,9 @@ async function assign() {
   assigning.value = true
   error.value = ''
   try {
-    await $fetch(`/api/partners/${selectedPartner.value.id}/interactions`, {
+    await $fetch(`/api/partners/${selectedPartner.value.id}/negotiation`, {
       method: 'POST',
-      body: { type: 'FULFILLMENT', assigneeIds: selectedAssigneeId.value ? [selectedAssigneeId.value] : [] },
+      body: { assigneeIds: selectedAssigneeId.value ? [selectedAssigneeId.value] : [] },
     })
     toast.show(`Partner "${selectedPartner.value.canonicalName}" přidán do projektu`, 'success')
     emit('assigned', { partnerId: selectedPartner.value.id })
@@ -130,7 +130,7 @@ const SIZE_LABELS: Record<string, string> = {
                   </div>
                 </div>
                 <span
-                  v-if="r.hasInteractionsInProject"
+                  v-if="r.hasNegotiation"
                   class="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 font-medium whitespace-nowrap"
                 >Již v projektu</span>
               </li>

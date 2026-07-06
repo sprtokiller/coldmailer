@@ -6,6 +6,7 @@ import { getInteractionAccess } from '~/server/utils/projectPermissions'
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
   const globalRecordId = getRouterParam(event, 'id')!
+  const userId = getRouterParam(event, 'userId')!
   const scope = await getActiveScope(event)
   const projectId = scope.project?.id
 
@@ -14,15 +15,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const access = await getInteractionAccess(session.id, projectId)
-  if (!access.isAdmin && !access.canEditAll) {
-    throw createError({ statusCode: 403, message: 'Nemáte oprávnění odebrat partnera z projektu.' })
+  if (!access.canEditAll && !access.isAdmin) {
+    throw createError({ statusCode: 403, message: 'Správu přiřazených uživatelů k záznamu smí provádět pouze vedení obchodu.' })
   }
 
-  // Only remove the outreach assignment. The Negotiation row (e-maily, poznámky,
-  // plnění, adresy) zůstává zachovaná, aby se historie obnovila při opětovném
-  // přidání partnera — Email/Note teď na Negotiation mají FK s onDelete: Cascade,
-  // takže smazání Negotiation by nenávratně smazalo celou historii.
-  await prisma.outreachAssignment.deleteMany({ where: { projectId, globalRecordId } })
+  const negotiation = await prisma.negotiation.findUnique({
+    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+    select: { id: true },
+  })
+  if (!negotiation) {
+    throw createError({ statusCode: 404, message: 'Jednání nebylo nalezeno.' })
+  }
 
-  return { success: true }
+  await prisma.fulfillmentAssignee.delete({
+    where: { negotiationId_userId: { negotiationId: negotiation.id, userId } },
+  })
+  return { ok: true }
 })

@@ -90,12 +90,12 @@ export default defineEventHandler(async (event) => {
     // If the recipient is not a known global contact, track it as a project-level additional address
     await trackCustomRecipientAddress(projectId, globalRecordId, body.toAddress)
 
-    // Create Interaction record
-    await prisma.interaction.create({
+    // Negotiation must exist before creating the Email row (Email.negotiationId is a FK)
+    const negotiation = await assignNegotiationOnSend(projectId, globalRecordId, user.id)
+
+    await prisma.email.create({
       data: {
-        globalRecordId,
-        projectId,
-        type: 'EMAIL',
+        negotiationId: negotiation.id,
         direction: 'SENT',
         subject: body.subject,
         sentAt: new Date(),
@@ -105,10 +105,7 @@ export default defineEventHandler(async (event) => {
         content: fullBody,
         createdBy: user.id,
       },
-    }).catch(err => console.error(`[outreach] failed to create interaction:`, err))
-
-    await assignNegotiationOnSend(projectId, globalRecordId, user.id)
-      .catch(err => console.error(`[outreach] failed to assign negotiation:`, err))
+    }).catch(err => console.error(`[outreach] failed to create email:`, err))
 
     // Mark as sent
     await prisma.partnerOutreachDraft.update({

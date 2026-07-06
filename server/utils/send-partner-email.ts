@@ -17,7 +17,7 @@ interface SendPartnerEmailOptions {
 
 /**
  * Sends an e-mail for a partner right now via the given user's Gmail account,
- * then records the resulting Interaction and negotiation assignment. Shared by
+ * then records the resulting Email and negotiation assignment. Shared by
  * the immediate send-email endpoint and the scheduled-email poller so both
  * paths stay in sync.
  */
@@ -72,14 +72,11 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
     await trackCustomRecipientAddress(projectId, globalRecordId, addr)
       .catch(err => console.error('[send-partner-email] trackCustomRecipientAddress failed:', err))
   }
-  await assignNegotiationOnSend(projectId, globalRecordId, userId)
-    .catch(err => console.error('[send-partner-email] assignNegotiationOnSend failed:', err))
+  const negotiation = await assignNegotiationOnSend(projectId, globalRecordId, userId)
 
-  const interaction = await prisma.interaction.create({
+  const email = await prisma.email.create({
     data: {
-      globalRecordId,
-      projectId,
-      type: 'EMAIL',
+      negotiationId: negotiation.id,
       direction: 'SENT',
       subject,
       sentAt: new Date(),
@@ -98,9 +95,8 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
           user: { select: { id: true, name: true, image: true } },
         },
       },
-      project: { select: { id: true, name: true } },
     },
   })
 
-  return interaction
+  return email
 }

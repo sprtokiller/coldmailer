@@ -1,4 +1,4 @@
-﻿import { exchangeCode, getUserInfo } from '~/server/utils/google'
+import { exchangeCode, getUserInfo } from '~/server/utils/google'
 import { prisma } from '~/server/utils/prisma'
 import { applyDefaultBudgetToUser } from '~/server/utils/usage-tracker'
 
@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
           accessToken: tokens.access_token,
           ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
           tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+          lastLoginAt: new Date(),
         },
       })
     : await prisma.user.create({
@@ -43,6 +44,7 @@ export default defineEventHandler(async (event) => {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token ?? null,
           tokenExpiry: new Date(Date.now() + tokens.expires_in * 1000),
+          lastLoginAt: new Date(),
         },
       })
 

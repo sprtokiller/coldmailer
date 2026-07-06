@@ -72,41 +72,71 @@ export async function canEditNegotiation(userId: string, projectId: string, glob
   return !!outreachAssignment || !!negotiationAssignee
 }
 
-export async function requireInteractionAccess(
+async function resolveInteractionAccess(
   event: H3Event,
-  interactionId: string,
+  record: { projectId: string; globalRecordId: string; createdBy: string; assignees: { userId: string }[] } | null,
+  notFoundMessage: string,
   mode: 'view' | 'edit',
 ) {
   const session = await requireAuth(event)
 
-  const interaction = await prisma.interaction.findUnique({
-    where: { id: interactionId },
-    include: {
-      assignees: { select: { userId: true } },
-    },
-  })
-
-  if (!interaction) {
-    throw createError({ statusCode: 404, message: 'Jednání nebylo nalezeno.' })
+  if (!record) {
+    throw createError({ statusCode: 404, message: notFoundMessage })
   }
 
-  const access = await getInteractionAccess(session.id, interaction.projectId)
+  const access = await getInteractionAccess(session.id, record.projectId)
 
   if (!access.isAdmin && !access.canViewAll) {
     throw createError({ statusCode: 403, message: 'K tomuto projektu nemáte přístup.' })
   }
 
-  const isCreator = interaction.createdBy === session.id
+  const isCreator = record.createdBy === session.id
 
   if (mode === 'edit' && !access.isAdmin && !access.canEditAll && !isCreator) {
-    const canEdit = await canEditNegotiation(session.id, interaction.projectId, interaction.globalRecordId)
+    const canEdit = await canEditNegotiation(session.id, record.projectId, record.globalRecordId)
     if (!canEdit) {
       throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat toto jednání. Nejste přiřazeni k tomuto partnerovi.' })
     }
   }
 
-  const isAssignee = interaction.assignees.some(a => a.userId === session.id)
+  const isAssignee = record.assignees.some(a => a.userId === session.id)
 
-  return { session, interaction, access, isAssignee, isCreator }
+  return { session, access, isAssignee, isCreator }
+}
+
+export async function requireEmailAccess(
+  event: H3Event,
+  emailId: string,
+  mode: 'view' | 'edit',
+) {
+  const email = await prisma.email.findUnique({
+    where: { id: emailId },
+    include: {
+      assignees: { select: { userId: true } },
+      negotiation: { select: { projectId: true, globalRecordId: true } },
+    },
+  })
+  const flat = email ? { ...email, projectId: email.negotiation.projectId, globalRecordId: email.negotiation.globalRecordId } : null
+
+  const result = await resolveInteractionAccess(event, flat, 'E-mail nebyl nalezen.', mode)
+  return { ...result, email: flat! }
+}
+
+export async function requireNoteAccess(
+  event: H3Event,
+  noteId: string,
+  mode: 'view' | 'edit',
+) {
+  const note = await prisma.note.findUnique({
+    where: { id: noteId },
+    include: {
+      assignees: { select: { userId: true } },
+      negotiation: { select: { projectId: true, globalRecordId: true } },
+    },
+  })
+  const flat = note ? { ...note, projectId: note.negotiation.projectId, globalRecordId: note.negotiation.globalRecordId } : null
+
+  const result = await resolveInteractionAccess(event, flat, 'Poznámka nebyla nalezena.', mode)
+  return { ...result, note: flat! }
 }
 

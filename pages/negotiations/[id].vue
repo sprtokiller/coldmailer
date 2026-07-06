@@ -12,29 +12,36 @@ const id = route.params.id as string
 interface Contact { id: string; address: string | null; label: string | null; firstName: string | null; lastName: string | null; role: string | null; contactType: string | null; priority: number; note: string | null }
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface InteractionAssignee { userId: string; user: AssigneeUser }
-interface Interaction {
+interface EmailItem {
+  type: 'EMAIL'
   id: string
-  type: 'NOTE' | 'EMAIL' | 'FULFILLMENT'
   content: string | null
   createdAt: string
   updatedAt: string
   creator: AssigneeUser
   assignees: InteractionAssignee[]
-  direction: 'SENT' | 'RECEIVED' | null
+  direction: 'SENT' | 'RECEIVED'
   subject: string | null
   sentAt: string | null
   fromAddress: string | null
   toAddress: string | null
   ccAddress: string | null
   gmailId: string | null
-  myToThem: string | null
-  themToUs: string | null
-  projectId: string
-  project: { id: string; name: string }
   canEdit: boolean
   isUnknownContact: boolean
   unknownContactAddress: string | null
 }
+interface NoteItem {
+  type: 'NOTE'
+  id: string
+  content: string | null
+  createdAt: string
+  updatedAt: string
+  creator: AssigneeUser
+  assignees: InteractionAssignee[]
+  canEdit: boolean
+}
+type Interaction = EmailItem | NoteItem
 interface CrossProjectMeta {
   projectId: string
   projectName: string
@@ -42,8 +49,9 @@ interface CrossProjectMeta {
   lastActivityAt: string | null
   assigneeNames: string[]
 }
-interface InteractionsResponse {
+interface TimelineResponse {
   items: Interaction[]
+  fulfillment: { myToThem: string | null; themToUs: string | null }
   crossProjectSummary: CrossProjectMeta[]
   access: { canViewAll: boolean; canEditAll: boolean; canEdit: boolean; canManageAssignees: boolean }
 }
@@ -58,7 +66,7 @@ interface AppUser { id: string; name: string; image: string | null; email: strin
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 const { data: partner, refresh: refreshPartner } = await useFetch<Partner>(`/api/partners/${id}`)
-const { data: interactionsData, refresh: refreshInteractions } = await useFetch<InteractionsResponse>(`/api/partners/${id}/interactions`)
+const { data: interactionsData, refresh: refreshInteractions } = await useFetch<TimelineResponse>(`/api/partners/${id}/timeline`)
 const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{
   blacklist: string[]
   emailDisplayMode: string
@@ -162,9 +170,9 @@ const hasSentEmail = computed(() => interactions.value.some(i => i.type === 'EMA
 // ── Unknown contacts ─────────────────────────────────────────────────────────
 
 const unknownContacts = computed(() => {
-  const byEmail = new Map<string, Interaction[]>()
+  const byEmail = new Map<string, EmailItem[]>()
   for (const i of interactions.value) {
-    if (i.isUnknownContact && i.unknownContactAddress) {
+    if (i.type === 'EMAIL' && i.isUnknownContact && i.unknownContactAddress) {
       const list = byEmail.get(i.unknownContactAddress) ?? []
       list.push(i)
       byEmail.set(i.unknownContactAddress, list)
@@ -350,19 +358,20 @@ const typeFilter = ref<TypeFilter>('EMAIL')
 
 const filteredInteractions = computed(() => {
   if (typeFilter.value === 'FULFILLMENT') {
-    return interactions.value.filter(i => (i.type === 'FULFILLMENT' || i.type === 'NOTE') && !i.isUnknownContact)
+    return interactions.value.filter(i => i.type === 'NOTE')
   }
-  return interactions.value.filter(i => i.type === typeFilter.value && !i.isUnknownContact)
+  return interactions.value.filter(i => i.type === typeFilter.value && !(i.type === 'EMAIL' && i.isUnknownContact))
 })
+
+const fulfillment = computed(() => interactionsData.value?.fulfillment ?? { myToThem: null, themToUs: null })
 
 // ── Interaction CRUD ─────────────────────────────────────────────────────────
 
-type NewInteractionMode = null | 'NOTE' | 'EMAIL' | 'FULFILLMENT'
+type NewInteractionMode = null | 'NOTE' | 'EMAIL'
 const newMode = ref<NewInteractionMode>(null)
 
 const noteForm = ref({ content: '' })
 const mailForm = ref({ direction: 'SENT' as 'SENT' | 'RECEIVED', subject: '', body: '', sentAt: '', fromAddress: '', toAddress: '' })
-const fulfillmentForm = ref({ myToThem: '', themToUs: '' })
 
 const editingId = ref<string | null>(null)
 const editingContent = ref('')
@@ -377,14 +386,13 @@ function resetForms() {
   newMode.value = null
   noteForm.value = { content: '' }
   mailForm.value = { direction: 'SENT', subject: '', body: '', sentAt: '', fromAddress: '', toAddress: '' }
-  fulfillmentForm.value = { myToThem: '', themToUs: '' }
 }
 
 async function createNote() {
   if (!noteForm.value.content.trim()) return
-  await $fetch(`/api/partners/${id}/interactions`, {
+  await $fetch(`/api/partners/${id}/notes`, {
     method: 'POST',
-    body: { type: 'NOTE', content: noteForm.value.content.trim() },
+    body: { content: noteForm.value.content.trim() },
   })
   resetForms()
   toast.show('Poznámka přidána', 'success')
@@ -395,10 +403,9 @@ async function createEmail() {
   const f = mailForm.value
   if (!f.subject.trim() || !f.sentAt) return
   const toAddr = f.toAddress.trim().toLowerCase()
-  await $fetch(`/api/partners/${id}/interactions`, {
+  await $fetch(`/api/partners/${id}/emails`, {
     method: 'POST',
     body: {
-      type: 'EMAIL',
       direction: f.direction,
       subject: f.subject.trim(),
       content: f.body.trim() || null,
@@ -421,35 +428,14 @@ async function createEmail() {
   await refresh()
 }
 
-async function createFulfillment() {
-  // Normalize input text to markdown checklist format
-  const myToThem = fulfillmentForm.value.myToThem?.trim()
-    ? normalizeChecklist(fulfillmentForm.value.myToThem)
-    : null
-  const themToUs = fulfillmentForm.value.themToUs?.trim()
-    ? normalizeChecklist(fulfillmentForm.value.themToUs)
-    : null
-  await $fetch(`/api/partners/${id}/interactions`, {
-    method: 'POST',
-    body: {
-      type: 'FULFILLMENT',
-      myToThem,
-      themToUs,
-    },
-  })
-  resetForms()
-  toast.show('Obsah plnění přidán', 'success')
-  await refresh()
-}
-
-function startEdit(i: Interaction) {
+function startEdit(i: NoteItem) {
   editingId.value = i.id
   editingContent.value = i.content ?? ''
 }
 
 async function saveEdit() {
   if (!editingId.value) return
-  await $fetch(`/api/partners/${id}/interactions/${editingId.value}`, {
+  await $fetch(`/api/partners/${id}/notes/${editingId.value}`, {
     method: 'PATCH',
     body: { content: editingContent.value.trim() || null },
   })
@@ -460,7 +446,7 @@ async function saveEdit() {
 
 // ── Fulfillment inline editing ───────────────────────────────────────────────
 
-const fulfillmentEditingField = ref<{ id: string; field: 'myToThem' | 'themToUs'; value: string } | null>(null)
+const fulfillmentEditingField = ref<{ field: 'myToThem' | 'themToUs'; value: string } | null>(null)
 const fulfillmentTextarea = ref<HTMLTextAreaElement[] | null>(null)
 
 /**
@@ -511,20 +497,18 @@ function parseChecklistLines(text: string): ChecklistLine[] {
   }, [])
 }
 
-const togglingItem = ref<{ interactionId: string; field: string; lineIndex: number } | null>(null)
+const togglingItem = ref<{ field: string; lineIndex: number } | null>(null)
 
-async function toggleCheckItem(interactionId: string, field: 'myToThem' | 'themToUs', lineIndex: number) {
-  togglingItem.value = { interactionId, field, lineIndex }
+async function toggleCheckItem(field: 'myToThem' | 'themToUs', lineIndex: number) {
+  togglingItem.value = { field, lineIndex }
   try {
     const result = await $fetch<{ id: string; myToThem: string | null; themToUs: string | null }>(
-      `/api/partners/${id}/interactions/${interactionId}/toggle-check`,
+      `/api/partners/${id}/negotiation/fulfillment/toggle-check`,
       { method: 'PATCH', body: { field, lineIndex } }
     )
-    // Optimistic update: patch the interaction in-place without full refresh
-    const interaction = interactions.value.find(i => i.id === interactionId)
-    if (interaction && result) {
-      interaction.myToThem = result.myToThem
-      interaction.themToUs = result.themToUs
+    // Optimistic update without full refresh
+    if (interactionsData.value && result) {
+      interactionsData.value.fulfillment = { myToThem: result.myToThem, themToUs: result.themToUs }
     }
   } catch {
     await refreshInteractions()
@@ -533,20 +517,20 @@ async function toggleCheckItem(interactionId: string, field: 'myToThem' | 'themT
   }
 }
 
-function startFulfillmentEdit(i: Interaction, field: 'myToThem' | 'themToUs') {
-  fulfillmentEditingField.value = { id: i.id, field, value: i[field] ?? '' }
+function startFulfillmentEdit(field: 'myToThem' | 'themToUs') {
+  fulfillmentEditingField.value = { field, value: fulfillment.value[field] ?? '' }
   nextTick(() => {
     fulfillmentTextarea.value?.[0]?.focus()
   })
 }
 
-async function saveFulfillmentField(interactionId: string) {
-  if (!fulfillmentEditingField.value || fulfillmentEditingField.value.id !== interactionId) return
+async function saveFulfillmentField() {
+  if (!fulfillmentEditingField.value) return
   const { field, value } = fulfillmentEditingField.value
   fulfillmentEditingField.value = null
   // Normalize to checklist format before saving
   const normalized = value.trim() ? normalizeChecklist(value) : null
-  await $fetch(`/api/partners/${id}/interactions/${interactionId}`, {
+  await $fetch(`/api/partners/${id}/negotiation/fulfillment`, {
     method: 'PATCH',
     body: { [field]: normalized },
   })
@@ -564,9 +548,10 @@ async function updateStatus(value: string | null) {
 }
 
 
-async function deleteInteraction(iId: string) {
+async function deleteInteraction(i: Interaction) {
   if (!confirm('Opravdu chcete smazat tuto položku? Tato akce je nevratná.')) return
-  await $fetch(`/api/partners/${id}/interactions/${iId}`, { method: 'DELETE' })
+  const path = i.type === 'EMAIL' ? 'emails' : 'notes'
+  await $fetch(`/api/partners/${id}/${path}/${i.id}`, { method: 'DELETE' })
   toast.show('Položka smazána', 'success')
   await refresh()
 }
@@ -634,7 +619,7 @@ function extractEmails(raw: string | null | undefined): string[] {
   return (raw.match(/[^\s<>,]+@[^\s<>,]+/g) ?? []).map(a => a.toLowerCase())
 }
 
-function openReply(i: Interaction, replyAll = false) {
+function openReply(i: EmailItem, replyAll = false) {
   const primary = i.direction === 'RECEIVED' ? (i.fromAddress ?? '') : (i.toAddress ?? '')
   composerPrefilledTo.value = primary
 
@@ -1098,21 +1083,109 @@ const TYPE_COLORS: Record<string, string> = {
       </div>
     </div>
 
-    <!-- FULFILLMENT form -->
-    <div v-if="newMode === 'FULFILLMENT'" class="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-        <div>
-          <label class="text-xs font-medium text-blue-700 mb-1 block">My jim</label>
-          <textarea v-model="fulfillmentForm.myToThem" rows="4" placeholder="Co jsme slíbili / dodali..." class="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none bg-white" />
+    <!-- ── Fulfillment checklist (jedna na jednání, mimo seznam interakcí) ── -->
+    <div v-if="typeFilter === 'FULFILLMENT'" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <h4 class="text-xs font-semibold text-blue-800">My jim</h4>
+          <div class="flex items-center gap-2">
+            <span v-if="fulfillment.myToThem" class="text-[10px] text-blue-400">
+              {{ parseChecklistLines(fulfillment.myToThem).filter(l => l.checked).length }}/{{ parseChecklistLines(fulfillment.myToThem).length }}
+            </span>
+            <button v-if="canEdit" class="text-[10px] text-gray-400 hover:text-blue-600 transition-colors" @click.stop="startFulfillmentEdit('myToThem')">✏️</button>
+          </div>
         </div>
-        <div>
-          <label class="text-xs font-medium text-green-700 mb-1 block">Oni nám</label>
-          <textarea v-model="fulfillmentForm.themToUs" rows="4" placeholder="Co nám slíbili / dodali..." class="w-full text-sm px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-400 resize-none bg-white" />
+        <!-- Progress bar -->
+        <div v-if="fulfillment.myToThem && parseChecklistLines(fulfillment.myToThem).length > 0" class="w-full bg-blue-100 rounded-full h-1 mb-2 overflow-hidden">
+          <div
+            class="bg-blue-500 h-1 rounded-full transition-all duration-300"
+            :style="{ width: (parseChecklistLines(fulfillment.myToThem).filter(l => l.checked).length / parseChecklistLines(fulfillment.myToThem).length * 100) + '%' }"
+          />
+        </div>
+        <div v-if="fulfillmentEditingField?.field === 'myToThem'">
+          <textarea
+            ref="fulfillmentTextarea"
+            :value="fulfillmentEditingField.value"
+            rows="6"
+            placeholder="Každý řádek = jedna položka..."
+            class="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none bg-white font-mono"
+            @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
+            @blur="saveFulfillmentField()"
+            @keydown.escape="fulfillmentEditingField = null"
+          />
+          <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
+        </div>
+        <div v-else class="bg-blue-50 rounded-lg p-3 min-h-[3rem]">
+          <div v-if="fulfillment.myToThem" class="space-y-1">
+            <label
+              v-for="item in parseChecklistLines(fulfillment.myToThem)"
+              :key="item.lineIndex"
+              :class="[
+                'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
+                canEdit ? 'cursor-pointer hover:bg-blue-100/50' : 'cursor-default',
+                togglingItem?.field === 'myToThem' && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
+              ]"
+              @click.prevent="canEdit && toggleCheckItem('myToThem', item.lineIndex)"
+            >
+              <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-blue-300 bg-white group-hover:border-blue-400']">
+                <span v-if="item.checked">✓</span>
+              </span>
+              <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
+            </label>
+          </div>
+          <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="canEdit && startFulfillmentEdit('myToThem')">Klikněte pro přidání...</p>
         </div>
       </div>
-      <div class="flex justify-end gap-2">
-        <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="resetForms">Zrušit</button>
-        <button class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="createFulfillment">Přidat obsah plnění</button>
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <h4 class="text-xs font-semibold text-green-800">Oni nám</h4>
+          <div class="flex items-center gap-2">
+            <span v-if="fulfillment.themToUs" class="text-[10px] text-green-400">
+              {{ parseChecklistLines(fulfillment.themToUs).filter(l => l.checked).length }}/{{ parseChecklistLines(fulfillment.themToUs).length }}
+            </span>
+            <button v-if="canEdit" class="text-[10px] text-gray-400 hover:text-green-600 transition-colors" @click.stop="startFulfillmentEdit('themToUs')">✏️</button>
+          </div>
+        </div>
+        <!-- Progress bar -->
+        <div v-if="fulfillment.themToUs && parseChecklistLines(fulfillment.themToUs).length > 0" class="w-full bg-green-100 rounded-full h-1 mb-2 overflow-hidden">
+          <div
+            class="bg-green-500 h-1 rounded-full transition-all duration-300"
+            :style="{ width: (parseChecklistLines(fulfillment.themToUs).filter(l => l.checked).length / parseChecklistLines(fulfillment.themToUs).length * 100) + '%' }"
+          />
+        </div>
+        <div v-if="fulfillmentEditingField?.field === 'themToUs'">
+          <textarea
+            ref="fulfillmentTextarea"
+            :value="fulfillmentEditingField.value"
+            rows="6"
+            placeholder="Každý řádek = jedna položka..."
+            class="w-full text-sm px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-400 resize-none bg-white font-mono"
+            @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
+            @blur="saveFulfillmentField()"
+            @keydown.escape="fulfillmentEditingField = null"
+          />
+          <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
+        </div>
+        <div v-else class="bg-green-50 rounded-lg p-3 min-h-[3rem]">
+          <div v-if="fulfillment.themToUs" class="space-y-1">
+            <label
+              v-for="item in parseChecklistLines(fulfillment.themToUs)"
+              :key="item.lineIndex"
+              :class="[
+                'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
+                canEdit ? 'cursor-pointer hover:bg-green-100/50' : 'cursor-default',
+                togglingItem?.field === 'themToUs' && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
+              ]"
+              @click.prevent="canEdit && toggleCheckItem('themToUs', item.lineIndex)"
+            >
+              <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-green-500 border-green-500 text-white' : 'border-green-300 bg-white group-hover:border-green-400']">
+                <span v-if="item.checked">✓</span>
+              </span>
+              <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
+            </label>
+          </div>
+          <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="canEdit && startFulfillmentEdit('themToUs')">Klikněte pro přidání...</p>
+        </div>
       </div>
     </div>
 
@@ -1125,13 +1198,12 @@ const TYPE_COLORS: Record<string, string> = {
           'bg-white border rounded-xl p-4 transition-colors',
           i.type === 'EMAIL' && i.direction === 'SENT' ? 'border-blue-100 cursor-pointer' :
           i.type === 'EMAIL' && i.direction === 'RECEIVED' ? 'border-green-100 cursor-pointer' :
-          i.type === 'FULFILLMENT' ? 'border-emerald-100' :
           'border-gray-200',
         ]"
         @click="i.type === 'EMAIL' && toggleEvent(i.id)"
       >
         <!-- Header row -->
-        <div v-if="i.type !== 'FULFILLMENT'" class="flex items-center justify-between gap-2 mb-2">
+        <div class="flex items-center justify-between gap-2 mb-2">
           <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
             <span v-if="i.type === 'EMAIL' && i.direction" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', i.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
               {{ i.direction === 'SENT' ? '↑ Odesláno' : '↓ Obdrženo' }}
@@ -1157,7 +1229,7 @@ const TYPE_COLORS: Record<string, string> = {
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15 5 9m0 0 6-6M5 9h9a6 6 0 0 1 0 12h-2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 15 1 9m0 0 6-6" /></svg>
             </button>
             <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
-            <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">
+            <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i)">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             </button>
           </div>
@@ -1179,120 +1251,13 @@ const TYPE_COLORS: Record<string, string> = {
             <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors" @click="editingId = null">Zrušit</button>
           </div>
         </div>
-        <template v-else-if="i.type !== 'FULFILLMENT'">
+        <template v-else>
           <p v-if="i.type === 'NOTE' && i.content" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ i.content }}</p>
           <div v-if="i.type === 'EMAIL' && expandedEvents.has(i.id) && i.content" class="mt-2 pt-2 border-t border-gray-100">
             <div v-if="emailDisplayMode === 'html'" class="email-html-preview text-sm text-gray-700 leading-relaxed" v-html="sanitizeEmailHtml(i.content)" />
             <div v-else class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{{ stripHtml(i.content) }}</div>
           </div>
         </template>
-
-        <!-- Fulfillment content — interactive checklist -->
-        <div v-if="i.type === 'FULFILLMENT'" class="grid grid-cols-1 md:grid-cols-2 gap-3" @click.stop>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <h4 class="text-xs font-semibold text-blue-800">My jim</h4>
-              <div class="flex items-center gap-2">
-                <span v-if="i.myToThem" class="text-[10px] text-blue-400">
-                  {{ parseChecklistLines(i.myToThem).filter(l => l.checked).length }}/{{ parseChecklistLines(i.myToThem).length }}
-                </span>
-                <button v-if="i.canEdit" class="text-[10px] text-gray-400 hover:text-blue-600 transition-colors" @click.stop="startFulfillmentEdit(i, 'myToThem')">✏️</button>
-              </div>
-            </div>
-            <!-- Progress bar -->
-            <div v-if="i.myToThem && parseChecklistLines(i.myToThem).length > 0" class="w-full bg-blue-100 rounded-full h-1 mb-2 overflow-hidden">
-              <div
-                class="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                :style="{ width: (parseChecklistLines(i.myToThem).filter(l => l.checked).length / parseChecklistLines(i.myToThem).length * 100) + '%' }"
-              />
-            </div>
-            <div v-if="fulfillmentEditingField?.id === i.id && fulfillmentEditingField?.field === 'myToThem'">
-              <textarea
-                ref="fulfillmentTextarea"
-                :value="fulfillmentEditingField.value"
-                rows="6"
-                placeholder="Každý řádek = jedna položka..."
-                class="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none bg-white font-mono"
-                @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
-                @blur="saveFulfillmentField(i.id)"
-                @keydown.escape="fulfillmentEditingField = null"
-              />
-              <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
-            </div>
-            <div v-else class="bg-blue-50 rounded-lg p-3 min-h-[3rem]">
-              <div v-if="i.myToThem" class="space-y-1">
-                <label
-                  v-for="item in parseChecklistLines(i.myToThem)"
-                  :key="item.lineIndex"
-                  :class="[
-                    'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
-                    i.canEdit ? 'cursor-pointer hover:bg-blue-100/50' : 'cursor-default',
-                    togglingItem?.interactionId === i.id && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
-                  ]"
-                  @click.prevent="i.canEdit && toggleCheckItem(i.id, 'myToThem', item.lineIndex)"
-                >
-                  <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-blue-300 bg-white group-hover:border-blue-400']">
-                    <span v-if="item.checked">✓</span>
-                  </span>
-                  <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
-                </label>
-              </div>
-              <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="i.canEdit && startFulfillmentEdit(i, 'myToThem')">Klikněte pro přidání...</p>
-            </div>
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <h4 class="text-xs font-semibold text-green-800">Oni nám</h4>
-              <div class="flex items-center gap-2">
-                <span v-if="i.themToUs" class="text-[10px] text-green-400">
-                  {{ parseChecklistLines(i.themToUs).filter(l => l.checked).length }}/{{ parseChecklistLines(i.themToUs).length }}
-                </span>
-                <button v-if="i.canEdit" class="text-[10px] text-gray-400 hover:text-green-600 transition-colors" @click.stop="startFulfillmentEdit(i, 'themToUs')">✏️</button>
-              </div>
-            </div>
-            <!-- Progress bar -->
-            <div v-if="i.themToUs && parseChecklistLines(i.themToUs).length > 0" class="w-full bg-green-100 rounded-full h-1 mb-2 overflow-hidden">
-              <div
-                class="bg-green-500 h-1 rounded-full transition-all duration-300"
-                :style="{ width: (parseChecklistLines(i.themToUs).filter(l => l.checked).length / parseChecklistLines(i.themToUs).length * 100) + '%' }"
-              />
-            </div>
-            <div v-if="fulfillmentEditingField?.id === i.id && fulfillmentEditingField?.field === 'themToUs'">
-              <textarea
-                ref="fulfillmentTextarea"
-                :value="fulfillmentEditingField.value"
-                rows="6"
-                placeholder="Každý řádek = jedna položka..."
-                class="w-full text-sm px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-400 resize-none bg-white font-mono"
-                @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
-                @blur="saveFulfillmentField(i.id)"
-                @keydown.escape="fulfillmentEditingField = null"
-              />
-              <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
-            </div>
-            <div v-else class="bg-green-50 rounded-lg p-3 min-h-[3rem]">
-              <div v-if="i.themToUs" class="space-y-1">
-                <label
-                  v-for="item in parseChecklistLines(i.themToUs)"
-                  :key="item.lineIndex"
-                  :class="[
-                    'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
-                    i.canEdit ? 'cursor-pointer hover:bg-green-100/50' : 'cursor-default',
-                    togglingItem?.interactionId === i.id && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
-                  ]"
-                  @click.prevent="i.canEdit && toggleCheckItem(i.id, 'themToUs', item.lineIndex)"
-                >
-                  <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-green-500 border-green-500 text-white' : 'border-green-300 bg-white group-hover:border-green-400']">
-                    <span v-if="item.checked">✓</span>
-                  </span>
-                  <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
-                </label>
-              </div>
-              <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="i.canEdit && startFulfillmentEdit(i, 'themToUs')">Klikněte pro přidání...</p>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm select-none">

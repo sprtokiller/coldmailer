@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
     return { scheduled: true, scheduledEmail }
   }
 
-  const interaction = await sendPartnerEmailNow({
+  const email = await sendPartnerEmailNow({
     userId: session.id,
     projectId,
     globalRecordId,
@@ -79,5 +79,5 @@ export default defineEventHandler(async (event) => {
     inReplyToGmailId: body.inReplyToGmailId,
   })
 
-  return { scheduled: false, interaction }
+  return { scheduled: false, interaction: email }
 })

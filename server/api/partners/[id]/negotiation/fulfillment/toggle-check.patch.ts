@@ -1,5 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
-import { requireInteractionAccess } from '~/server/utils/projectPermissions'
+import { requireAuth } from '~/server/utils/requireAuth'
+import { getActiveScope } from '~/server/utils/activeProject'
+import { canEditNegotiation } from '~/server/utils/projectPermissions'
 
 /**
  * Toggle a single checklist line in myToThem or themToUs.
@@ -9,8 +11,19 @@ import { requireInteractionAccess } from '~/server/utils/projectPermissions'
  * This endpoint toggles between the two states for the given line index.
  */
 export default defineEventHandler(async (event) => {
-  const iId = getRouterParam(event, 'iId')!
-  const { session, interaction } = await requireInteractionAccess(event, iId, 'edit')
+  const session = await requireAuth(event)
+  const globalRecordId = getRouterParam(event, 'id')!
+  const scope = await getActiveScope(event)
+  const projectId = scope.project?.id
+
+  if (!projectId) {
+    throw createError({ statusCode: 400, message: 'Není vybrán žádný projekt.' })
+  }
+
+  const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+  if (!canEdit) {
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat toto jednání. Nejste přiřazeni k tomuto partnerovi.' })
+  }
 
   const body = await readBody<{
     field: 'myToThem' | 'themToUs'
@@ -25,7 +38,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'lineIndex musí být nezáporné číslo.' })
   }
 
-  const currentValue = interaction[body.field] as string | null
+  const negotiation = await prisma.negotiation.findUnique({
+    where: { projectId_globalRecordId: { projectId, globalRecordId } },
+  })
+  if (!negotiation) {
+    throw createError({ statusCode: 404, message: 'Jednání nebylo nalezeno.' })
+  }
+
+  const currentValue = negotiation[body.field]
   if (!currentValue) {
     throw createError({ statusCode: 400, message: 'Pole je prázdné, nelze přepnout.' })
   }
@@ -50,16 +70,18 @@ export default defineEventHandler(async (event) => {
   const newValue = lines.join('\n')
 
   // Track co-authorship
-  const data: Record<string, any> = { [body.field]: newValue }
-  const isCreator = interaction.createdBy === session.id
-  const isAlreadyAssignee = interaction.assignees.some((a: any) => a.userId === session.id)
-  if (!isCreator && !isAlreadyAssignee) {
-    data.assignees = { create: { userId: session.id } }
+  const isAlreadyAssignee = await prisma.fulfillmentAssignee.findUnique({
+    where: { negotiationId_userId: { negotiationId: negotiation.id, userId: session.id } },
+  })
+  if (!isAlreadyAssignee) {
+    await prisma.fulfillmentAssignee.create({
+      data: { negotiationId: negotiation.id, userId: session.id },
+    }).catch(() => {})
   }
 
-  const updated = await prisma.interaction.update({
-    where: { id: iId },
-    data,
+  const updated = await prisma.negotiation.update({
+    where: { id: negotiation.id },
+    data: { [body.field]: newValue },
     select: {
       id: true,
       myToThem: true,

@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     if (!canEdit) {
       throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat stav tohoto partnera. Nejste přiřazeni k tomuto partnerovi.' })
     }
-    await prisma.projectRecord.upsert({
+    await prisma.negotiation.upsert({
       where: { projectId_globalRecordId: { projectId, globalRecordId } },
       create: { projectId, globalRecordId, negotiationStatus },
       update: { negotiationStatus },

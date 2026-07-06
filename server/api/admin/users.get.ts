@@ -1,4 +1,4 @@
-﻿import { prisma } from '~/server/utils/prisma'
+import { prisma } from '~/server/utils/prisma'
 import { requireAdmin } from '~/server/utils/permissions'
 
 export default defineEventHandler(async (event) => {
@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
     image: u.image,
     isAdmin: u.isAdmin,
     createdAt: u.createdAt,
+    lastLoginAt: u.lastLoginAt,
     projectRoles: u.projectRoles.map(upr => ({
       id: upr.projectRole.id,
       name: upr.projectRole.name,

@@ -18,6 +18,7 @@ model User {
   tokenExpiry   DateTime?
   lastGmailSync DateTime?
   createdAt     DateTime  @default(now())
+  lastLoginAt   DateTime?
   isAdmin       Boolean   @default(false)
 
   systemPrompts SystemPrompt[]
@@ -31,17 +32,20 @@ model User {
   recordEvents  RecordEvent[]
   usageEvents   UsageEvent[]
 
-  interactionsCreated    Interaction[]         @relation("InteractionCreator")
-  interactionAssignments InteractionAssignee[]
+  emailsCreated          Email[]               @relation("EmailCreator")
+  notesCreated           Note[]                @relation("NoteCreator")
+  emailAssignments       EmailAssignee[]
+  noteAssignments        NoteAssignee[]
+  fulfillmentAssignments FulfillmentAssignee[]
   projectRoles           UserProjectRole[]
 
-  partnerAlignments    PartnerAlignment[]
-  outreachDraftsSaved      PartnerOutreachDraft[] @relation("OutreachDraftSavedBy")
-  outreachDraftsSent       PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
-  outreachAssignments      OutreachAssignment[]   @relation("OutreachAssignee")
-  outreachAssignmentsGiven OutreachAssignment[]   @relation("OutreachAssignedBy")
-  negotiationAssignments      NegotiationAssignee[] @relation("NegotiationAssignee")
-  negotiationAssignmentsGiven NegotiationAssignee[] @relation("NegotiationAssignedBy")
+  partnerAlignments           PartnerAlignment[]
+  outreachDraftsSaved         PartnerOutreachDraft[] @relation("OutreachDraftSavedBy")
+  outreachDraftsSent          PartnerOutreachDraft[] @relation("OutreachDraftSentBy")
+  outreachAssignments         OutreachAssignment[]   @relation("OutreachAssignee")
+  outreachAssignmentsGiven    OutreachAssignment[]   @relation("OutreachAssignedBy")
+  negotiationAssignments      NegotiationAssignee[]  @relation("NegotiationAssignee")
+  negotiationAssignmentsGiven NegotiationAssignee[]  @relation("NegotiationAssignedBy")
   scheduledEmails             ScheduledEmail[]
 }
 
@@ -68,16 +72,15 @@ model Project {
   group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
-  systemPrompts      SystemPrompt[]
-  contextParts       ContextPart[]
-  sellingPoints      SellingPoint[]
-  emailDrafts        EmailDraft[]
-  interactions       Interaction[]
-  projectRoles       ProjectRole[]
-  projectRecords     ProjectRecord[]
-  partnerAlignments   PartnerAlignment[]
-  outreachDrafts      PartnerOutreachDraft[]
-  outreachAssignments OutreachAssignment[]
+  systemPrompts        SystemPrompt[]
+  contextParts         ContextPart[]
+  sellingPoints        SellingPoint[]
+  emailDrafts          EmailDraft[]
+  projectRoles         ProjectRole[]
+  negotiations         Negotiation[]
+  partnerAlignments    PartnerAlignment[]
+  outreachDrafts       PartnerOutreachDraft[]
+  outreachAssignments  OutreachAssignment[]
   negotiationAssignees NegotiationAssignee[]
   scheduledEmails      ScheduledEmail[]
 
@@ -180,21 +183,21 @@ model SellingPoint {
 }
 
 model EmailDraft {
-  id            String         @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String
   subject       String
   body          String
-  order         Int            @default(0)
+  order         Int          @default(0)
   authorId      String
-  author        User           @relation(fields: [authorId], references: [id])
+  author        User         @relation(fields: [authorId], references: [id])
   groupId       String?
-  group         Group?         @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  group         Group?       @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt     DateTime       @default(now())
+  project       Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
   derivedFromId String?
-  derivedFrom   EmailDraft?    @relation("DraftLineage", fields: [derivedFromId], references: [id])
-  derived       EmailDraft[]   @relation("DraftLineage")
+  derivedFrom   EmailDraft?  @relation("DraftLineage", fields: [derivedFromId], references: [id])
+  derived       EmailDraft[] @relation("DraftLineage")
 }
 
 model Partner {
@@ -206,7 +209,6 @@ model Partner {
   rawData        Json?
   createdAt      DateTime @default(now())
   globalRecordId String?
-
 }
 
 // ── Global Record System ─────────────────────────────────────────────────────
@@ -243,13 +245,12 @@ model GlobalRecord {
   duplicateOf    GlobalRecord?  @relation("Duplicates", fields: [duplicateOfId], references: [id])
   duplicates     GlobalRecord[] @relation("Duplicates")
 
-  events            RecordEvent[]
-  contacts          PartnerContact[]
-  interactions      Interaction[]
-  projectRecords    ProjectRecord[]
-  partnerAlignments   PartnerAlignment[]
-  outreachDrafts      PartnerOutreachDraft[]
-  outreachAssignments OutreachAssignment[]
+  events               RecordEvent[]
+  contacts             PartnerContact[]
+  negotiations         Negotiation[]
+  partnerAlignments    PartnerAlignment[]
+  outreachDrafts       PartnerOutreachDraft[]
+  outreachAssignments  OutreachAssignment[]
   negotiationAssignees NegotiationAssignee[]
   scheduledEmails      ScheduledEmail[]
 
@@ -274,7 +275,7 @@ model UsageEvent {
   costUsd      Float          @default(0)
   generationId String? // OpenRouter generation ID for AI calls
 
-  stepType       String? // e.g. "VALUE_ALIGNMENT"
+  stepType String? // e.g. "VALUE_ALIGNMENT"
 
   @@index([userId, createdAt])
   @@index([userId, eventType])
@@ -325,13 +326,7 @@ model PartnerContact {
   @@index([globalRecordId])
 }
 
-// ── Interaction System ────────────────────────────────────────────────────────
-
-enum InteractionType {
-  NOTE
-  EMAIL
-  FULFILLMENT
-}
+// ── Negotiation: e-maily, poznámky, plnění ────────────────────────────────────
 
 enum NegotiationStatus {
   CONTACTED
@@ -345,53 +340,78 @@ enum NegotiationStatus {
   NOT_THIS_TIME
 }
 
-model Interaction {
-  id             String          @id @default(cuid())
-  globalRecordId String
-  globalRecord   GlobalRecord    @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  projectId      String
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type           InteractionType
-
-  content   String?
-  createdBy String
-  creator   User     @relation("InteractionCreator", fields: [createdBy], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // EMAIL-specific
-  direction   MailDirection?
-  subject     String?
-  sentAt      DateTime?
-  fromAddress String?
-  toAddress   String?
-  ccAddress   String?
-  gmailId     String?
-
-  // FULFILLMENT-specific
-  myToThem String?
-  themToUs String?
+model Email {
+  id            String        @id @default(cuid())
+  negotiationId String
+  negotiation   Negotiation   @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  direction     MailDirection
+  subject       String?
+  sentAt        DateTime?
+  fromAddress   String?
+  toAddress     String?
+  ccAddress     String?
+  gmailId       String?
+  content       String?
+  createdBy     String
+  creator       User          @relation("EmailCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Unknown contact detection
   isUnknownContact      Boolean @default(false)
   unknownContactAddress String?
 
-  assignees InteractionAssignee[]
+  assignees EmailAssignee[]
 
-  @@unique([gmailId, globalRecordId])
-  @@index([globalRecordId, projectId])
-  @@index([globalRecordId])
-  @@index([projectId])
+  @@unique([gmailId, negotiationId])
+  @@index([negotiationId])
 }
 
-model InteractionAssignee {
-  interactionId String
-  interaction   Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+model EmailAssignee {
+  emailId    String
+  email      Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  assignedAt DateTime @default(now())
+
+  @@id([emailId, userId])
+  @@index([userId])
+}
+
+model Note {
+  id            String      @id @default(cuid())
+  negotiationId String
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  content       String
+  createdBy     String
+  creator       User        @relation("NoteCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  assignees NoteAssignee[]
+
+  @@index([negotiationId])
+}
+
+model NoteAssignee {
+  noteId     String
+  note       Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  assignedAt DateTime @default(now())
+
+  @@id([noteId, userId])
+  @@index([userId])
+}
+
+model FulfillmentAssignee {
+  negotiationId String
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
   userId        String
   user          User        @relation(fields: [userId], references: [id])
   assignedAt    DateTime    @default(now())
 
-  @@id([interactionId, userId])
+  @@id([negotiationId, userId])
   @@index([userId])
 }
 
@@ -423,7 +443,7 @@ model UserProjectRole {
 
 // ── Project CRM Records ─────────────────────────────────────────────────────────
 
-model ProjectRecord {
+model Negotiation {
   id             String       @id @default(cuid())
   projectId      String
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -431,15 +451,41 @@ model ProjectRecord {
   globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
 
   negotiationStatus NegotiationStatus?
+  emailDisplayMode  String             @default("text")
+  autoIncludeDomain Boolean? // null = auto-detect from contacts; true/false = explicit user override
 
-  // Moved from deprecated PartnerFulfillment
-  contactBlacklist    Json?
-  emailDisplayMode    String   @default("text")
-  additionalAddresses Json?    // String[] – project-specific email addresses not in global PartnerContact
-  autoIncludeDomain   Boolean? // null = auto-detect from contacts; true/false = explicit user override
+  // Obsah plnění – 1:1 s jednáním, prosté sloupce, žádný typový enum
+  myToThem String?
+  themToUs String?
+
+  additionalAddresses  NegotiationAddress[]
+  blacklistedAddresses NegotiationBlacklistedAddress[]
+  emails               Email[]
+  notes                Note[]
+  fulfillmentAssignees FulfillmentAssignee[]
 
   @@unique([projectId, globalRecordId])
   @@index([globalRecordId])
+}
+
+model NegotiationAddress {
+  id            String      @id @default(cuid())
+  negotiationId String
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  address       String
+  createdAt     DateTime    @default(now())
+
+  @@unique([negotiationId, address])
+}
+
+model NegotiationBlacklistedAddress {
+  id            String      @id @default(cuid())
+  negotiationId String
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  address       String
+  createdAt     DateTime    @default(now())
+
+  @@unique([negotiationId, address])
 }
 
 // ── Standalone Outreach (nezávislé na PipelineRun) ───────────────────────────
@@ -452,11 +498,11 @@ model PartnerAlignment {
   project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   globalRecordId  String
   globalRecord    GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  outputData      Json         // Objekt s výsledkem VALUE_ALIGNMENT pro tohoto partnera
+  outputData      Json // Objekt s výsledkem VALUE_ALIGNMENT pro tohoto partnera
   systemPromptId  String?
   contextPartIds  String[]
   sellingPointId  String?
-  profileSnapshot Json?        // Snapshot profilovacích dat použitých jako vstup pro AI
+  profileSnapshot Json? // Snapshot profilovacích dat použitých jako vstup pro AI
   authorId        String
   author          User         @relation(fields: [authorId], references: [id])
   createdAt       DateTime     @default(now())
@@ -469,27 +515,27 @@ model PartnerAlignment {
 // Připravený e-mail (OUTREACH_PREPARATION) pro konkrétního partnera v projektu.
 // Nahrazuje ukládání do PipelineStep.outputData / outreach-save.ts logiku.
 model PartnerOutreachDraft {
-  id             String       @id @default(cuid())
-  projectId      String
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  globalRecordId String
-  globalRecord   GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
-  toAddress      String       @default("")
-  subject        String       @default("")
-  body           String       @default("") // HTML
-  systemPromptId String?
-  emailDraftId   String?
-  config         Json? // { signatureId, selectedArgumentIds, contextPartIds, ... }
+  id              String       @id @default(cuid())
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalRecordId  String
+  globalRecord    GlobalRecord @relation(fields: [globalRecordId], references: [id], onDelete: Cascade)
+  toAddress       String       @default("")
+  subject         String       @default("")
+  body            String       @default("") // HTML
+  systemPromptId  String?
+  emailDraftId    String?
+  config          Json? // { signatureId, selectedArgumentIds, contextPartIds, ... }
   recommendations Json? // string[] – doporučení z OUTREACH_PREPARATION
-  savedById      String
-  savedBy        User         @relation("OutreachDraftSavedBy", fields: [savedById], references: [id])
-  savedAt        DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  sentAt         DateTime?
-  sentById       String?
-  sentBy         User?        @relation("OutreachDraftSentBy", fields: [sentById], references: [id])
-  sendError      String?
-  gmailId        String?
+  savedById       String
+  savedBy         User         @relation("OutreachDraftSavedBy", fields: [savedById], references: [id])
+  savedAt         DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  sentAt          DateTime?
+  sentById        String?
+  sentBy          User?        @relation("OutreachDraftSentBy", fields: [sentById], references: [id])
+  sendError       String?
+  gmailId         String?
 
   @@unique([projectId, globalRecordId])
   @@index([projectId])

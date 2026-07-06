@@ -2,8 +2,9 @@
  * GET /api/projects/[projectId]/outreach/partners
  *
  * Vrátí všechny GlobalRecordy asociované s tímto projektem – bez závislosti
- * na konkrétním kroku pipeline. Zahrnuje záznamy nalezené přes PipelineRecordRef
- * (jakýkoli krok v jakémkoli PipelineRun projektu) i přes ProjectRecord.
+ * na konkrétním kroku pipeline. Zahrnuje záznamy nalezené přes Negotiation
+ * (e-maily/poznámky/plnění vždy vyžadují existující Negotiation, takže její
+ * existence sama o sobě znamená "partner má v projektu nějakou aktivitu").
  *
  * Každý záznam obsahuje stav PartnerAlignment a PartnerOutreachDraft.
  */
@@ -20,14 +21,8 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(user.id, projectId)
   const canManageAll = access.isAdmin || access.canEditAll
 
-  const [projectRecords, interactionRecords] = await Promise.all([
-    prisma.projectRecord.findMany({ where: { projectId }, select: { globalRecordId: true } }),
-    prisma.interaction.findMany({ where: { projectId }, select: { globalRecordId: true } }),
-  ])
-
-  const globalRecordIds = [...new Set(
-    [...projectRecords, ...interactionRecords].map(r => r.globalRecordId),
-  )]
+  const negotiations = await prisma.negotiation.findMany({ where: { projectId }, select: { globalRecordId: true } })
+  const globalRecordIds = [...new Set(negotiations.map(n => n.globalRecordId))]
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }
 
@@ -58,17 +53,17 @@ export default defineEventHandler(async (event) => {
     // Any e-mail we've ever sent this partner in this project — via this workspace,
     // the negotiations page, or discovered by Gmail sync — counts as active
     // communication, regardless of whether an outreach draft was ever generated.
-    prisma.interaction.findMany({
-      where: { projectId, globalRecordId: { in: globalRecordIds }, type: 'EMAIL', direction: 'SENT' },
-      select: { globalRecordId: true },
-      distinct: ['globalRecordId'],
+    prisma.email.findMany({
+      where: { negotiation: { projectId, globalRecordId: { in: globalRecordIds } }, direction: 'SENT' },
+      select: { negotiation: { select: { globalRecordId: true } } },
+      distinct: ['negotiationId'],
     }),
   ])
 
   const alignmentMap = new Map(alignments.map(a => [a.globalRecordId, a]))
   const draftMap = new Map(drafts.map(d => [d.globalRecordId, d]))
   const assignmentMap = new Map(assignments.map(a => [a.globalRecordId, a]))
-  const sentEmailSet = new Set(sentEmails.map(e => e.globalRecordId))
+  const sentEmailSet = new Set(sentEmails.map(e => e.negotiation.globalRecordId))
 
   const partners = globalRecords.map(gr => ({
     id: gr.id,

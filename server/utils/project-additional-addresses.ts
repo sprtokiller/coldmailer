@@ -1,5 +1,4 @@
 import { prisma } from '~/server/utils/prisma'
-import { Prisma } from '@prisma/client'
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -14,25 +13,24 @@ export async function appendProjectAdditionalAddress(
   const normalized = normalizeEmail(email)
   if (!normalized) return false
 
-  const projRec = await prisma.projectRecord.findUnique({
+  const negotiation = await prisma.negotiation.upsert({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    select: { contactBlacklist: true, additionalAddresses: true },
+    create: { projectId, globalRecordId },
+    update: {},
   })
 
-  const blacklisted = Array.isArray(projRec?.contactBlacklist)
-    ? (projRec.contactBlacklist as string[]).includes(normalized)
-    : false
+  const blacklisted = await prisma.negotiationBlacklistedAddress.findUnique({
+    where: { negotiationId_address: { negotiationId: negotiation.id, address: normalized } },
+  })
   if (blacklisted) return false
 
-  const current = Array.isArray(projRec?.additionalAddresses)
-    ? (projRec.additionalAddresses as string[])
-    : []
-  if (current.includes(normalized)) return false
+  const existing = await prisma.negotiationAddress.findUnique({
+    where: { negotiationId_address: { negotiationId: negotiation.id, address: normalized } },
+  })
+  if (existing) return false
 
-  await prisma.projectRecord.upsert({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    create: { projectId, globalRecordId, additionalAddresses: [normalized] },
-    update: { additionalAddresses: [...current, normalized] },
+  await prisma.negotiationAddress.create({
+    data: { negotiationId: negotiation.id, address: normalized },
   }).catch(() => {})
 
   return true
@@ -45,20 +43,14 @@ export async function removeProjectAdditionalAddress(
   email: string,
 ): Promise<void> {
   const normalized = normalizeEmail(email)
-  const projRec = await prisma.projectRecord.findUnique({
+  const negotiation = await prisma.negotiation.findUnique({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    select: { additionalAddresses: true },
+    select: { id: true },
   })
+  if (!negotiation) return
 
-  const current = Array.isArray(projRec?.additionalAddresses)
-    ? (projRec.additionalAddresses as string[])
-    : []
-  if (!current.includes(normalized)) return
-
-  const updated = current.filter(a => a !== normalized)
-  await prisma.projectRecord.update({
-    where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    data: { additionalAddresses: updated.length ? updated : Prisma.DbNull },
+  await prisma.negotiationAddress.deleteMany({
+    where: { negotiationId: negotiation.id, address: normalized },
   }).catch(() => {})
 }
 

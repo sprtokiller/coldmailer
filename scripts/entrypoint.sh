@@ -7,6 +7,11 @@ if [ "${SKIP_DB_SETUP:-}" != "true" ]; then
     node node_modules/prisma/build/index.js db execute --file scripts/backfill-signature-group-id.sql --schema prisma/schema.prisma
   fi
 
+  if [ -f scripts/backfill-negotiation-split.sql ]; then
+    echo "Running pre-push backfills (negotiation split)..."
+    node node_modules/prisma/build/index.js db execute --file scripts/backfill-negotiation-split.sql --schema prisma/schema.prisma
+  fi
+
   echo "Syncing database schema..."
   node node_modules/prisma/build/index.js db push --skip-generate
 

@@ -34,7 +34,7 @@ export type ProjectRoleAssignment = {
 }
 export type AdminUser = {
   id: string; email: string; name: string; image: string | null
-  isAdmin: boolean; createdAt: string
+  isAdmin: boolean; createdAt: string; lastLoginAt: string | null
   projectRoles: ProjectRoleAssignment[]
   budget: Budget | null
 }
@@ -48,6 +48,17 @@ export type BudgetUser = {
 
 export type DefaultBudgetCfg = { limitUsd: number | null; resetPeriod: BudgetResetPeriod }
 export type BudgetResponse = { users: BudgetUser[]; defaultBudget: DefaultBudgetCfg }
+
+export type ProjectMember = {
+  id: string; name: string; email: string; image: string | null
+  lastLoginAt: string | null
+  roles: string[]
+}
+export type ManagedProject = {
+  id: string; name: string; slug: string
+  group: { id: string; name: string; color: string }
+  members: ProjectMember[]
+}
 
 export const RESET_PERIOD_LABELS: Record<BudgetResetPeriod, string> = {
   never: 'Bez resetu',

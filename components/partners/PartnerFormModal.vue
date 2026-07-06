@@ -71,7 +71,7 @@ function removeContact(i: number) {
   contacts.value.splice(i, 1)
 }
 
-const createInteraction = ref(false)
+const joinProject = ref(false)
 const assigneeIds = ref<string[]>([])
 const { data: allUsers } = useFetch<{ id: string; name: string; image: string | null; email: string }[]>('/api/users')
 
@@ -184,8 +184,8 @@ async function save() {
         body: {
           canonicalName: form.canonicalName.trim(),
           payload: payloadData,
-          createInteraction: createInteraction.value,
-          assigneeIds: createInteraction.value ? assigneeIds.value : undefined,
+          joinProject: joinProject.value,
+          assigneeIds: joinProject.value ? assigneeIds.value : undefined,
         },
       })
       toast.show(`Partner "${form.canonicalName.trim()}" byl vytvořen`, 'success')
@@ -357,10 +357,10 @@ async function save() {
           <section v-if="mode === 'create'">
             <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Přiřazení do projektu</h3>
             <label class="flex items-center gap-2 text-sm text-gray-700 mb-3 cursor-pointer">
-              <input v-model="createInteraction" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <input v-model="joinProject" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
               Přiřadit partnera do aktivního projektu
             </label>
-            <div v-if="createInteraction" class="ml-6">
+            <div v-if="joinProject" class="ml-6">
               <label class="block text-xs font-medium text-gray-600 mb-1">Členové obchodního týmu</label>
               <div class="flex flex-wrap gap-2">
                 <label

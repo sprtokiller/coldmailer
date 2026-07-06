@@ -41,14 +41,19 @@ export default defineEventHandler(async (event) => {
     select: {
       payload: true,
       contacts: { select: { address: true } },
-      projectRecords: {
+      negotiations: {
         where: { projectId },
-        select: { contactBlacklist: true, emailDisplayMode: true, additionalAddresses: true, autoIncludeDomain: true }
-      }
-    }
+        select: {
+          emailDisplayMode: true,
+          autoIncludeDomain: true,
+          blacklistedAddresses: { select: { address: true } },
+          additionalAddresses: { select: { address: true } },
+        },
+      },
+    },
   })
 
-  const projRecord = record?.projectRecords[0]
+  const negotiation = record?.negotiations[0]
 
   const domains = new Set<string>()
   if (record) {
@@ -75,17 +80,13 @@ export default defineEventHandler(async (event) => {
     : null
 
   // null stored value → default to true if a company domain was detected
-  const autoIncludeDomain = projRecord?.autoIncludeDomain ?? (detectedDomain !== null)
+  const autoIncludeDomain = negotiation?.autoIncludeDomain ?? (detectedDomain !== null)
 
   return {
-    blacklist: Array.isArray(projRecord?.contactBlacklist)
-      ? (projRecord.contactBlacklist as string[])
-      : [],
-    emailDisplayMode: projRecord?.emailDisplayMode ?? 'text',
+    blacklist: negotiation?.blacklistedAddresses.map(a => a.address) ?? [],
+    emailDisplayMode: negotiation?.emailDisplayMode ?? 'text',
     domains: Array.from(domains),
-    additionalAddresses: Array.isArray(projRecord?.additionalAddresses)
-      ? (projRecord.additionalAddresses as string[])
-      : [],
+    additionalAddresses: negotiation?.additionalAddresses.map(a => a.address) ?? [],
     autoIncludeDomain,
     detectedDomain,
   }

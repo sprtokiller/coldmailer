@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     canonicalName: string
     payload?: Record<string, unknown>
-    createInteraction?: boolean
+    joinProject?: boolean
     assigneeIds?: string[]
   }>(event)
 
@@ -76,8 +76,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  let interaction = null
-  if (body.createInteraction) {
+  let negotiation = null
+  if (body.joinProject) {
     const scope = await getActiveScope(event)
     const projectId = scope.project?.id
     if (projectId) {
@@ -87,22 +87,20 @@ export default defineEventHandler(async (event) => {
         assigneeIds.push(session.id)
       }
 
-      interaction = await prisma.interaction.create({
-        data: {
-          globalRecordId: record.id,
-          projectId,
-          type: 'FULFILLMENT',
-          createdBy: session.id,
-          assignees: assigneeIds.length > 0
-            ? { create: assigneeIds.map(userId => ({ userId })) }
-            : undefined,
-        },
+      negotiation = await prisma.negotiation.create({
+        data: { globalRecordId: record.id, projectId },
       })
+      if (assigneeIds.length > 0) {
+        await prisma.fulfillmentAssignee.createMany({
+          data: assigneeIds.map(userId => ({ negotiationId: negotiation!.id, userId })),
+          skipDuplicates: true,
+        })
+      }
     }
   }
 
   if (emailContacts.length > 0) {
-    const syncProjectId = interaction?.projectId ?? undefined
+    const syncProjectId = negotiation?.projectId ?? undefined
     getEmailSyncHistoryDays().then(historyDays => {
       for (const c of emailContacts) {
         syncGmailForPartnerEmail(session.id, record.id, c.email.trim(), historyDays, syncProjectId)
@@ -111,6 +109,6 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return { record, interaction }
+  return { record, negotiation }
 })
 

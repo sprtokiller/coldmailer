@@ -16,28 +16,34 @@ export default defineEventHandler(async (event) => {
     autoIncludeDomain?: boolean
   }>(event)
 
-  const data: Record<string, unknown> = {}
-  if (body.contactBlacklist !== undefined) data.contactBlacklist = [...new Set(body.contactBlacklist)]
-  if (body.emailDisplayMode !== undefined) data.emailDisplayMode = body.emailDisplayMode
-  if (body.additionalAddresses !== undefined) data.additionalAddresses = body.additionalAddresses
-  if (body.autoIncludeDomain !== undefined) data.autoIncludeDomain = body.autoIncludeDomain
+  const scalarData: Record<string, unknown> = {}
+  if (body.emailDisplayMode !== undefined) scalarData.emailDisplayMode = body.emailDisplayMode
+  if (body.autoIncludeDomain !== undefined) scalarData.autoIncludeDomain = body.autoIncludeDomain
 
-  if (Object.keys(data).length === 0) return { ok: true }
+  const newBlacklist = body.contactBlacklist !== undefined ? [...new Set(body.contactBlacklist)] : undefined
+  const newAddresses = body.additionalAddresses !== undefined ? [...new Set(body.additionalAddresses)] : undefined
+
+  if (Object.keys(scalarData).length === 0 && newBlacklist === undefined && newAddresses === undefined) {
+    return { ok: true }
+  }
+
+  const existing = await prisma.negotiation.findUnique({
+    where: { projectId_globalRecordId: { globalRecordId, projectId } },
+    select: {
+      blacklistedAddresses: { select: { address: true } },
+      additionalAddresses: { select: { address: true } },
+    },
+  })
+
+  const currentBlacklist = existing?.blacklistedAddresses.map(a => a.address) ?? []
+  const currentAddresses = existing?.additionalAddresses.map(a => a.address) ?? []
 
   // Cross-validate: an address cannot be in both lists
-  if (data.contactBlacklist !== undefined || data.additionalAddresses !== undefined) {
-    const existing = await prisma.projectRecord.findUnique({
-      where: { projectId_globalRecordId: { globalRecordId, projectId } },
-      select: { contactBlacklist: true, additionalAddresses: true },
-    })
-
-    const blacklist = (data.contactBlacklist as string[] | undefined)
-      ?? (Array.isArray(existing?.contactBlacklist) ? (existing.contactBlacklist as string[]) : [])
-    const whitelist = (data.additionalAddresses as string[] | undefined)
-      ?? (Array.isArray(existing?.additionalAddresses) ? (existing.additionalAddresses as string[]) : [])
-
+  if (newBlacklist !== undefined || newAddresses !== undefined) {
+    const blacklist = newBlacklist ?? currentBlacklist
+    const addresses = newAddresses ?? currentAddresses
     const blacklistSet = new Set(blacklist)
-    const overlap = whitelist.filter(e => blacklistSet.has(e))
+    const overlap = addresses.filter(e => blacklistSet.has(e))
     if (overlap.length > 0) {
       throw createError({
         statusCode: 400,
@@ -46,11 +52,39 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await prisma.projectRecord.upsert({
+  const negotiation = await prisma.negotiation.upsert({
     where: { projectId_globalRecordId: { globalRecordId, projectId } },
-    create: { globalRecordId, projectId, ...data },
-    update: data,
+    create: { globalRecordId, projectId, ...scalarData },
+    update: scalarData,
   })
+
+  if (newBlacklist !== undefined) {
+    const toRemove = currentBlacklist.filter(a => !newBlacklist.includes(a))
+    const toAdd = newBlacklist.filter(a => !currentBlacklist.includes(a))
+    await prisma.negotiationBlacklistedAddress.deleteMany({
+      where: { negotiationId: negotiation.id, address: { in: toRemove } },
+    })
+    if (toAdd.length > 0) {
+      await prisma.negotiationBlacklistedAddress.createMany({
+        data: toAdd.map(address => ({ negotiationId: negotiation.id, address })),
+        skipDuplicates: true,
+      })
+    }
+  }
+
+  if (newAddresses !== undefined) {
+    const toRemove = currentAddresses.filter(a => !newAddresses.includes(a))
+    const toAdd = newAddresses.filter(a => !currentAddresses.includes(a))
+    await prisma.negotiationAddress.deleteMany({
+      where: { negotiationId: negotiation.id, address: { in: toRemove } },
+    })
+    if (toAdd.length > 0) {
+      await prisma.negotiationAddress.createMany({
+        data: toAdd.map(address => ({ negotiationId: negotiation.id, address })),
+        skipDuplicates: true,
+      })
+    }
+  }
 
   return { ok: true }
 })

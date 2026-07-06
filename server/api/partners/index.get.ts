@@ -9,47 +9,50 @@ export default defineEventHandler(async (event) => {
   const scope = await getActiveScope(event)
   const projectId = scope.project?.id
 
-  const interactionWhere = projectId ? { projectId } : {}
+  const negotiationWhere = projectId ? { projectId } : {}
 
   const records = await prisma.globalRecord.findMany({
     where: {
       type: 'PARTNER',
       ...(search && { canonicalName: { contains: search, mode: 'insensitive' } }),
-      interactions: { some: interactionWhere },
+      negotiations: {
+        some: {
+          ...negotiationWhere,
+          OR: [
+            { emails: { some: {} } },
+            { notes: { some: {} } },
+            { myToThem: { not: null } },
+            { themToUs: { not: null } },
+          ],
+        },
+      },
     },
     include: {
       contacts: { orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] },
-      interactions: {
-        where: interactionWhere,
-        select: { updatedAt: true, sentAt: true },
-        orderBy: { sentAt: 'desc' },
-        take: 1,
+      negotiations: {
+        where: negotiationWhere,
+        select: {
+          negotiationStatus: true,
+          emails: { select: { sentAt: true }, orderBy: { sentAt: 'desc' }, take: 1 },
+          notes: { select: { updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+          _count: { select: { emails: true } },
+        },
       },
       negotiationAssignees: {
         where: projectId ? { projectId } : undefined,
         select: { user: { select: { id: true, name: true, image: true } } },
-      },
-      projectRecords: {
-        where: projectId ? { projectId } : undefined,
-        select: { negotiationStatus: true },
-      },
-      _count: {
-        select: {
-          interactions: {
-            where: {
-              type: 'EMAIL',
-              ...(projectId ? { projectId } : {}),
-            },
-          },
-        },
       },
     },
     orderBy: { canonicalName: 'asc' },
   })
 
   return records.map((r) => {
-    const lastInteraction = r.interactions[0] ?? null
-    const projectRecord = r.projectRecords[0] ?? null
+    const negotiation = r.negotiations[0] ?? null
+    const lastEmailAt = negotiation?.emails[0]?.sentAt ?? null
+    const lastNoteAt = negotiation?.notes[0]?.updatedAt ?? null
+    const lastInteractionAt = lastEmailAt && lastNoteAt
+      ? (lastEmailAt > lastNoteAt ? lastEmailAt : lastNoteAt)
+      : (lastEmailAt ?? lastNoteAt ?? null)
 
     return {
       id: r.id,
@@ -59,11 +62,10 @@ export default defineEventHandler(async (event) => {
       payload: r.payload,
       contacts: r.contacts,
       assignees: r.negotiationAssignees.map(a => a.user),
-      lastInteractionAt: lastInteraction?.sentAt ?? lastInteraction?.updatedAt ?? null,
-      interactionCount: r._count.interactions,
-      negotiationStatus: projectRecord?.negotiationStatus ?? null,
-      inProject: !!projectRecord,
+      lastInteractionAt,
+      interactionCount: negotiation?._count.emails ?? 0,
+      negotiationStatus: negotiation?.negotiationStatus ?? null,
+      inProject: !!negotiation,
     }
   })
 })
-

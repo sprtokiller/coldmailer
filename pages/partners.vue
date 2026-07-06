@@ -25,7 +25,7 @@ interface GlobalRecord {
   payload: Record<string, unknown>
   creator: { id: string; name: string; image: string | null }
   _count: { events: number }
-  projectRecords: Array<{ project: { id: string; name: string } }>
+  negotiations: Array<{ project: { id: string; name: string } }>
   contacts: Contact[]
 }
 
@@ -112,7 +112,7 @@ const editingPartner = ref<GlobalRecord | null>(null)
 const partnerToAssign = ref<GlobalRecord | null>(null)
 
 function isInActiveProject(rec: GlobalRecord): boolean {
-  return rec.projectRecords.some(pr => pr.project.id === activeProject.value?.id)
+  return rec.negotiations.some(pr => pr.project.id === activeProject.value?.id)
 }
 
 async function removeFromProject(rec: GlobalRecord) {
@@ -267,7 +267,7 @@ function onImportClose() {
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-1 flex-wrap max-w-56">
-                      <span v-for="pr in rec.projectRecords" :key="pr.project.id" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ pr.project.name }}</span>
+                      <span v-for="pr in rec.negotiations" :key="pr.project.id" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ pr.project.name }}</span>
                     </div>
                   </td>
                   <td class="px-4 py-3">
@@ -378,7 +378,7 @@ function onImportClose() {
         industry: String(partnerToAssign.payload.industry ?? ''),
         size: String(partnerToAssign.payload.size ?? ''),
         website: String(partnerToAssign.payload.website ?? ''),
-        hasInteractionsInProject: false
+        hasNegotiation: false
       }"
       @close="partnerToAssign = null"
       @assigned="partnerToAssign = null; fetchRecords(true)"

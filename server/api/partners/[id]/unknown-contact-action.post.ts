@@ -28,9 +28,9 @@ export default defineEventHandler(async (event) => {
     if (projectId) {
       await appendProjectAdditionalAddress(projectId, globalRecordId, email)
     }
-    await prisma.interaction.updateMany({
+    await prisma.email.updateMany({
       where: {
-        globalRecordId,
+        negotiation: { globalRecordId },
         isUnknownContact: true,
         unknownContactAddress: email,
       },
@@ -43,9 +43,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body.action === 'blacklist') {
-    await prisma.interaction.deleteMany({
+    await prisma.email.deleteMany({
       where: {
-        globalRecordId,
+        negotiation: { globalRecordId },
         isUnknownContact: true,
         unknownContactAddress: email,
       },
@@ -54,22 +54,17 @@ export default defineEventHandler(async (event) => {
     if (projectId) {
       await removeProjectAdditionalAddress(projectId, globalRecordId, email)
 
-      const projRecord = await prisma.projectRecord.findUnique({
+      const negotiation = await prisma.negotiation.upsert({
         where: { projectId_globalRecordId: { globalRecordId, projectId } },
-        select: { contactBlacklist: true },
+        create: { globalRecordId, projectId },
+        update: {},
       })
 
-      const existing = Array.isArray(projRecord?.contactBlacklist)
-        ? (projRecord.contactBlacklist as string[])
-        : []
-
-      if (!existing.includes(email)) {
-        await prisma.projectRecord.upsert({
-          where: { projectId_globalRecordId: { globalRecordId, projectId } },
-          create: { globalRecordId, projectId, contactBlacklist: [...existing, email] },
-          update: { contactBlacklist: [...existing, email] },
-        })
-      }
+      await prisma.negotiationBlacklistedAddress.upsert({
+        where: { negotiationId_address: { negotiationId: negotiation.id, address: email } },
+        create: { negotiationId: negotiation.id, address: email },
+        update: {},
+      })
     }
 
     return { ok: true }
@@ -100,9 +95,9 @@ export default defineEventHandler(async (event) => {
       await removeProjectAdditionalAddress(projectId, globalRecordId, email)
     }
 
-    await prisma.interaction.updateMany({
+    await prisma.email.updateMany({
       where: {
-        globalRecordId,
+        negotiation: { globalRecordId },
         isUnknownContact: true,
         unknownContactAddress: email,
       },

@@ -55,6 +55,31 @@ async function saveBudget(userId: string) {
   emit('refreshUsers')
 }
 
+// ── Last login badge ────────────────────────────────────────────────────
+function lastLoginDays(lastLoginAt: string | null): number | null {
+  if (!lastLoginAt) return null
+  return Math.floor((Date.now() - new Date(lastLoginAt).getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function lastLoginLabel(lastLoginAt: string | null): string {
+  const days = lastLoginDays(lastLoginAt)
+  if (days === null) return 'Nikdy'
+  if (days === 0) return 'Dnes'
+  if (days === 1) return 'Včera'
+  if (days < 7) return `Před ${days} dny`
+  if (days < 30) return `Před ${days} dny`
+  if (days < 365) return `Před ${Math.floor(days / 30)} měs.`
+  return `Před ${Math.floor(days / 365)} r.`
+}
+
+function lastLoginColor(lastLoginAt: string | null): string {
+  const days = lastLoginDays(lastLoginAt)
+  if (days === null) return 'bg-gray-100 text-gray-400 border-gray-200'
+  if (days <= 7) return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (days <= 30) return 'bg-amber-50 text-amber-700 border-amber-200'
+  return 'bg-red-50 text-red-600 border-red-200'
+}
+
 // ── Admin toggle ──────────────────────────────────────────────────────────
 const adminCount = computed(() => props.adminUsers?.filter(u => u.isAdmin).length ?? 0)
 
@@ -135,7 +160,14 @@ function availableProjectRoles(user: AdminUser) {
                   <span v-if="!u.isAdmin && u.projectRoles.length === 0" class="text-xs text-gray-300">—</span>
                 </div>
 
-                <div class="hidden md:block text-right shrink-0">
+                <div class="hidden md:flex flex-col items-end gap-1 shrink-0">
+                  <span
+                    class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border"
+                    :class="lastLoginColor(u.lastLoginAt)"
+                    :title="u.lastLoginAt ? `Poslední přihlášení: ${new Date(u.lastLoginAt).toLocaleString('cs-CZ')}` : 'Uživatel se ještě nikdy nepřihlásil'"
+                  >
+                    🕐 {{ lastLoginLabel(u.lastLoginAt) }}
+                  </span>
                   <span v-if="u.budget" class="text-xs text-gray-500 tabular-nums">
                     ${{ u.budget.usedUsd.toFixed(2) }}<span class="text-gray-300"> / {{ u.budget.limitUsd != null ? `$${u.budget.limitUsd.toFixed(2)}` : '∞' }}</span>
                   </span>
@@ -214,6 +246,24 @@ function availableProjectRoles(user: AdminUser) {
                     >
                       Smazat uživatele
                     </button>
+                  </div>
+                </div>
+
+                <!-- Last login info -->
+                <div class="bg-white rounded-xl border border-gray-100 p-4 col-span-full md:col-span-2">
+                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Aktivita</div>
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full border"
+                      :class="lastLoginColor(u.lastLoginAt)"
+                    >
+                      <span>🕐</span>
+                      <span>Poslední přihlášení: {{ lastLoginLabel(u.lastLoginAt) }}</span>
+                    </span>
+                    <span v-if="u.lastLoginAt" class="text-xs text-gray-400">
+                      {{ new Date(u.lastLoginAt).toLocaleString('cs-CZ') }}
+                    </span>
+                    <span v-else class="text-xs text-gray-400 italic">Uživatel se ještě nikdy nepřihlásil.</span>
                   </div>
                 </div>
 

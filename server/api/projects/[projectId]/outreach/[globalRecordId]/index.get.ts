@@ -41,8 +41,8 @@ export default defineEventHandler(async (event) => {
     // Any e-mail we've ever sent this partner in this project — via this workspace,
     // the negotiations page, or discovered by Gmail sync — counts as active
     // communication, regardless of whether an outreach draft was ever generated.
-    prisma.interaction.count({
-      where: { projectId, globalRecordId, type: 'EMAIL', direction: 'SENT' },
+    prisma.email.count({
+      where: { negotiation: { projectId, globalRecordId }, direction: 'SENT' },
     }),
   ])
 

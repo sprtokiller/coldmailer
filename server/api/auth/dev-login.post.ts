@@ -33,8 +33,8 @@ export default defineEventHandler(async (event) => {
 
   const testUser = await prisma.user.upsert({
     where: { email: cfg.email },
-    create: { googleId: cfg.googleId, email: cfg.email, name: cfg.name, isAdmin: false },
-    update: {},
+    create: { googleId: cfg.googleId, email: cfg.email, name: cfg.name, isAdmin: false, lastLoginAt: new Date() },
+    update: { lastLoginAt: new Date() },
     select: { id: true, email: true, name: true, image: true },
   })
 

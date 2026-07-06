@@ -1,27 +1,24 @@
 import { prisma } from '~/server/utils/prisma'
-import { requireInteractionAccess } from '~/server/utils/projectPermissions'
+import { requireEmailAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
-  const iId = getRouterParam(event, 'iId')!
-  const { session, interaction } = await requireInteractionAccess(event, iId, 'edit')
+  const emailId = getRouterParam(event, 'emailId')!
+  const { session, email } = await requireEmailAccess(event, emailId, 'edit')
 
   const body = await readBody<{
-    content?: string
+    content?: string | null
     direction?: 'SENT' | 'RECEIVED'
     subject?: string
     sentAt?: string
     fromAddress?: string | null
     toAddress?: string | null
-    myToThem?: string | null
-    themToUs?: string | null
   }>(event)
 
   const data: Record<string, any> = {}
 
-  // If someone other than the creator edits, add them as a co-author (InteractionAssignee)
-  const isCreator = interaction.createdBy === session.id
-  const isAlreadyAssignee = interaction.assignees.some(a => a.userId === session.id)
-  
+  // If someone other than the creator edits, add them as a co-author (EmailAssignee)
+  const isCreator = email.createdBy === session.id
+  const isAlreadyAssignee = email.assignees.some(a => a.userId === session.id)
   if (!isCreator && !isAlreadyAssignee) {
     data.assignees = { create: { userId: session.id } }
   }
@@ -32,11 +29,9 @@ export default defineEventHandler(async (event) => {
   if (body.sentAt !== undefined) data.sentAt = body.sentAt ? new Date(body.sentAt) : null
   if (body.fromAddress !== undefined) data.fromAddress = body.fromAddress?.trim() || null
   if (body.toAddress !== undefined) data.toAddress = body.toAddress?.trim() || null
-  if (body.myToThem !== undefined) data.myToThem = body.myToThem
-  if (body.themToUs !== undefined) data.themToUs = body.themToUs
 
-  return prisma.interaction.update({
-    where: { id: iId },
+  return prisma.email.update({
+    where: { id: emailId },
     data,
     include: {
       creator: { select: { id: true, name: true, image: true } },
@@ -46,7 +41,6 @@ export default defineEventHandler(async (event) => {
           user: { select: { id: true, name: true, image: true } },
         },
       },
-      project: { select: { id: true, name: true } },
     },
   })
 })

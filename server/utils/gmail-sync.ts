@@ -51,8 +51,12 @@ async function buildDomainContext(
       id: true,
       payload: true,
       contacts: { select: { address: true } },
-      projectRecords: {
-        select: { contactBlacklist: true, additionalAddresses: true, autoIncludeDomain: true },
+      negotiations: {
+        select: {
+          blacklistedAddresses: { select: { address: true } },
+          additionalAddresses: { select: { address: true } },
+          autoIncludeDomain: true,
+        },
       },
     },
   })
@@ -83,25 +87,21 @@ async function buildDomainContext(
       }
     }
 
-    for (const pr of rec.projectRecords) {
-      if (Array.isArray(pr.contactBlacklist)) {
-        for (const email of pr.contactBlacklist) {
-          if (typeof email === 'string') blacklistedEmails.add(email.toLowerCase())
-        }
+    for (const neg of rec.negotiations) {
+      for (const b of neg.blacklistedAddresses) {
+        blacklistedEmails.add(b.address.toLowerCase())
       }
       // Include project-specific addresses as known so they don't get auto-promoted to global contacts
-      if (Array.isArray(pr.additionalAddresses)) {
-        for (const email of pr.additionalAddresses) {
-          if (typeof email === 'string') knownEmails.add(email.toLowerCase())
-        }
+      for (const a of neg.additionalAddresses) {
+        knownEmails.add(a.address.toLowerCase())
       }
     }
 
     const hasCompanyDomain = domains.size > 0
     // null stored value → default to true when a company domain exists (backward-compat)
-    const autoIncludeDomain = rec.projectRecords.some(
-      pr => pr.autoIncludeDomain === true || (pr.autoIncludeDomain === null && hasCompanyDomain),
-    ) || (rec.projectRecords.length === 0 && hasCompanyDomain)
+    const autoIncludeDomain = rec.negotiations.some(
+      neg => neg.autoIncludeDomain === true || (neg.autoIncludeDomain === null && hasCompanyDomain),
+    ) || (rec.negotiations.length === 0 && hasCompanyDomain)
 
     result.set(rec.id, { domains, knownEmails, blacklistedEmails, projectId: '', autoIncludeDomain })
   }
@@ -251,10 +251,10 @@ export async function syncGmailForPartnerEmail(
     const record = await prisma.globalRecord.findUnique({
       where: { id: globalRecordId },
       select: {
-        interactions: { orderBy: { createdAt: 'desc' }, take: 1, select: { projectId: true } },
+        negotiations: { take: 1, select: { projectId: true } },
       },
     })
-    projectId = record?.interactions[0]?.projectId
+    projectId = record?.negotiations[0]?.projectId
   }
 
   if (!projectId) return { synced: 0 }
@@ -339,8 +339,8 @@ const ASSIGNMENT_SELECT = {
   globalRecord: {
     select: {
       contacts: { select: { address: true } },
-      projectRecords: {
-        select: { projectId: true, additionalAddresses: true },
+      negotiations: {
+        select: { projectId: true, additionalAddresses: { select: { address: true } } },
       },
     },
   },
@@ -351,7 +351,7 @@ type AssignmentRow = {
   projectId: string
   globalRecord: {
     contacts: { address: string | null }[]
-    projectRecords: { projectId: string; additionalAddresses: unknown }[]
+    negotiations: { projectId: string; additionalAddresses: { address: string }[] }[]
   }
 }
 
@@ -362,10 +362,10 @@ function populatePartnerEmailMap(map: Map<string, PartnerEmailEntry[]>, assignme
       if (!contact.address) continue
       addToMap(map, contact.address.toLowerCase(), entry)
     }
-    const projRecord = assign.globalRecord.projectRecords.find(pr => pr.projectId === assign.projectId)
-    if (projRecord && Array.isArray(projRecord.additionalAddresses)) {
-      for (const addr of projRecord.additionalAddresses) {
-        if (typeof addr === 'string') addToMap(map, addr.toLowerCase(), entry)
+    const negotiation = assign.globalRecord.negotiations.find(neg => neg.projectId === assign.projectId)
+    if (negotiation) {
+      for (const addr of negotiation.additionalAddresses) {
+        addToMap(map, addr.address.toLowerCase(), entry)
       }
     }
   }
@@ -488,12 +488,29 @@ async function processMessage(
     const unknownAddr = matchedViaKnown.has(entry.globalRecordId)
       ? null
       : (newlyDiscovered.get(`${entry.globalRecordId}:${entry.projectId}`) ?? null)
+
+    const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
+    const negotiation = await prisma.negotiation.upsert({
+      where: { projectId_globalRecordId: { projectId: entry.projectId, globalRecordId: entry.globalRecordId } },
+      create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, negotiationStatus: newStatus },
+      update: {},
+    })
+    await prisma.negotiation.updateMany({
+      where: {
+        globalRecordId: entry.globalRecordId,
+        projectId: entry.projectId,
+        OR: [
+          { negotiationStatus: null },
+          { negotiationStatus: { notIn: ['NOT_INTERESTED', 'NOT_THIS_TIME', 'COMPLETED', 'THANKS_REMAINING'] } },
+        ],
+      },
+      data: { negotiationStatus: newStatus },
+    })
+
     try {
-      await prisma.interaction.create({
+      await prisma.email.create({
         data: {
-          globalRecordId: entry.globalRecordId,
-          projectId: entry.projectId,
-          type: 'EMAIL',
+          negotiationId: negotiation.id,
           direction,
           subject,
           sentAt,
@@ -508,24 +525,6 @@ async function processMessage(
         },
       })
       created++
-
-      const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
-      await prisma.projectRecord.upsert({
-        where: { projectId_globalRecordId: { projectId: entry.projectId, globalRecordId: entry.globalRecordId } },
-        create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, negotiationStatus: newStatus },
-        update: {},
-      })
-      await prisma.projectRecord.updateMany({
-        where: {
-          globalRecordId: entry.globalRecordId,
-          projectId: entry.projectId,
-          OR: [
-            { negotiationStatus: null },
-            { negotiationStatus: { notIn: ['NOT_INTERESTED', 'NOT_THIS_TIME', 'COMPLETED', 'THANKS_REMAINING'] } },
-          ],
-        },
-        data: { negotiationStatus: newStatus },
-      })
     } catch (e: any) {
       if (e?.code === 'P2002') continue
       throw e

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
       payload: true,
       ...(projectId && {
         _count: {
-          select: { interactions: { where: { projectId } } },
+          select: { negotiations: { where: { projectId } } },
         },
       }),
     },
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
       industry: payload?.industry ?? null,
       size: payload?.size ?? null,
       website: payload?.website ?? payload?.url ?? null,
-      hasInteractionsInProject: projectId ? ((r as any)._count?.interactions ?? 0) > 0 : false,
+      hasNegotiation: projectId ? ((r as any)._count?.negotiations ?? 0) > 0 : false,
     }
   })
 })

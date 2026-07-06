@@ -56,16 +56,15 @@ export default defineEventHandler(async (event) => {
         where: { id: globalRecordId },
         select: {
           contacts: { select: { address: true } },
-          projectRecords: { where: { projectId }, select: { additionalAddresses: true } },
+          negotiations: { where: { projectId }, select: { additionalAddresses: { select: { address: true } } } },
         },
       })
       const knownAddresses = new Set<string>()
       for (const c of record?.contacts ?? []) {
         if (c.address) knownAddresses.add(c.address.toLowerCase())
       }
-      const additional = record?.projectRecords[0]?.additionalAddresses
-      if (Array.isArray(additional)) {
-        for (const a of additional) if (typeof a === 'string') knownAddresses.add(a.toLowerCase())
+      for (const a of record?.negotiations[0]?.additionalAddresses ?? []) {
+        knownAddresses.add(a.address.toLowerCase())
       }
 
       const found = await getGmailScheduledForAddresses(accessToken, knownAddresses)
