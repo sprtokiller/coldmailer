@@ -15,6 +15,8 @@ const emit = defineEmits<{
   (e: 'refreshGroups'): void
 }>()
 
+const toast = useToast()
+
 const selectedUserId = ref<string | null>(null)
 const selectedUser = computed(() => props.adminUsers?.find(u => u.id === selectedUserId.value) ?? null)
 
@@ -36,12 +38,22 @@ function selectUser(userId: string) {
 
 // ── Assign / remove project role ─────────────────────────────────────────
 async function assignProjectRole(userId: string, projectRoleId: string) {
-  await $fetch(`/api/admin/users/${userId}/project-roles`, { method: 'POST', body: { projectRoleId } })
-  emit('refreshUsers')
+  try {
+    await $fetch(`/api/admin/users/${userId}/project-roles`, { method: 'POST', body: { projectRoleId } })
+    toast.show('Role přidělena', 'success')
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se přidělit roli', 'error')
+  }
 }
 async function removeProjectRole(userId: string, projectRoleId: string) {
-  await $fetch(`/api/admin/users/${userId}/project-roles/${projectRoleId}`, { method: 'DELETE' })
-  emit('refreshUsers')
+  try {
+    await $fetch(`/api/admin/users/${userId}/project-roles/${projectRoleId}`, { method: 'DELETE' })
+    toast.show('Role odebrána', 'success')
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se odebrat roli', 'error')
+  }
 }
 
 // ── Budget ─────────────────────────────────────────────────────────────────
@@ -51,8 +63,13 @@ watch(selectedUser, (u) => {
 })
 async function saveBudget(userId: string) {
   const limitUsd = budgetInput.value.trim() === '' ? null : parseFloat(budgetInput.value)
-  await $fetch(`/api/admin/users/${userId}/budget`, { method: 'PATCH', body: { limitUsd } })
-  emit('refreshUsers')
+  try {
+    await $fetch(`/api/admin/users/${userId}/budget`, { method: 'PATCH', body: { limitUsd } })
+    toast.show('Limit uložen', 'success')
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit limit', 'error')
+  }
 }
 
 // ── Last login badge ────────────────────────────────────────────────────
@@ -85,8 +102,13 @@ const adminCount = computed(() => props.adminUsers?.filter(u => u.isAdmin).lengt
 
 async function toggleAdmin(user: AdminUser) {
   if (!confirm(`${user.isAdmin ? 'Odebrat' : 'Přidělit'} admin status uživateli ${user.name}?`)) return
-  await $fetch(`/api/admin/users/${user.id}/admin`, { method: 'PATCH', body: { isAdmin: !user.isAdmin } })
-  emit('refreshUsers')
+  try {
+    await $fetch(`/api/admin/users/${user.id}/admin`, { method: 'PATCH', body: { isAdmin: !user.isAdmin } })
+    toast.show(user.isAdmin ? 'Admin status odebrán' : 'Admin status přidělen', 'success')
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se změnit admin status', 'error')
+  }
 }
 
 // ── Delete user ──────────────────────────────────────────────────────────
@@ -95,9 +117,10 @@ async function deleteUser(user: AdminUser) {
   try {
     await $fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
     if (selectedUserId.value === user.id) selectedUserId.value = null
+    toast.show('Uživatel smazán', 'success')
     emit('refreshUsers')
   } catch (err: any) {
-    alert(err?.data?.message ?? 'Uživatele se nepodařilo smazat.')
+    toast.show(err?.data?.message ?? 'Uživatele se nepodařilo smazat', 'error')
   }
 }
 

@@ -3,6 +3,7 @@ import type { GroupInfo } from '~/utils/settings-constants'
 
 const props = defineProps<{ adminGroups: GroupInfo[] | null }>()
 const emit = defineEmits<{ (e: 'refresh'): void }>()
+const toast = useToast()
 
 const showModal = ref(false)
 const modalMode = ref<'create' | 'edit'>('create')
@@ -48,10 +49,11 @@ async function save() {
         body: { name: form.value.name.trim(), slug: form.value.slug.trim() },
       })
     }
+    toast.show(editingProject.value ? 'Projekt uložen' : 'Projekt vytvořen', 'success')
     emit('refresh')
     showModal.value = false
   } catch (err: any) {
-    alert(err?.data?.statusMessage ?? 'Nepodařilo se uložit.')
+    toast.show(err?.data?.statusMessage ?? 'Nepodařilo se uložit', 'error')
   } finally {
     saving.value = false
   }
@@ -65,10 +67,11 @@ async function deleteProject() {
     await $fetch(`/api/admin/groups/${editingProject.value.groupId}/projects/${editingProject.value.id}`, {
       method: 'DELETE',
     })
+    toast.show('Projekt smazán', 'success')
     emit('refresh')
     showModal.value = false
   } catch (err: any) {
-    alert(err?.data?.statusMessage ?? 'Nepodařilo se smazat.')
+    toast.show(err?.data?.statusMessage ?? 'Nepodařilo se smazat', 'error')
   } finally {
     deleting.value = false
   }

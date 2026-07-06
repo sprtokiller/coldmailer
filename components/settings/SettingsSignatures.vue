@@ -10,6 +10,7 @@ interface SignatureItem {
   author?: { id: string; name: string; image: string | null }
 }
 
+const toast = useToast()
 const { groupFont, groups } = useActiveProject()
 const { data: sigData, refresh } = await useFetch<{ templates: SignatureItem[]; personal: SignatureItem[] }>('/api/library/signatures', { default: () => ({ templates: [], personal: [] }) })
 
@@ -66,10 +67,11 @@ async function save() {
         body: { name: formName.value.trim(), content: formContent.value, groupId: formGroupId.value },
       })
     }
+    toast.show(editingId.value ? 'Podpis uložen' : 'Podpis vytvořen', 'success')
     editing.value = false
     await refresh()
   } catch (err: any) {
-    alert(err?.data?.message || err?.message || 'Nepodařilo se uložit podpis.')
+    toast.show(err?.data?.message || err?.message || 'Nepodařilo se uložit podpis', 'error')
   } finally {
     saving.value = false
   }
@@ -79,9 +81,10 @@ async function deleteSignature(id: string) {
   if (!confirm('Opravdu smazat tento podpis?')) return
   try {
     await $fetch(`/api/library/signatures/${id}`, { method: 'DELETE' })
+    toast.show('Podpis smazán', 'success')
     await refresh()
   } catch (err: any) {
-    alert(err?.data?.message || err?.message || 'Nepodařilo se smazat podpis.')
+    toast.show(err?.data?.message || err?.message || 'Nepodařilo se smazat podpis', 'error')
   }
 }
 

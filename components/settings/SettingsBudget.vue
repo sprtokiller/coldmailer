@@ -7,6 +7,8 @@ import {
 const props = defineProps<{ budgetData: BudgetResponse | null }>()
 const emit = defineEmits<{ (e: 'refresh'): void }>()
 
+const toast = useToast()
+
 const budgetUsers = computed(() => props.budgetData?.users ?? [])
 
 // ── Default budget form ──────────────────────────────────────────────────
@@ -18,11 +20,16 @@ watch(() => defBudget.value.limitUsd, (v) => { defLimitInput.value = v != null ?
 
 async function saveDefaultBudget() {
   const limitUsd = defLimitInput.value.trim() === '' ? null : parseFloat(defLimitInput.value)
-  await $fetch('/api/admin/budget/defaults', {
-    method: 'PATCH',
-    body: { limitUsd, resetPeriod: defBudget.value.resetPeriod },
-  })
-  emit('refresh')
+  try {
+    await $fetch('/api/admin/budget/defaults', {
+      method: 'PATCH',
+      body: { limitUsd, resetPeriod: defBudget.value.resetPeriod },
+    })
+    toast.show('Výchozí limit uložen', 'success')
+    emit('refresh')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit výchozí limit', 'error')
+  }
 }
 
 // ── Per-user budget editing ──────────────────────────────────────────────
@@ -41,20 +48,30 @@ watch(selectedBudgetUser, (u) => {
 async function saveBudgetUser() {
   if (!selectedBudgetUserId.value) return
   const limitUsd = editLimitInput.value.trim() === '' ? null : parseFloat(editLimitInput.value)
-  await $fetch(`/api/admin/budget/${selectedBudgetUserId.value}`, {
-    method: 'PATCH',
-    body: { limitUsd, resetPeriod: editResetPeriod.value },
-  })
-  emit('refresh')
+  try {
+    await $fetch(`/api/admin/budget/${selectedBudgetUserId.value}`, {
+      method: 'PATCH',
+      body: { limitUsd, resetPeriod: editResetPeriod.value },
+    })
+    toast.show('Limit uložen', 'success')
+    emit('refresh')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit limit', 'error')
+  }
 }
 
 async function resetBudgetCounter(userId: string) {
   if (!confirm('Opravdu resetovat čítač spotřeby na nulu?')) return
-  await $fetch(`/api/admin/budget/${userId}`, {
-    method: 'PATCH',
-    body: { resetUsedNow: true },
-  })
-  emit('refresh')
+  try {
+    await $fetch(`/api/admin/budget/${userId}`, {
+      method: 'PATCH',
+      body: { resetUsedNow: true },
+    })
+    toast.show('Čítač spotřeby resetován', 'success')
+    emit('refresh')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se resetovat čítač', 'error')
+  }
 }
 
 function budgetPct(u: BudgetUser) {

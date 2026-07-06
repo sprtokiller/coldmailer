@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const toast = useToast()
+
 const emailSyncDays = ref(30)
 const emailSyncSaving = ref(false)
 
@@ -17,6 +19,9 @@ async function saveEmailSyncDays() {
       body: { days: emailSyncDays.value },
     })
     emailSyncDays.value = data.emailSyncHistoryDays
+    toast.show('Nastavení synchronizace uloženo', 'success')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit nastavení', 'error')
   } finally {
     emailSyncSaving.value = false
   }
@@ -57,6 +62,9 @@ async function saveDefaultRoles() {
         projectRoleIds: [...selectedProjectRoleIds.value],
       },
     })
+    toast.show('Výchozí role uloženy', 'success')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit výchozí role', 'error')
   } finally {
     defaultRolesSaving.value = false
   }
@@ -102,6 +110,9 @@ async function saveReasoningEffort() {
       body: { effort: reasoningEffort.value },
     })
     reasoningEffort.value = data.effort
+    toast.show('Reasoning effort uložen', 'success')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Nepodařilo se uložit reasoning effort', 'error')
   } finally {
     reasoningEffortSaving.value = false
   }
