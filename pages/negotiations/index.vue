@@ -17,9 +17,10 @@ interface Partner {
 
 const search = ref('')
 const { data: allPartners, pending, refresh: refreshPartners } = await useFetch<Partner[]>('/api/partners')
-const { data: meData } = await useFetch<{ user: { id: string } }>('/api/settings/me')
+const { data: meData } = await useFetch<{ user: { id: string; isAdmin: boolean } }>('/api/settings/me')
 
 const currentUserId = computed(() => meData.value?.user?.id ?? null)
+const isAdmin = computed(() => meData.value?.user?.isAdmin ?? false)
 
 /** Seřadí skupinu partnerů dle lastInteractionAt DESC, záznamy bez data na konec */
 function sortByLastInteraction(list: Partner[]): Partner[] {
@@ -48,8 +49,9 @@ const sortedPartners = computed(() => {
   ]
 })
 
-/** Vrátí true, pokud je partner READ-ONLY pro přihlášeného uživatele (není mu přiřazen) */
+/** Vrátí true, pokud je partner READ-ONLY pro přihlášeného uživatele (není mu přiřazen, nebo je admin) */
 function isReadOnly(p: Partner): boolean {
+  if (isAdmin.value) return false
   const uid = currentUserId.value
   if (!uid) return false
   return !p.assignees.some(a => a.id === uid)

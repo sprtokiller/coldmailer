@@ -143,7 +143,7 @@ async function syncNow(lookbackDays?: number) {
 // ── UI state ──────────────────────────────────────────────────────────────────
 
 onMounted(() => {
-  document.addEventListener('click', () => { showSyncDropdown.value = false })
+  document.addEventListener('click', () => { showSyncDropdown.value = false; showAddAssignee.value = false })
 })
 
 const showProfileModal = ref(false)
@@ -572,6 +572,11 @@ async function deleteInteraction(iId: string) {
 }
 
 const showAddAssignee = ref(false)
+const addAssigneeSelectEl = ref<HTMLSelectElement | null>(null)
+
+function openAddAssignee() {
+  showAddAssignee.value = true
+}
 
 async function addSolutionAssignee() {
   if (!addAssigneeUserId.value) return
@@ -755,9 +760,8 @@ const TYPE_COLORS: Record<string, string> = {
               class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600"
             >{{ partner.payload.industry || partner.payload.type }}</span>
           </div>
-          <div class="mt-1.5 flex items-center gap-3">
-            <span v-if="firstContact?.address" class="text-sm font-mono text-gray-500">{{ firstContact.address }}</span>
-            <span v-else class="text-sm text-gray-300 italic">Bez emailu</span>
+          <div v-if="partner.payload.summary || partner.payload.description" class="mt-1.5 text-sm text-gray-400 max-w-xl line-clamp-2">
+            {{ partner.payload.summary || partner.payload.description }}
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
@@ -795,6 +799,23 @@ const TYPE_COLORS: Record<string, string> = {
               >Synchronizovat {{ syncLookbackDays }} dní zpět</button>
             </div>
           </div>
+          <!-- Stav jednání inline vedle tlačítek -->
+          <div v-if="canEdit || partner.negotiationStatus" class="flex items-center gap-1.5">
+            <span class="text-xs text-gray-400 font-medium whitespace-nowrap">Stav:</span>
+            <select
+              v-if="canEdit"
+              :value="partner.negotiationStatus ?? ''"
+              class="text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-36"
+              @change="updateStatus(($event.target as HTMLSelectElement).value || null)"
+            >
+              <option value="">—</option>
+              <option v-for="(label, key) in NEGOTIATION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <span
+              v-else-if="partner.negotiationStatus"
+              :class="['text-xs px-2 py-1 rounded font-medium', NEGOTIATION_STATUS_COLORS[partner.negotiationStatus] ?? 'bg-gray-100 text-gray-600']"
+            >{{ NEGOTIATION_STATUS_LABELS[partner.negotiationStatus] }}</span>
+          </div>
           <button
             v-if="partner.payload.description"
             class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
@@ -810,24 +831,6 @@ const TYPE_COLORS: Record<string, string> = {
             Upravit profil
           </button>
         </div>
-      </div>
-
-      <!-- Partner Status -->
-      <div v-if="canEdit || partner.negotiationStatus" class="mt-4 flex items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-lg w-max">
-        <span class="text-xs text-gray-500 font-medium">Stav jednání:</span>
-        <select
-          v-if="canEdit"
-          :value="partner.negotiationStatus ?? ''"
-          class="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-40"
-          @change="updateStatus(($event.target as HTMLSelectElement).value || null)"
-        >
-          <option value="">—</option>
-          <option v-for="(label, key) in NEGOTIATION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
-        </select>
-        <span
-          v-else-if="partner.negotiationStatus"
-          :class="['text-xs px-2 py-1 rounded font-medium', NEGOTIATION_STATUS_COLORS[partner.negotiationStatus] ?? 'bg-gray-100 text-gray-600']"
-        >{{ NEGOTIATION_STATUS_LABELS[partner.negotiationStatus] }}</span>
       </div>
 
       <!-- Souhrnné přiřazení -->
@@ -852,21 +855,36 @@ const TYPE_COLORS: Record<string, string> = {
               <span class="text-xs text-gray-500">{{ a.name }}</span>
             </span>
           </template>
-          <button
-            v-if="canManageAssignees && !showAddAssignee"
-            class="w-7 h-7 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-indigo-500 hover:border-indigo-300 text-xs transition-colors ml-1"
-            @click="showAddAssignee = true"
-          >+</button>
-          <select
-            v-if="showAddAssignee"
-            v-model="addAssigneeUserId"
-            class="text-xs px-1.5 py-0.5 ml-1 border border-gray-200 rounded text-gray-500 focus:outline-none focus:border-indigo-300 bg-white"
-            @change="addSolutionAssignee"
-            @blur="showAddAssignee = false"
-          >
-            <option value="">Přidat...</option>
-            <option v-for="u in unassignedSolutionUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
-          </select>
+          <div class="relative ml-1">
+            <button
+              v-if="canManageAssignees"
+              class="w-7 h-7 rounded-full border border-dashed flex items-center justify-center text-xs transition-colors"
+              :class="showAddAssignee ? 'border-indigo-300 text-indigo-500 bg-indigo-50' : 'border-gray-300 text-gray-400 hover:text-indigo-500 hover:border-indigo-300'"
+              @click.stop="showAddAssignee = !showAddAssignee"
+            >+</button>
+            <div
+              v-if="showAddAssignee && unassignedSolutionUsers.length"
+              class="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl py-1 min-w-36"
+              @click.stop
+            >
+              <button
+                v-for="u in unassignedSolutionUsers"
+                :key="u.id"
+                class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-left transition-colors"
+                @click="addAssigneeUserId = u.id; addSolutionAssignee(); showAddAssignee = false"
+              >
+                <img v-if="u.image" :src="u.image" :alt="u.name" class="w-5 h-5 rounded-full object-cover" referrerpolicy="no-referrer" />
+                <div v-else class="w-5 h-5 rounded-full bg-indigo-400 flex items-center justify-center text-white text-[10px] font-medium">{{ u.name.charAt(0).toUpperCase() }}</div>
+                <span class="text-xs text-gray-700">{{ u.name }}</span>
+              </button>
+            </div>
+            <div
+              v-else-if="showAddAssignee && !unassignedSolutionUsers.length"
+              class="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl py-2 px-3 min-w-36"
+            >
+              <span class="text-xs text-gray-400">Nikdo další</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
