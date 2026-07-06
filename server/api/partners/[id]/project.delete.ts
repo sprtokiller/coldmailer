@@ -18,11 +18,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Nemáte oprávnění odebrat partnera z projektu.' })
   }
 
-  // Only remove the outreach assignment. The Negotiation row (e-maily, poznámky,
-  // plnění, adresy) zůstává zachovaná, aby se historie obnovila při opětovném
-  // přidání partnera — Email/Note teď na Negotiation mají FK s onDelete: Cascade,
-  // takže smazání Negotiation by nenávratně smazalo celou historii.
+  // Nemažeme Negotiation řádek (e-maily, poznámky, plnění, adresy) — Email/Note
+  // na něj mají FK s onDelete: Cascade, takže smazání by nenávratně smazalo
+  // celou historii. Místo toho ho jen označíme jako odebraný (removedAt), aby
+  // zmizel z Jednání i Oslovování; historie se obnoví při opětovném přidání partnera.
   await prisma.outreachAssignment.deleteMany({ where: { projectId, globalRecordId } })
+  await prisma.negotiation.updateMany({
+    where: { projectId, globalRecordId },
+    data: { removedAt: new Date() },
+  })
 
   return { success: true }
 })

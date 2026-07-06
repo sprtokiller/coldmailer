@@ -4,7 +4,8 @@
  * Vrátí všechny GlobalRecordy asociované s tímto projektem – bez závislosti
  * na konkrétním kroku pipeline. Zahrnuje záznamy nalezené přes Negotiation
  * (e-maily/poznámky/plnění vždy vyžadují existující Negotiation, takže její
- * existence sama o sobě znamená "partner má v projektu nějakou aktivitu").
+ * existence sama o sobě znamená "partner má v projektu nějakou aktivitu"),
+ * kromě těch, které byly z projektu odebrány (removedAt).
  *
  * Každý záznam obsahuje stav PartnerAlignment a PartnerOutreachDraft.
  */
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(user.id, projectId)
   const canManageAll = access.isAdmin || access.canEditAll
 
-  const negotiations = await prisma.negotiation.findMany({ where: { projectId }, select: { globalRecordId: true } })
+  const negotiations = await prisma.negotiation.findMany({ where: { projectId, removedAt: null }, select: { globalRecordId: true } })
   const globalRecordIds = [...new Set(negotiations.map(n => n.globalRecordId))]
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }

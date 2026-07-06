@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
       payload: true,
       ...(projectId && {
         _count: {
-          select: { negotiations: { where: { projectId } } },
+          select: { negotiations: { where: { projectId, removedAt: null } } },
         },
       }),
     },

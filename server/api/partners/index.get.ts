@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const scope = await getActiveScope(event)
   const projectId = scope.project?.id
 
-  const negotiationWhere = projectId ? { projectId } : {}
+  const negotiationWhere = projectId ? { projectId, removedAt: null } : { removedAt: null }
 
   const records = await prisma.globalRecord.findMany({
     where: {

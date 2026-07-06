@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
   const negotiation = await prisma.negotiation.upsert({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
     create: { projectId, globalRecordId },
-    update: {},
+    update: { removedAt: null },
   })
 
   if (assigneeIds.length > 0) {
