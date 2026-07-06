@@ -190,7 +190,8 @@ BEGIN
   )
   SELECT
     i."id", n."id", i."direction", i."subject", i."sentAt", i."fromAddress", i."toAddress",
-    i."ccAddress", i."gmailId", i."content", i."createdBy", i."createdAt", i."updatedAt",
+    to_jsonb(i) ->> 'ccAddress', -- ccAddress may not exist yet if this deploy is also catching up
+    i."gmailId", i."content", i."createdBy", i."createdAt", i."updatedAt",
     i."isUnknownContact", i."unknownContactAddress"
   FROM "Interaction" i
   JOIN "Negotiation" n ON n."projectId" = i."projectId" AND n."globalRecordId" = i."globalRecordId"

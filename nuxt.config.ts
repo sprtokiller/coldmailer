@@ -80,17 +80,11 @@ export default defineNuxtConfig({
     adminEmails: '',
     openRouterApiKey: '',
     openRouterManagementKey: '',
-    serpApiKeys: '',
     session: {
       maxAge: 60 * 60 * 24 * 7, // 7 days
       password: '',
     },
   },
-
-  css: [
-    '@vue-flow/core/dist/style.css',
-    '@vue-flow/core/dist/theme-default.css',
-  ],
 
   typescript: {
     strict: true,

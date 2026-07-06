@@ -11,11 +11,6 @@ export interface TrackAIOptions {
   stepType?: string
 }
 
-export interface TrackSerpOptions {
-  userId: string
-  pipelineStepId?: string
-  stepType?: string
-}
 
 // â”€â”€ Reset helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -94,26 +89,6 @@ export async function trackAIUsage(opts: TrackAIOptions): Promise<void> {
     })
   } catch (err) {
     console.error('[usage-tracker] trackAIUsage error:', err)
-  }
-}
-
-/**
- * Records a SerpAPI search event (no monetary cost tracked here, count only).
- * Non-fatal.
- */
-export async function trackSerpUsage(opts: TrackSerpOptions): Promise<void> {
-  try {
-    await prisma.usageEvent.create({
-      data: {
-        userId:         opts.userId,
-        eventType:      'serp_search',
-        model:          'serpapi',
-        costUsd:        0,
-        stepType:       opts.stepType ?? null,
-      },
-    })
-  } catch (err) {
-    console.error('[usage-tracker] trackSerpUsage error:', err)
   }
 }
 

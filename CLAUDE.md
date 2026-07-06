@@ -87,7 +87,6 @@ Copy `.env.example` to `.env` and fill in:
 - `NUXT_SESSION_PASSWORD` — session encryption key, min 32 chars; generate with `openssl rand -base64 32`
 - `NUXT_OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
 - `NUXT_OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
-- `NUXT_SERP_API_KEYS` — comma-separated SerpAPI keys; read by `server/utils/serpapi.ts`, which is currently not imported by any active route (dead code left over from a removed partner-identification pipeline)
 
 ## Architecture
 
@@ -98,7 +97,7 @@ Copy `.env.example` to `.env` and fill in:
 - **AI**: All LLM calls go through OpenRouter via the `openai` npm package (`baseURL: 'https://openrouter.ai/api/v1'`). There is no direct Anthropic SDK.
 - **Styling**: Tailwind CSS + Parkinsans Google Font
 
-There is no `PipelineRun`/`PipelineStep` model and no visual pipeline canvas anymore — that sequential-pipeline design was replaced by the Groups → Projects structure described below. `StepType` (`MARKET_SCANNING`, `PARTNER_IDENTIFICATION`, `PARTNER_PROFILING`, `VALUE_ALIGNMENT`, `OUTREACH_PREPARATION`) survives only as a label on `SystemPrompt`/`ContextPart` for organizing the Library; only `VALUE_ALIGNMENT` and `OUTREACH_PREPARATION` are wired to an actual AI call. `server/utils/serpapi.ts` and `server/utils/page-fetcher.ts` (Crawlee/Playwright) are leftovers from the removed `PARTNER_IDENTIFICATION` step and are not imported by any active route.
+There is no `PipelineRun`/`PipelineStep` model and no visual pipeline canvas anymore — that sequential-pipeline design was replaced by the Groups → Projects structure described below. `StepType` (`MARKET_SCANNING`, `PARTNER_IDENTIFICATION`, `PARTNER_PROFILING`, `VALUE_ALIGNMENT`, `OUTREACH_PREPARATION`) survives only as a label on `SystemPrompt`/`ContextPart` for organizing the Library; only `VALUE_ALIGNMENT` and `OUTREACH_PREPARATION` are wired to an actual AI call. `server/utils/serpapi.ts` and `server/utils/page-fetcher.ts` (its Crawlee/Playwright counterpart), both leftovers from the removed `PARTNER_IDENTIFICATION` step, were removed along with the `playwright`/`crawlee`/`@crawlee/memory-storage` dependencies they solely justified. `@vue-flow/core` (leftover from the removed visual pipeline canvas) and `pathe` (unused) were removed too.
 
 ### Data Model
 Work is organized as **Groups → Projects** (`prisma/schema.prisma`). Each project tracks partner/sponsor records via a shared `GlobalRecord` table (deduplicated across projects), with per-project state layered on top:
