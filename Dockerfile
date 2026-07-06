@@ -16,9 +16,7 @@ FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/node_modules/openai ./.output/server/node_modules/openai
-COPY --from=builder /app/node_modules/playwright ./.output/server/node_modules/playwright
-COPY --from=builder /app/node_modules/playwright-core ./.output/server/node_modules/playwright-core
-RUN bun .output/server/node_modules/playwright/cli.js install --with-deps chromium \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends procps \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
