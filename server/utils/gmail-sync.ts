@@ -499,6 +499,7 @@ async function processMessage(
           sentAt,
           fromAddress: from,
           toAddress: to,
+          ccAddress: cc || null,
           gmailId: msg.id,
           content: htmlBody,
           createdBy: userId,

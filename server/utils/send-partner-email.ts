@@ -85,6 +85,7 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
       sentAt: new Date(),
       fromAddress: dbUser.email,
       toAddress,
+      ccAddress: cc || null,
       gmailId: result.id,
       content: fullBody,
       createdBy: userId,

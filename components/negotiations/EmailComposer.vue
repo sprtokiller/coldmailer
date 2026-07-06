@@ -27,37 +27,107 @@ interface Props {
   globalRecordId: string
   contacts: Contact[]
   prefilledTo?: string
+  prefilledCc?: string
   prefilledSubject?: string
   inReplyToGmailId?: string
   editScheduled?: EditScheduled | null
+  hasPriorCommunication?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ close: []; sent: [] }>()
 
 const { activeProject, groupFont } = useActiveProject()
+const toast = useToast()
 
 const isEdit = computed(() => !!props.editScheduled)
 
 const to = ref(props.editScheduled?.toAddress ?? props.prefilledTo ?? '')
-const cc = ref(props.editScheduled?.cc ?? '')
+const cc = ref(props.editScheduled?.cc ?? props.prefilledCc ?? '')
 const bcc = ref(props.editScheduled?.bcc ?? '')
 const showCc = ref(!!cc.value)
 const showBcc = ref(!!bcc.value)
 const subject = ref(props.editScheduled?.subject ?? props.prefilledSubject ?? '')
 const body = ref(props.editScheduled?.body ?? '')
 const selectedSignatureId = ref('')
+const includeSignature = ref(true)
 const sending = ref(false)
 const error = ref('')
 
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso)
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-  return d.toISOString().slice(0, 16)
+function dateToDatetimeLocal(d: Date): string {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
 }
 
-const scheduleEnabled = ref(!!props.editScheduled)
+function toDatetimeLocal(iso: string): string {
+  return dateToDatetimeLocal(new Date(iso))
+}
+
+function fmtDateTime(d: Date): string {
+  return d.toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 const scheduledFor = ref(props.editScheduled ? toDatetimeLocal(props.editScheduled.scheduledFor) : '')
+
+// Default: at least 15 minutes from now, rounded up to the nearest half hour
+function defaultScheduleTime(): Date {
+  const d = new Date(Date.now() + 15 * 60 * 1000)
+  const remainder = d.getMinutes() % 30
+  if (remainder !== 0) d.setMinutes(d.getMinutes() + (30 - remainder))
+  d.setSeconds(0, 0)
+  return d
+}
+
+const schedulePopoverOpen = ref(false)
+const schedulePopoverView = ref<'menu' | 'picker'>('menu')
+
+function toggleSchedulePopover() {
+  if (schedulePopoverOpen.value) {
+    closeSchedulePopover()
+  } else {
+    schedulePopoverOpen.value = true
+    schedulePopoverView.value = 'menu'
+  }
+}
+
+function closeSchedulePopover() {
+  schedulePopoverOpen.value = false
+  schedulePopoverView.value = 'menu'
+}
+
+function openSchedulePicker() {
+  schedulePopoverView.value = 'picker'
+  if (!scheduledFor.value) scheduledFor.value = dateToDatetimeLocal(defaultScheduleTime())
+}
+
+function pickIn30Min() {
+  const d = new Date(Date.now() + 30 * 60 * 1000)
+  d.setSeconds(0, 0)
+  scheduledFor.value = dateToDatetimeLocal(d)
+}
+
+function pickNextMonday() {
+  const d = new Date()
+  d.setHours(8, 0, 0, 0)
+  let daysUntilMonday = (1 - d.getDay() + 7) % 7
+  if (daysUntilMonday === 0 && d.getTime() <= Date.now()) daysUntilMonday = 7
+  d.setDate(d.getDate() + daysUntilMonday)
+  scheduledFor.value = dateToDatetimeLocal(d)
+}
+
+function pickTomorrow() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(7, 0, 0, 0)
+  scheduledFor.value = dateToDatetimeLocal(d)
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeSchedulePopover)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', closeSchedulePopover)
+})
 
 const activeProjectId = computed(() => activeProject.value?.id ?? '')
 
@@ -78,21 +148,28 @@ watch(signatures, (val) => {
 const title = computed(() => isEdit.value ? 'Upravit naplánovaný e-mail' : props.inReplyToGmailId ? 'Odpovědět' : 'Nový e-mail')
 
 const scheduledForDate = computed(() => scheduledFor.value ? new Date(scheduledFor.value) : null)
-const scheduleValid = computed(() => !scheduleEnabled.value || (!!scheduledForDate.value && scheduledForDate.value.getTime() > Date.now()))
+const scheduleValid = computed(() => !!scheduledForDate.value && scheduledForDate.value.getTime() > Date.now())
 
-const canSend = computed(() =>
+const signatureRequired = computed(() => !isEdit.value && !props.hasPriorCommunication)
+
+watch(signatureRequired, (val) => { if (val) includeSignature.value = true }, { immediate: true })
+
+const baseValid = computed(() =>
   !!to.value.trim() && !!subject.value.trim() && !!body.value.trim() &&
-  (isEdit.value || !!selectedSignatureId.value) &&
-  scheduleValid.value && !sending.value,
+  (isEdit.value || !signatureRequired.value || (includeSignature.value && !!selectedSignatureId.value)) &&
+  !sending.value,
 )
 
-const submitLabel = computed(() => {
-  if (isEdit.value) return 'Uložit změny'
-  return scheduleEnabled.value ? 'Naplánovat odeslání' : 'Odeslat'
-})
+// Immediate "Odeslat" / "Uložit změny" — for edit mode the schedule time must stay valid too
+const canSend = computed(() => baseValid.value && (!isEdit.value || scheduleValid.value))
+// Confirming a chosen time in the schedule popover
+const canConfirmSchedule = computed(() => baseValid.value && scheduleValid.value)
 
-async function handleSend() {
-  if (!canSend.value) return
+const submitLabel = computed(() => isEdit.value ? 'Uložit změny' : 'Odeslat')
+
+async function submitEmail(scheduled: boolean) {
+  const requiresValidTime = isEdit.value || scheduled
+  if (requiresValidTime ? !canConfirmSchedule.value : !canSend.value) return
   error.value = ''
   sending.value = true
   try {
@@ -110,7 +187,7 @@ async function handleSend() {
         },
       })
     } else {
-      const sig = signatures.value.find(s => s.id === selectedSignatureId.value)
+      const sig = includeSignature.value ? signatures.value.find(s => s.id === selectedSignatureId.value) : undefined
       await $fetch(`/api/partners/${props.globalRecordId}/send-email`, {
         method: 'POST',
         body: {
@@ -121,9 +198,12 @@ async function handleSend() {
           body: body.value,
           signatureContent: sig?.content,
           inReplyToGmailId: props.inReplyToGmailId,
-          scheduledFor: scheduleEnabled.value ? scheduledForDate.value!.toISOString() : undefined,
+          scheduledFor: scheduled ? scheduledForDate.value!.toISOString() : undefined,
         },
       })
+      if (scheduled) {
+        toast.show(`E-mail bude odeslán ${fmtDateTime(scheduledForDate.value!)}`, 'success')
+      }
     }
     emit('sent')
     emit('close')
@@ -175,6 +255,7 @@ async function handleSend() {
               v-model="cc"
               type="text"
               autocomplete="off"
+              data-bwignore
               list="composer-contacts-list"
               class="composer-field-input"
               placeholder="Emailové adresy, odděl čárkou…"
@@ -187,6 +268,7 @@ async function handleSend() {
               v-model="bcc"
               type="text"
               autocomplete="off"
+              data-bwignore
               list="composer-contacts-list"
               class="composer-field-input"
               placeholder="Emailové adresy, odděl čárkou…"
@@ -195,30 +277,31 @@ async function handleSend() {
           </div>
           <div class="composer-field-row">
             <span class="composer-field-label">Předmět</span>
-            <input v-model="subject" type="text" class="composer-field-input" placeholder="Předmět e-mailu…" />
+            <input v-model="subject" type="text" autocomplete="off" data-bwignore class="composer-field-input" placeholder="Předmět e-mailu…" />
           </div>
           <template v-if="!isEdit">
-            <div v-if="signatures.length" class="composer-field-row">
+            <div class="composer-field-row">
               <span class="composer-field-label">Podpis</span>
-              <select v-model="selectedSignatureId" class="composer-field-input composer-field-select">
+              <label class="composer-checkbox" :class="{ 'composer-checkbox--disabled': signatureRequired }">
+                <input v-model="includeSignature" type="checkbox" :disabled="signatureRequired" />
+                Zahrnout podpis
+              </label>
+              <span v-if="signatureRequired" class="composer-required-hint">povinné při oslovování</span>
+            </div>
+            <div v-if="includeSignature" class="composer-field-row">
+              <span class="composer-field-label"></span>
+              <select v-if="signatures.length" v-model="selectedSignatureId" class="composer-field-input composer-field-select">
+                <option value="">— vyberte —</option>
                 <option v-for="sig in signatures" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
               </select>
-            </div>
-            <div v-else class="composer-field-row">
-              <span class="composer-field-label">Podpis</span>
-              <span class="composer-no-signature">Nemáte podpis pro tento typ projektu — vytvořte jej v Knihovně.</span>
+              <span v-else class="composer-no-signature">Nemáte podpis pro tento typ projektu — vytvořte jej v Knihovně.</span>
             </div>
           </template>
 
-          <!-- Scheduling -->
-          <div class="composer-field-row">
-            <span class="composer-field-label">Naplánovat</span>
-            <label v-if="!isEdit" class="composer-schedule-toggle">
-              <input v-model="scheduleEnabled" type="checkbox" />
-              odeslat později
-            </label>
+          <!-- Scheduling (edit mode only — new e-mails use the "Odeslat později" popover in the footer) -->
+          <div v-if="isEdit" class="composer-field-row">
+            <span class="composer-field-label">Naplánováno</span>
             <input
-              v-if="scheduleEnabled"
               v-model="scheduledFor"
               type="datetime-local"
               class="composer-field-input"
@@ -229,7 +312,7 @@ async function handleSend() {
 
         <!-- Editor -->
         <div class="composer-editor">
-          <RichTextEditor v-model="body" placeholder="Napište zprávu…" :default-font="groupFont" />
+          <RichTextEditor v-model="body" placeholder="Napište zprávu…" :default-font="groupFont" class="composer-rte" />
         </div>
 
         <!-- Error -->
@@ -238,13 +321,58 @@ async function handleSend() {
         <!-- Footer -->
         <div class="composer-footer">
           <button class="composer-btn-secondary" :disabled="sending" @click="emit('close')">Zrušit</button>
-          <button class="composer-btn-primary" :disabled="!canSend" @click="handleSend">
+
+          <button v-if="isEdit" class="composer-btn-primary" :disabled="!canSend" @click="submitEmail(false)">
             <svg v-if="sending" class="composer-spinner" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ sending ? 'Odesílám…' : submitLabel }}
+            {{ sending ? 'Ukládám…' : submitLabel }}
           </button>
+
+          <div v-else class="composer-split-btn">
+            <button class="composer-split-btn-main" :disabled="!canSend" @click="submitEmail(false)">
+              <svg v-if="sending" class="composer-spinner" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {{ sending ? 'Odesílám…' : submitLabel }}
+            </button>
+            <button
+              type="button"
+              class="composer-split-btn-arrow"
+              :disabled="!baseValid"
+              title="Odeslat později"
+              @click.stop="toggleSchedulePopover"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+            </button>
+
+            <div v-if="schedulePopoverOpen" class="composer-schedule-popover" @click.stop>
+              <button v-if="schedulePopoverView === 'menu'" type="button" class="composer-schedule-menu-item" @click="openSchedulePicker">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7v5l3 3" /></svg>
+                Odeslat později
+              </button>
+
+              <template v-else>
+                <div class="composer-schedule-quick">
+                  <button type="button" @click="pickIn30Min">Za 30 min</button>
+                  <button type="button" @click="pickNextMonday">Pondělí 8:00</button>
+                  <button type="button" @click="pickTomorrow">Zítra 7:00</button>
+                </div>
+                <input
+                  v-model="scheduledFor"
+                  type="datetime-local"
+                  class="composer-field-input"
+                  :class="{ 'composer-field-input--error': scheduledFor && !scheduleValid }"
+                />
+                <div class="composer-schedule-actions">
+                  <button type="button" class="composer-btn-secondary" @click="closeSchedulePopover">Zrušit</button>
+                  <button type="button" class="composer-btn-primary" :disabled="!canConfirmSchedule" @click="submitEmail(true)">Odeslat</button>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -267,9 +395,10 @@ async function handleSend() {
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  width: 80%;
-  max-width: 1200px;
-  max-height: calc(100vh - 80px);
+  width: 92%;
+  max-width: 1500px;
+  height: calc(100vh - 96px);
+  max-height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -363,13 +492,144 @@ async function handleSend() {
   color: #dc2626;
 }
 
-.composer-schedule-toggle {
+.composer-checkbox {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
   color: #374151;
   cursor: pointer;
+  user-select: none;
+}
+
+.composer-checkbox input {
+  cursor: pointer;
+}
+
+.composer-checkbox--disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.composer-checkbox--disabled input {
+  cursor: not-allowed;
+}
+
+.composer-required-hint {
+  font-size: 11px;
+  color: #b45309;
+  font-weight: 600;
+}
+
+.composer-split-btn {
+  position: relative;
+  display: flex;
+}
+
+.composer-split-btn-main,
+.composer-split-btn-arrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.composer-split-btn-main:hover:not(:disabled),
+.composer-split-btn-arrow:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.composer-split-btn-main:active:not(:disabled),
+.composer-split-btn-arrow:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.composer-split-btn-main:disabled,
+.composer-split-btn-arrow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.composer-split-btn-main {
+  padding: 7px 16px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.composer-split-btn-arrow {
+  padding: 7px 10px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.composer-schedule-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  z-index: 20;
+}
+
+.composer-schedule-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.composer-schedule-menu-item:hover { background: #f3f4f6; }
+
+.composer-schedule-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.composer-schedule-quick button {
+  flex: 1 1 auto;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.composer-schedule-quick button:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+
+.composer-schedule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .composer-field-input--error {
@@ -391,6 +651,20 @@ async function handleSend() {
   flex: 1;
   min-height: 0;
   padding: 16px 20px;
+  display: flex;
+  overflow: hidden;
+}
+
+:deep(.composer-rte) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+:deep(.composer-rte > .bg-white) {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 

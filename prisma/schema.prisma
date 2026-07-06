@@ -365,6 +365,7 @@ model Interaction {
   sentAt      DateTime?
   fromAddress String?
   toAddress   String?
+  ccAddress   String?
   gmailId     String?
 
   // FULFILLMENT-specific

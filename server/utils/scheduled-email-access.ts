@@ -9,11 +9,11 @@ export async function getScheduledEmailListAccess(event: H3Event, globalRecordId
   const session = await requireAuth(event)
   const scope = await getActiveScope(event)
   const projectId = scope.project?.id
-  if (!projectId) return { projectId: null as string | null, canView: false }
+  if (!projectId) return { session, projectId: null as string | null, canView: false }
 
   const access = await getInteractionAccess(session.id, projectId)
   const canView = access.canViewAll || access.isAdmin || await canEditNegotiation(session.id, projectId, globalRecordId)
-  return { projectId, canView }
+  return { session, projectId, canView }
 }
 
 /** For single-item endpoints (patch/delete/send-now): resolves and authorizes one ScheduledEmail. */

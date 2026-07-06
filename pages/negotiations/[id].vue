@@ -25,6 +25,7 @@ interface Interaction {
   sentAt: string | null
   fromAddress: string | null
   toAddress: string | null
+  ccAddress: string | null
   gmailId: string | null
   myToThem: string | null
   themToUs: string | null
@@ -79,10 +80,11 @@ interface ScheduledEmailItem {
   bcc: string | null
   subject: string
   body: string
-  scheduledFor: string
+  scheduledFor: string | null
   status: 'PENDING' | 'SENDING' | 'FAILED'
   errorMessage: string | null
   createdBy: AppUser
+  source?: 'app' | 'gmail'
 }
 const { data: scheduledEmails, refresh: refreshScheduledEmails } = await useFetch<ScheduledEmailItem[]>(`/api/partners/${id}/scheduled-emails`)
 
@@ -155,6 +157,7 @@ const interactions = computed(() => interactionsData.value?.items ?? [])
 const crossProjectSummary = computed(() => interactionsData.value?.crossProjectSummary ?? [])
 const access = computed(() => interactionsData.value?.access ?? { canViewAll: false, canEditAll: false })
 const firstContact = computed(() => partner.value?.contacts[0] ?? null)
+const hasSentEmail = computed(() => interactions.value.some(i => i.type === 'EMAIL' && i.direction === 'SENT'))
 
 // ── Unknown contacts ─────────────────────────────────────────────────────────
 
@@ -607,20 +610,40 @@ const unassignedSolutionUsers = computed(() => {
 
 const composerOpen = ref(false)
 const composerPrefilledTo = ref('')
+const composerPrefilledCc = ref('')
 const composerPrefilledSubject = ref('')
 const composerReplyToGmailId = ref<string | null>(null)
-const composerEditScheduled = ref<ScheduledEmailItem | null>(null)
+const composerEditScheduled = ref<(ScheduledEmailItem & { scheduledFor: string }) | null>(null)
 
 function openNewEmail() {
   composerPrefilledTo.value = firstContact.value?.address ?? ''
+  composerPrefilledCc.value = ''
   composerPrefilledSubject.value = ''
   composerReplyToGmailId.value = null
   composerEditScheduled.value = null
   composerOpen.value = true
 }
 
-function openReply(i: Interaction) {
-  composerPrefilledTo.value = i.direction === 'RECEIVED' ? (i.fromAddress ?? '') : (i.toAddress ?? '')
+function extractEmails(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  return (raw.match(/[^\s<>,]+@[^\s<>,]+/g) ?? []).map(a => a.toLowerCase())
+}
+
+function openReply(i: Interaction, replyAll = false) {
+  const primary = i.direction === 'RECEIVED' ? (i.fromAddress ?? '') : (i.toAddress ?? '')
+  composerPrefilledTo.value = primary
+
+  if (replyAll) {
+    const selfEmail = me.value?.email?.toLowerCase()
+    const primaryEmails = extractEmails(primary)
+    const others = i.direction === 'RECEIVED' ? extractEmails(i.toAddress) : extractEmails(i.fromAddress)
+    const ccEmails = [...new Set([...others, ...extractEmails(i.ccAddress)])]
+      .filter(a => a !== selfEmail && !primaryEmails.includes(a))
+    composerPrefilledCc.value = ccEmails.join(', ')
+  } else {
+    composerPrefilledCc.value = ''
+  }
+
   const subj = i.subject ?? ''
   composerPrefilledSubject.value = /^re:/i.test(subj) ? subj : `Re: ${subj}`
   composerReplyToGmailId.value = i.gmailId
@@ -629,7 +652,9 @@ function openReply(i: Interaction) {
 }
 
 function editScheduledEmail(se: ScheduledEmailItem) {
-  composerEditScheduled.value = se
+  const scheduledFor = se.scheduledFor
+  if (!scheduledFor) return
+  composerEditScheduled.value = { ...se, scheduledFor }
   composerOpen.value = true
 }
 
@@ -900,18 +925,32 @@ const TYPE_COLORS: Record<string, string> = {
       >
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
+            <span v-if="se.source === 'gmail'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
+              Naplánováno v Gmailu
+            </span>
+            <span v-else class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
               {{ se.status === 'FAILED' ? 'Selhalo' : se.status === 'SENDING' ? 'Odesílá se…' : 'Naplánováno' }}
             </span>
             <span class="text-sm font-medium text-amber-900">{{ se.subject }}</span>
           </div>
-          <p class="text-xs text-amber-700 mt-1">
+          <p v-if="se.source === 'gmail'" class="text-xs text-amber-700 mt-1">
+            Komu: <span class="font-mono">{{ se.toAddress }}</span> · čas odeslání zná jen Gmail · připraveno bokem uživatelem {{ se.createdBy.name }}
+          </p>
+          <p v-else class="text-xs text-amber-700 mt-1">
             Komu: <span class="font-mono">{{ se.toAddress }}</span> · odejde
-            <strong>{{ fmtScheduled(se.scheduledFor) }}</strong> · připravil/a {{ se.createdBy.name }}
+            <strong>{{ fmtScheduled(se.scheduledFor!) }}</strong> · připravil/a {{ se.createdBy.name }}
           </p>
           <p v-if="se.status === 'FAILED' && se.errorMessage" class="text-xs text-red-600 mt-1">{{ se.errorMessage }}</p>
         </div>
-        <div v-if="(se.status === 'PENDING' || se.status === 'FAILED') && canEdit" class="flex items-center gap-2 flex-shrink-0">
+        <div v-if="se.source === 'gmail'" class="flex items-center gap-2 flex-shrink-0">
+          <a
+            href="https://mail.google.com/mail/u/0/#scheduled"
+            target="_blank"
+            rel="noopener"
+            class="text-xs px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors"
+          >Otevřít v Gmailu</a>
+        </div>
+        <div v-else-if="(se.status === 'PENDING' || se.status === 'FAILED') && canEdit" class="flex items-center gap-2 flex-shrink-0">
           <button
             v-if="se.status === 'PENDING'"
             :disabled="scheduledActionLoading === se.id"
@@ -1093,9 +1132,16 @@ const TYPE_COLORS: Record<string, string> = {
             <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
           </div>
           <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
-            <button v-if="i.type === 'EMAIL'" class="text-xs text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i)">odpovědět</button>
+            <button v-if="i.type === 'EMAIL'" title="Odpovědět" class="p-1 text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i)">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+            </button>
+            <button v-if="i.type === 'EMAIL'" title="Odpovědět všem" class="p-1 text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i, true)">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15 5 9m0 0 6-6M5 9h9a6 6 0 0 1 0 12h-2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 15 1 9m0 0 6-6" /></svg>
+            </button>
             <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
-            <button class="text-xs text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">smazat</button>
+            <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i.id)">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
           </div>
         </div>
 
@@ -1412,9 +1458,11 @@ const TYPE_COLORS: Record<string, string> = {
     :global-record-id="id"
     :contacts="composerContacts"
     :prefilled-to="composerPrefilledTo"
+    :prefilled-cc="composerPrefilledCc"
     :prefilled-subject="composerPrefilledSubject"
     :in-reply-to-gmail-id="composerReplyToGmailId ?? undefined"
     :edit-scheduled="composerEditScheduled"
+    :has-prior-communication="hasSentEmail"
     @close="composerOpen = false"
     @sent="composerOpen = false; refreshInteractions(); refreshScheduledEmails()"
   />

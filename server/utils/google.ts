@@ -113,6 +113,18 @@ export async function listGmailMessages(
   })
 }
 
+export async function listGmailDrafts(
+  accessToken: string,
+  query: string,
+): Promise<{ id: string; message: { id: string; threadId: string } }[]> {
+  const params = new URLSearchParams({ q: query, maxResults: '50' })
+  const res = await $fetch<{ drafts?: { id: string; message: { id: string; threadId: string } }[] }>(
+    `https://gmail.googleapis.com/gmail/v1/users/me/drafts?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  return res.drafts ?? []
+}
+
 export async function getGmailMessage(
   accessToken: string,
   messageId: string,
