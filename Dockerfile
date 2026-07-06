@@ -13,7 +13,9 @@ RUN bunx prisma generate
 RUN node --disable-warning=DEP0155 ./node_modules/nuxt/bin/nuxt.mjs build
 
 FROM base AS runner
+ARG GIT_COMMIT_HASH=""
 ENV NODE_ENV=production
+ENV NUXT_PUBLIC_GIT_COMMIT_HASH=$GIT_COMMIT_HASH
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/node_modules/openai ./.output/server/node_modules/openai
 RUN apt-get update \

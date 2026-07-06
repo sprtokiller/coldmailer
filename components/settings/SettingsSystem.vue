@@ -108,10 +108,24 @@ async function saveReasoningEffort() {
 }
 
 onMounted(() => { fetchEmailSyncDays(); fetchDefaultRoles(); fetchReasoningEffort() })
+
+const runtimeConfig = useRuntimeConfig()
+const appVersion = runtimeConfig.public.appVersion
+const gitCommitHash = runtimeConfig.public.gitCommitHash
 </script>
 
 <template>
   <div class="space-y-6">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100">
+        <h2 class="text-base font-semibold text-gray-800">O aplikaci</h2>
+      </div>
+      <div class="px-6 py-5 flex items-center gap-6 text-sm text-gray-600">
+        <span>Verze: <span class="font-medium text-gray-800">{{ appVersion }}</span></span>
+        <span>Commit: <span class="font-mono text-gray-800">{{ gitCommitHash ?? 'neznámý' }}</span></span>
+      </div>
+    </div>
+
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-100">
         <h2 class="text-base font-semibold text-gray-800">Hloubka synchronizace emailů</h2>

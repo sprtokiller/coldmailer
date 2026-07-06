@@ -13,7 +13,7 @@ steps:
     run: "if [ -d {{!APP_DIR!}}/.git ]; then cd {{!APP_DIR!}} && git fetch origin && git reset --hard origin/{{!GIT_BRANCH!}}; else git clone --branch {{!GIT_BRANCH!}} --depth 1 {{!GIT_REPO!}} {{!APP_DIR!}}; fi"
 
   - name: "Build application image"
-    run: "cd {{!APP_DIR!}} && docker compose -p {{!COMPOSE_PROJECT!}} build --pull app"
+    run: "cd {{!APP_DIR!}} && export GIT_COMMIT_HASH=$(git rev-parse --short HEAD) && docker compose -p {{!COMPOSE_PROJECT!}} build --pull app"
 
   - name: "Deploy containers"
     run: "cd {{!APP_DIR!}} && docker compose -p {{!COMPOSE_PROJECT!}} up -d"

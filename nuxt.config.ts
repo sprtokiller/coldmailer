@@ -1,7 +1,20 @@
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
 const proxyOrigin = process.env.NUXT_GOOGLE_REDIRECT_URI?.replace(
   /\/api\/auth\/callback\/google$/,
   '',
 )
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+
+function getGitCommitHash(): string | null {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return null
+  }
+}
 
 export default defineNuxtConfig({
   modules: [
@@ -83,6 +96,10 @@ export default defineNuxtConfig({
     session: {
       maxAge: 60 * 60 * 24 * 7, // 7 days
       password: '',
+    },
+    public: {
+      appVersion: pkg.version,
+      gitCommitHash: getGitCommitHash(),
     },
   },
 

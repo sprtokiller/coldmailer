@@ -23,7 +23,7 @@ const SIZE_OPTIONS = [
   { value: 'large', label: 'Velká (500–5k)' },
   { value: 'enterprise', label: 'Korporát (>5k)' },
 ]
-const CONTACT_TYPE_OPTIONS = ['PR', 'HR', 'Marketing', 'CEO', 'General']
+const CONTACT_TYPE_OPTIONS = ['Partnerships', 'PR', 'HR', 'Marketing', 'CEO', 'General']
 
 const payload = props.partner?.payload ?? {}
 const form = reactive({

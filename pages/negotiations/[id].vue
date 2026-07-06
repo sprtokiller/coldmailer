@@ -199,7 +199,7 @@ const composerContacts = computed(() => {
 })
 
 const unknownContactActionLoading = ref<string | null>(null)
-const CONTACT_TYPE_OPTIONS = ['PR', 'HR', 'Marketing', 'CEO', 'General']
+const CONTACT_TYPE_OPTIONS = ['Partnerships', 'PR', 'HR', 'Marketing', 'CEO', 'General']
 
 async function handleUnknownContactAction(action: 'blacklist' | 'save_local' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string; contactType?: string; note?: string }) {
   unknownContactActionLoading.value = email
