@@ -17,14 +17,43 @@ interface Partner {
 
 const search = ref('')
 const { data: allPartners, pending, refresh: refreshPartners } = await useFetch<Partner[]>('/api/partners')
+const { data: meData } = await useFetch<{ user: { id: string } }>('/api/settings/me')
 
-const partners = computed(() => {
+const currentUserId = computed(() => meData.value?.user?.id ?? null)
+
+/** Seřadí skupinu partnerů dle lastInteractionAt DESC, záznamy bez data na konec */
+function sortByLastInteraction(list: Partner[]): Partner[] {
+  return [...list].sort((a, b) => {
+    if (a.lastInteractionAt && b.lastInteractionAt) {
+      return new Date(b.lastInteractionAt).getTime() - new Date(a.lastInteractionAt).getTime()
+    }
+    if (a.lastInteractionAt) return -1
+    if (b.lastInteractionAt) return 1
+    return 0
+  })
+}
+
+/** Filtrovaný + seřazený seznam — přiřazení mně nahoře, ostatní dole */
+const sortedPartners = computed(() => {
   const q = search.value.toLowerCase().trim()
-  if (!q) return allPartners.value ?? []
-  return (allPartners.value ?? []).filter(p =>
-    p.canonicalName.toLowerCase().includes(q),
+  const filtered = (allPartners.value ?? []).filter(p =>
+    !q || p.canonicalName.toLowerCase().includes(q),
   )
+  const uid = currentUserId.value
+  const mine = filtered.filter(p => uid && p.assignees.some(a => a.id === uid))
+  const others = filtered.filter(p => !uid || !p.assignees.some(a => a.id === uid))
+  return [
+    ...sortByLastInteraction(mine),
+    ...sortByLastInteraction(others),
+  ]
 })
+
+/** Vrátí true, pokud je partner READ-ONLY pro přihlášeného uživatele (není mu přiřazen) */
+function isReadOnly(p: Partner): boolean {
+  const uid = currentUserId.value
+  if (!uid) return false
+  return !p.assignees.some(a => a.id === uid)
+}
 
 function lastContact(p: Partner) {
   if (!p.lastInteractionAt) return null
@@ -34,6 +63,7 @@ function lastContact(p: Partner) {
 const CLOSED_STATUSES = new Set(['NOT_INTERESTED', 'NOT_THIS_TIME'])
 
 function lastInteractionColor(p: Partner): string {
+  if (isReadOnly(p)) return ''
   if (CLOSED_STATUSES.has(p.negotiationStatus ?? '')) return 'bg-gray-100 text-gray-400'
   if (!p.lastInteractionAt) return 'bg-gray-100 text-gray-400'
   const days = (Date.now() - new Date(p.lastInteractionAt).getTime()) / 86_400_000
@@ -100,21 +130,24 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
           <tr v-if="pending">
             <td colspan="5" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
           </tr>
-          <tr v-else-if="!partners?.length">
+          <tr v-else-if="!sortedPartners?.length">
             <td colspan="5" class="text-center py-12 text-gray-400 text-sm">
               {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
           <tr
-            v-for="p in partners"
+            v-for="p in sortedPartners"
             :key="p.id"
             :class="[
-              'hover:bg-gray-50 cursor-pointer transition-colors',
-              CLOSED_STATUSES.has(p.negotiationStatus ?? '') || !p.inProject ? 'opacity-60' : '',
+              'cursor-pointer transition-colors',
+              isReadOnly(p)
+                ? 'opacity-40 hover:opacity-60 grayscale'
+                : 'hover:bg-gray-50',
+              !isReadOnly(p) && (CLOSED_STATUSES.has(p.negotiationStatus ?? '') || !p.inProject) ? 'opacity-60' : '',
             ]"
             @click="navigateTo(`/negotiations/${p.id}`)"
           >
-            <td class="px-4 py-3 font-medium text-gray-800">
+            <td class="px-4 py-3 font-medium" :class="isReadOnly(p) ? 'text-gray-500' : 'text-gray-800'">
               <div class="flex items-center gap-2">
                 <span class="truncate max-w-56">{{ p.canonicalName }}</span>
                 <a
@@ -135,7 +168,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
               <span
                 v-if="p.negotiationStatus"
                 class="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
-                :class="NEGOTIATION_STATUS_COLORS[p.negotiationStatus] ?? 'bg-gray-100 text-gray-600'"
+                :class="isReadOnly(p) ? 'bg-gray-100 text-gray-400' : (NEGOTIATION_STATUS_COLORS[p.negotiationStatus] ?? 'bg-gray-100 text-gray-600')"
               >
                 {{ NEGOTIATION_STATUS_LABELS[p.negotiationStatus] ?? p.negotiationStatus }}
               </span>
@@ -166,11 +199,11 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
               </div>
             </td>
             <td class="px-4 py-3 text-center">
-              <span class="text-xs font-medium text-gray-700">{{ p.interactionCount }}</span>
+              <span class="text-xs font-medium" :class="isReadOnly(p) ? 'text-gray-400' : 'text-gray-700'">{{ p.interactionCount }}</span>
             </td>
             <td
               class="px-4 py-3 text-xs"
-              :class="lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400'"
+              :class="isReadOnly(p) ? 'text-gray-400' : (lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400')"
             >
               {{ lastContact(p) ?? '—' }}
             </td>
