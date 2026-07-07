@@ -109,7 +109,7 @@ async function buildDomainContext(
   return result
 }
 
-export async function syncGmailForUser(userId: string, options?: { forceLookbackDays?: number }): Promise<{ synced: number }> {
+export async function syncGmailForUser(userId: string, options?: { forceLookbackDays?: number }): Promise<{ synced: number; assigned: boolean }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -124,7 +124,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
     },
   })
 
-  if (!user?.accessToken) return { synced: 0 }
+  if (!user?.accessToken) return { synced: 0, assigned: false }
 
   const accessToken = await ensureFreshToken(user)
 
@@ -135,7 +135,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   const partnerEmailMap = await collectPartnerEmails(user.id, user.isAdmin)
 
   if (partnerEmailMap.size === 0) {
-    return { synced: 0 }
+    return { synced: 0, assigned: false }
   }
 
   const allRecordIds = [...new Set([...partnerEmailMap.values()].flat().map(e => e.globalRecordId))]
@@ -176,7 +176,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   } while (pageToken)
 
   await prisma.user.update({ where: { id: userId }, data: { lastGmailSync: new Date() } })
-  return { synced }
+  return { synced, assigned: true }
 }
 
 async function ensureFreshToken(user: {
@@ -297,6 +297,116 @@ export async function syncGmailForPartnerEmail(
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
   const query = `(from:${normalizedEmail} OR to:${normalizedEmail}) after:${afterTimestamp} -in:draft`
+
+  let synced = 0
+  let pageToken: string | undefined
+
+  do {
+    const listing = await listGmailMessages(accessToken, query, pageToken)
+    const messageIds = listing.messages ?? []
+    pageToken = listing.nextPageToken
+
+    for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      const batch = messageIds.slice(i, i + BATCH_SIZE)
+      const results = await Promise.all(
+        batch.map(m => getGmailMessage(accessToken, m.id).catch(() => null)),
+      )
+
+      for (const msg of results) {
+        if (!msg) continue
+        synced += await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
+      }
+
+      if (i + BATCH_SIZE < messageIds.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
+      }
+    }
+  } while (pageToken)
+
+  return { synced }
+}
+
+// Syncs one user's mailbox for messages related to a single partner only (all of its
+// contacts + additionalAddresses, plus the company domain when autoIncludeDomain is on)
+// — used to backfill a newly assigned NegotiationAssignee and to power the "sync all
+// assignees" button, both of which must stay scoped to this one partner, not the user's
+// whole inbox.
+export async function syncGmailForNegotiationRecord(
+  userId: string,
+  projectId: string,
+  globalRecordId: string,
+  lookbackDays: number,
+): Promise<{ synced: number }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      accessToken: true,
+      refreshToken: true,
+      tokenExpiry: true,
+    },
+  })
+
+  if (!user?.accessToken) return { synced: 0 }
+
+  const accessToken = await ensureFreshToken(user)
+
+  const domainCtx = await buildDomainContext([globalRecordId])
+  const ctx = domainCtx.get(globalRecordId)
+  if (ctx) ctx.projectId = projectId
+
+  const record = await prisma.globalRecord.findUnique({
+    where: { id: globalRecordId },
+    select: {
+      contacts: { select: { address: true } },
+      negotiations: {
+        where: { projectId },
+        select: { additionalAddresses: { select: { address: true } } },
+      },
+    },
+  })
+  if (!record) return { synced: 0 }
+
+  const partnerEmailMap = new Map<string, PartnerEmailEntry[]>()
+  const addresses = new Set<string>()
+
+  for (const c of record.contacts) {
+    if (!c.address) continue
+    const addr = c.address.toLowerCase()
+    if (ctx?.blacklistedEmails.has(addr)) continue
+    addresses.add(addr)
+    partnerEmailMap.set(addr, [{ globalRecordId, projectId }])
+  }
+  for (const neg of record.negotiations) {
+    for (const a of neg.additionalAddresses) {
+      const addr = a.address.toLowerCase()
+      if (ctx?.blacklistedEmails.has(addr)) continue
+      addresses.add(addr)
+      partnerEmailMap.set(addr, [{ globalRecordId, projectId }])
+    }
+  }
+
+  const queryParts: string[] = []
+  for (const addr of addresses) {
+    queryParts.push(`from:${addr}`, `to:${addr}`)
+  }
+  if (ctx?.autoIncludeDomain) {
+    for (const domain of ctx.domains) {
+      queryParts.push(`from:@${domain}`, `to:@${domain}`)
+    }
+  }
+
+  if (queryParts.length === 0) return { synced: 0 }
+
+  const lookbackDate = new Date()
+  lookbackDate.setDate(lookbackDate.getDate() - lookbackDays)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const afterDate = lookbackDate < oneYearAgo ? oneYearAgo : lookbackDate
+
+  const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
+  const query = `(${queryParts.join(' OR ')}) after:${afterTimestamp} -in:draft`
 
   let synced = 0
   let pageToken: string | undefined

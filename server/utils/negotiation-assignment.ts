@@ -1,10 +1,17 @@
 import { prisma } from '~/server/utils/prisma'
+import { syncGmailForNegotiationRecord } from '~/server/utils/gmail-sync'
+
+const ASSIGNMENT_SYNC_LOOKBACK_DAYS = 90
 
 /**
  * Upserts NegotiationAssignee rows for each userId (jednání can have several
  * people, unlike the single-owner OutreachAssignment). The first assignee ever
  * added promotes negotiationStatus to V_JEDNANI, unless it has already
  * progressed further (never regresses an advanced status).
+ *
+ * Each userId that is newly added (not already an assignee) gets a background
+ * 90-day Gmail backfill for this partner, so history predating the assignment
+ * (e.g. an email sent before the partner existed in the DB) still shows up.
  */
 export async function upsertNegotiationAssignees(
   projectId: string,
@@ -13,6 +20,14 @@ export async function upsertNegotiationAssignees(
   assignedById: string,
 ) {
   if (userIds.length === 0) return
+
+  const existing = await prisma.negotiationAssignee.findMany({
+    where: { projectId, globalRecordId, userId: { in: userIds } },
+    select: { userId: true },
+  })
+  const existingIds = new Set(existing.map(e => e.userId))
+  const newUserIds = userIds.filter(id => !existingIds.has(id))
+
   await prisma.$transaction(
     userIds.map(userId => prisma.negotiationAssignee.upsert({
       where: { projectId_globalRecordId_userId: { projectId, globalRecordId, userId } },
@@ -24,6 +39,11 @@ export async function upsertNegotiationAssignees(
     where: { projectId, globalRecordId, OR: [{ negotiationStatus: null }, { negotiationStatus: 'PRED_OSLOVENIM' }] },
     data: { negotiationStatus: 'V_JEDNANI' },
   })
+
+  for (const userId of newUserIds) {
+    syncGmailForNegotiationRecord(userId, projectId, globalRecordId, ASSIGNMENT_SYNC_LOOKBACK_DAYS)
+      .catch(err => console.warn('[gmail-sync] Assignment backfill failed:', err.message ?? err))
+  }
 }
 
 /**

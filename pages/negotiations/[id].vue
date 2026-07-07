@@ -126,16 +126,10 @@ async function syncNow(lookbackDays?: number) {
   gmailSyncActive.value = true
   showSyncDropdown.value = false
   try {
-    const body = lookbackDays ? { lookbackDays } : {}
-    const res = await $fetch<{ synced: number; skipped?: string }>('/api/gmail/sync', { method: 'POST', body })
-    if (res.skipped === 'debounced') {
-      // silent — button is disabled during the cooldown, this is just a race-condition fallback
-    } else if (res.skipped) {
-      const reason = res.skipped === 'no-token' ? 'Chybí Google token — přihlas se znovu'
-        : res.skipped === 'auth-error' ? 'Chyba autorizace Google'
-        : res.skipped === 'error' ? 'Chyba při načítání Gmailu'
-        : res.skipped
-      toast.show(`Sync přeskočen: ${reason}`, 'info')
+    const body = { lookbackDays: lookbackDays ?? syncLookbackDays.value }
+    const res = await $fetch<{ synced: number; skipped?: string }>(`/api/partners/${id}/sync-assignees`, { method: 'POST', body })
+    if (res.skipped === 'no-assignees') {
+      toast.show('K tomuto jednání není nikdo přiřazený', 'info')
     } else {
       const n = res.synced
       const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'
@@ -751,7 +745,7 @@ const TYPE_COLORS: Record<string, string> = {
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-          <div class="relative flex">
+          <div v-if="canEdit" class="relative flex">
             <button
               class="text-xs px-3 py-1.5 rounded-l-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-1.5 disabled:opacity-40"
               :disabled="syncDisabled"
