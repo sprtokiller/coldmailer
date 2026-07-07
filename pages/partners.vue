@@ -261,7 +261,6 @@ function onImportClose() {
               <th class="px-4 py-3 w-7" />
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
-              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Projekty</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav v projektu</th>
               <th class="px-4 py-3 w-10" />
@@ -269,7 +268,7 @@ function onImportClose() {
           </thead>
           <tbody class="divide-y divide-gray-50">
             <tr v-if="loading">
-              <td colspan="7" class="py-12">
+              <td colspan="6" class="py-12">
                 <div class="flex justify-center">
                   <svg class="w-5 h-5 animate-spin text-gray-300" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -279,7 +278,7 @@ function onImportClose() {
               </td>
             </tr>
             <tr v-else-if="filteredRecords.length === 0">
-              <td colspan="7" class="text-center py-12 text-gray-400 text-sm">Žádní partneři</td>
+              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Žádní partneři</td>
             </tr>
             <template v-else>
               <template v-for="rec in filteredRecords" :key="rec.id">
@@ -289,18 +288,29 @@ function onImportClose() {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </td>
-                  <td class="px-4 py-3 font-medium text-gray-800">
+                  <td :class="['px-4 py-3 font-medium', isProfiled(rec) ? 'text-gray-800' : 'text-gray-400']">
                     <div class="flex items-center gap-2">
+                      <svg
+                        v-if="!isProfiled(rec)"
+                        class="w-4 h-4 flex-shrink-0"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        title="Partner není profilován — je potřeba doplnit chybějící pole."
+                      >
+                        <path d="M12 3.5 2.5 20h19L12 3.5z" fill="#FBBF24" />
+                        <rect x="11.1" y="9" width="1.8" height="6" rx="0.9" fill="#F97316" />
+                        <rect x="11.1" y="16" width="1.8" height="1.8" rx="0.9" fill="#F97316" />
+                      </svg>
                       <span class="truncate max-w-64">{{ rec.canonicalName }}</span>
                       <a v-if="rec.payload.website || rec.payload.url" :href="String(rec.payload.website || rec.payload.url)" target="_blank" rel="noopener" class="text-indigo-400 hover:text-indigo-600 text-xs flex-shrink-0" @click.stop>↗</a>
                     </div>
                   </td>
                   <td class="px-4 py-3">
-                    <span v-if="rec.payload.industry || rec.payload.type" class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ rec.payload.industry || rec.payload.type }}</span>
-                  </td>
-                  <td class="px-4 py-3">
-                    <span v-if="isProfiled(rec)" class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-700 font-medium">Profilován</span>
-                    <span v-else class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-400">Identifikován</span>
+                    <span
+                      v-if="rec.payload.industry || rec.payload.type"
+                      class="inline-block max-w-32 truncate align-bottom text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-600"
+                      :title="String(rec.payload.industry || rec.payload.type)"
+                    >{{ rec.payload.industry || rec.payload.type }}</span>
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-1 flex-wrap max-w-56">
@@ -347,7 +357,7 @@ function onImportClose() {
 
                 <tr v-if="expandedIds.has(rec.id)" class="bg-indigo-50/20">
                   <td />
-                  <td colspan="6" class="px-4 py-4 space-y-3">
+                  <td colspan="5" class="px-4 py-4 space-y-3">
                     <!-- Profiled partner: rich detail -->
                     <template v-if="isProfiled(rec)">
                       <p class="text-sm text-gray-700 leading-relaxed">{{ rec.payload.summary }}</p>
