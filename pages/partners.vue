@@ -301,14 +301,14 @@ function onImportClose() {
                         <rect x="11.1" y="9" width="1.8" height="6" rx="0.9" fill="#F97316" />
                         <rect x="11.1" y="16" width="1.8" height="1.8" rx="0.9" fill="#F97316" />
                       </svg>
-                      <span class="truncate max-w-64">{{ rec.canonicalName }}</span>
+                      <span class="truncate max-w-40">{{ rec.canonicalName }}</span>
                       <a v-if="rec.payload.website || rec.payload.url" :href="String(rec.payload.website || rec.payload.url)" target="_blank" rel="noopener" class="text-indigo-400 hover:text-indigo-600 text-xs flex-shrink-0" @click.stop>↗</a>
                     </div>
                   </td>
                   <td class="px-4 py-3">
                     <span
                       v-if="rec.payload.industry || rec.payload.type"
-                      class="inline-block max-w-32 truncate align-bottom text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-600"
+                      class="inline-block max-w-56 truncate align-bottom text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-600"
                       :title="String(rec.payload.industry || rec.payload.type)"
                     >{{ rec.payload.industry || rec.payload.type }}</span>
                   </td>
