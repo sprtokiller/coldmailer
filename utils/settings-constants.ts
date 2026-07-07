@@ -44,7 +44,7 @@ export type BudgetUser = {
   id: string; name: string; email: string; image: string | null
   isAdmin: boolean; createdAt: string
   budget: Budget | null
-  stats30d: { aiCost: number; aiCount: number; serpCount: number }
+  stats30d: { aiCost: number; aiCount: number }
 }
 
 export type DefaultBudgetCfg = { limitUsd: number | null; resetPeriod: BudgetResetPeriod }

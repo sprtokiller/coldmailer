@@ -165,9 +165,6 @@ function budgetPct(u: BudgetUser) {
                 <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" title="AI requesty">
                   🤖 {{ u.stats30d.aiCount }}
                 </span>
-                <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" title="SerpAPI vyhledávání">
-                  🔍 {{ u.stats30d.serpCount }}
-                </span>
               </div>
             </div>
           </li>
@@ -203,10 +200,6 @@ function budgetPct(u: BudgetUser) {
           <div class="flex justify-between">
             <span class="text-gray-400">AI requesty (30d)</span>
             <span>{{ selectedBudgetUser.stats30d.aiCount }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-gray-400">SerpAPI (30d)</span>
-            <span>{{ selectedBudgetUser.stats30d.serpCount }}</span>
           </div>
         </div>
 

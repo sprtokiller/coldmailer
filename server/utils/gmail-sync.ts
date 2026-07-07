@@ -152,6 +152,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
 
   let synced = 0
   let pageToken: string | undefined
+  const allNewEmails: NewEmailRecord[] = []
 
   do {
     const listing = await listGmailMessages(accessToken, query, pageToken)
@@ -166,7 +167,9 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
 
       for (const msg of results) {
         if (!msg) continue
-        synced += await processMessage(msg, user.id, user.email, partnerEmailMap, domainCtx)
+        const result = await processMessage(msg, user.id, user.email, partnerEmailMap, domainCtx)
+        synced += result.created
+        allNewEmails.push(...result.newEmails)
       }
 
       if (i + BATCH_SIZE < messageIds.length) {
@@ -175,6 +178,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
     }
   } while (pageToken)
 
+  await normalizeUnreadAfterSync(allNewEmails)
   await prisma.user.update({ where: { id: userId }, data: { lastGmailSync: new Date() } })
   return { synced, assigned: true }
 }
@@ -300,6 +304,7 @@ export async function syncGmailForPartnerEmail(
 
   let synced = 0
   let pageToken: string | undefined
+  const allNewEmails: NewEmailRecord[] = []
 
   do {
     const listing = await listGmailMessages(accessToken, query, pageToken)
@@ -314,7 +319,9 @@ export async function syncGmailForPartnerEmail(
 
       for (const msg of results) {
         if (!msg) continue
-        synced += await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
+        const result = await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
+        synced += result.created
+        allNewEmails.push(...result.newEmails)
       }
 
       if (i + BATCH_SIZE < messageIds.length) {
@@ -323,6 +330,7 @@ export async function syncGmailForPartnerEmail(
     }
   } while (pageToken)
 
+  await normalizeUnreadAfterSync(allNewEmails)
   return { synced }
 }
 
@@ -410,6 +418,7 @@ export async function syncGmailForNegotiationRecord(
 
   let synced = 0
   let pageToken: string | undefined
+  const allNewEmails: NewEmailRecord[] = []
 
   do {
     const listing = await listGmailMessages(accessToken, query, pageToken)
@@ -424,7 +433,9 @@ export async function syncGmailForNegotiationRecord(
 
       for (const msg of results) {
         if (!msg) continue
-        synced += await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
+        const result = await processMessage(msg, userId, user.email, partnerEmailMap, domainCtx)
+        synced += result.created
+        allNewEmails.push(...result.newEmails)
       }
 
       if (i + BATCH_SIZE < messageIds.length) {
@@ -433,6 +444,7 @@ export async function syncGmailForNegotiationRecord(
     }
   } while (pageToken)
 
+  await normalizeUnreadAfterSync(allNewEmails)
   return { synced }
 }
 
@@ -526,13 +538,15 @@ async function collectPartnerEmails(
   return map
 }
 
+type NewEmailRecord = { id: string; negotiationId: string; direction: 'SENT' | 'RECEIVED'; sentAt: Date }
+
 async function processMessage(
   msg: GmailMessage,
   userId: string,
   userEmail: string,
   partnerEmailMap: Map<string, PartnerEmailEntry[]>,
   domainCtx?: Map<string, PartnerDomainContext>,
-): Promise<number> {
+): Promise<{ created: number; newEmails: NewEmailRecord[] }> {
   const headers = getHeaders(msg.payload)
   const from = headers.from ?? ''
   const to = headers.to ?? ''
@@ -599,7 +613,7 @@ async function processMessage(
     }
   }
 
-  if (matchedEntries.length === 0) return 0
+  if (matchedEntries.length === 0) return { created: 0, newEmails: [] }
 
   const fromAddresses = extractEmailAddresses(from)
   const direction = fromAddresses.includes(normalizedUserEmail) ? 'SENT' : 'RECEIVED'
@@ -616,6 +630,7 @@ async function processMessage(
   const sentAt = date ? new Date(date) : new Date(Number(msg.internalDate))
 
   let created = 0
+  const newEmails: NewEmailRecord[] = []
   for (const entry of matchedEntries) {
     const unknownAddr = matchedViaKnown.has(entry.globalRecordId)
       ? null
@@ -640,7 +655,7 @@ async function processMessage(
     })
 
     try {
-      await prisma.email.create({
+      const email = await prisma.email.create({
         data: {
           negotiationId: negotiation.id,
           direction,
@@ -659,13 +674,45 @@ async function processMessage(
         },
       })
       created++
+      newEmails.push({ id: email.id, negotiationId: negotiation.id, direction, sentAt })
     } catch (e: any) {
       if (e?.code === 'P2002') continue
       throw e
     }
   }
 
-  return created
+  return { created, newEmails }
+}
+
+// We don't track Gmail's own read/unread state — isRead is purely internal. A message is
+// only genuinely unhandled if it arrived after the last e-mail we sent in that negotiation,
+// so a bulk historical sync (e.g. right after adding a partner) must not mark old inbound
+// messages that precede a later outgoing reply as unread. Only touches rows created by this
+// sync call — never overrides a user's own manual read/unread toggle on older e-mails.
+async function normalizeUnreadAfterSync(newEmails: NewEmailRecord[]) {
+  if (newEmails.length === 0) return
+
+  const negotiationIds = [...new Set(newEmails.map(e => e.negotiationId))]
+
+  for (const negotiationId of negotiationIds) {
+    const lastSent = await prisma.email.findFirst({
+      where: { negotiationId, direction: 'SENT' },
+      orderBy: { sentAt: 'desc' },
+      select: { sentAt: true },
+    })
+    if (!lastSent?.sentAt) continue
+    const lastSentAt = lastSent.sentAt
+
+    const idsToMarkRead = newEmails
+      .filter(e => e.negotiationId === negotiationId && e.direction === 'RECEIVED' && e.sentAt <= lastSentAt)
+      .map(e => e.id)
+    if (idsToMarkRead.length === 0) continue
+
+    await prisma.email.updateMany({
+      where: { id: { in: idsToMarkRead } },
+      data: { isRead: true },
+    })
+  }
 }
 
 function getHeaders(payload: GmailMessagePart): Record<string, string> {

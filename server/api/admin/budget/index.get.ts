@@ -37,7 +37,6 @@ export default defineEventHandler(async (event) => {
     const userAgg = usageAgg.filter(a => a.userId === u.id)
     const aiCost = userAgg.find(a => a.eventType === 'ai_completion')?._sum.costUsd ?? 0
     const aiCount = userAgg.find(a => a.eventType === 'ai_completion')?._count.id ?? 0
-    const serpCount = userAgg.find(a => a.eventType === 'serp_search')?._count.id ?? 0
 
     return {
       id: u.id,
@@ -47,7 +46,7 @@ export default defineEventHandler(async (event) => {
       isAdmin: u.isAdmin,
       createdAt: u.createdAt,
       budget: u.budget,
-      stats30d: { aiCost, aiCount, serpCount },
+      stats30d: { aiCost, aiCount },
     }
   })
 
