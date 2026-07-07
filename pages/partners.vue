@@ -372,6 +372,7 @@ function onImportClose() {
     <PartnersPartnerFormModal v-if="editingPartner" mode="edit" :partner="editingPartner" @close="editingPartner = null" @saved="editingPartner = null; fetchRecords(true)" @deleted="editingPartner = null; fetchRecords(true)" />
     <PartnersPartnerSearchAssign
       v-if="partnerToAssign"
+      mode="choice"
       :preselected-partner="{
         id: partnerToAssign.id,
         canonicalName: partnerToAssign.canonicalName,

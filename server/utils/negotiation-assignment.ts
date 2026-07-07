@@ -1,6 +1,26 @@
 import { prisma } from '~/server/utils/prisma'
 
 /**
+ * Upserts NegotiationAssignee rows for each userId (jednání can have several
+ * people, unlike the single-owner OutreachAssignment).
+ */
+export async function upsertNegotiationAssignees(
+  projectId: string,
+  globalRecordId: string,
+  userIds: string[],
+  assignedById: string,
+) {
+  if (userIds.length === 0) return
+  await prisma.$transaction(
+    userIds.map(userId => prisma.negotiationAssignee.upsert({
+      where: { projectId_globalRecordId_userId: { projectId, globalRecordId, userId } },
+      create: { projectId, globalRecordId, userId, assignedById },
+      update: {},
+    })),
+  )
+}
+
+/**
  * Called right after an email is actually sent for a partner.
  * The sender becomes a NegotiationAssignee (jednání can have several people),
  * and negotiationStatus is bumped to CONTACTED only on first contact — it
@@ -19,11 +39,8 @@ export async function assignNegotiationOnSend(projectId: string, globalRecordId:
 
   // The negotiation itself (needed as the Email's FK target) must exist even if
   // this assignee bookkeeping fails, so its failure is swallowed independently.
-  await prisma.negotiationAssignee.upsert({
-    where: { projectId_globalRecordId_userId: { projectId, globalRecordId, userId } },
-    create: { projectId, globalRecordId, userId, assignedById: userId },
-    update: {},
-  }).catch(err => console.error('[negotiation-assignment] negotiationAssignee upsert failed:', err))
+  await upsertNegotiationAssignees(projectId, globalRecordId, [userId], userId)
+    .catch(err => console.error('[negotiation-assignment] negotiationAssignee upsert failed:', err))
 
   return negotiation
 }

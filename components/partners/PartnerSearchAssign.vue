@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   preselectedPartner?: SearchResult
+  mode: 'outreach' | 'negotiation' | 'choice'
 }>()
 
 const emit = defineEmits<{ close: []; assigned: [{ partnerId: string }] }>()
@@ -16,7 +17,9 @@ const query = ref('')
 const results = ref<SearchResult[]>([])
 const searching = ref(false)
 const selectedPartner = ref<SearchResult | null>(props.preselectedPartner ?? null)
-const selectedAssigneeId = ref<string | null>(null)
+const selectedAssigneeIds = ref<string[]>([])
+const purpose = ref<'outreach' | 'negotiation'>(props.mode === 'negotiation' ? 'negotiation' : 'outreach')
+const isMultiSelect = computed(() => purpose.value === 'negotiation')
 const assigning = ref(false)
 const error = ref('')
 const toast = useToast()
@@ -45,12 +48,24 @@ watch(query, (val) => {
 
 function selectPartner(p: SearchResult) {
   selectedPartner.value = p
-  selectedAssigneeId.value = null
+  selectedAssigneeIds.value = []
   error.value = ''
 }
 
+function setPurpose(p: 'outreach' | 'negotiation') {
+  if (purpose.value === p) return
+  purpose.value = p
+  selectedAssigneeIds.value = []
+}
+
 function toggleAssignee(userId: string) {
-  selectedAssigneeId.value = selectedAssigneeId.value === userId ? null : userId
+  if (isMultiSelect.value) {
+    const idx = selectedAssigneeIds.value.indexOf(userId)
+    if (idx === -1) selectedAssigneeIds.value.push(userId)
+    else selectedAssigneeIds.value.splice(idx, 1)
+  } else {
+    selectedAssigneeIds.value = selectedAssigneeIds.value[0] === userId ? [] : [userId]
+  }
 }
 
 async function assign() {
@@ -60,7 +75,7 @@ async function assign() {
   try {
     await $fetch(`/api/partners/${selectedPartner.value.id}/negotiation`, {
       method: 'POST',
-      body: { assigneeIds: selectedAssigneeId.value ? [selectedAssigneeId.value] : [] },
+      body: { assigneeIds: selectedAssigneeIds.value, purpose: purpose.value },
     })
     toast.show(`Partner "${selectedPartner.value.canonicalName}" přidán do projektu`, 'success')
     emit('assigned', { partnerId: selectedPartner.value.id })
@@ -145,15 +160,33 @@ const SIZE_LABELS: Record<string, string> = {
 
             <div v-if="error" class="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{{ error }}</div>
 
+            <div v-if="props.mode === 'choice'">
+              <label class="block text-xs font-medium text-gray-600 mb-2">Přidat pro</label>
+              <div class="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="purpose === 'outreach' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  @click="setPurpose('outreach')"
+                >Oslovování</button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors border-l border-gray-200"
+                  :class="purpose === 'negotiation' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  @click="setPurpose('negotiation')"
+                >Jednání</button>
+              </div>
+            </div>
+
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-2">Přiřadit člena obchodního týmu (nepovinné)</label>
+              <label class="block text-xs font-medium text-gray-600 mb-2">{{ isMultiSelect ? 'Přiřadit členy obchodního týmu (nepovinné, lze více)' : 'Přiřadit člena obchodního týmu (nepovinné)' }}</label>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="u in allUsers"
                   :key="u.id"
                   type="button"
                   class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors"
-                  :class="selectedAssigneeId === u.id ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
+                  :class="selectedAssigneeIds.includes(u.id) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
                   @click="toggleAssignee(u.id)"
                 >
                   <img v-if="u.image" :src="u.image" class="w-4 h-4 rounded-full" referrerpolicy="no-referrer" />

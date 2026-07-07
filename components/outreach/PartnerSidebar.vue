@@ -130,7 +130,7 @@ const STATUS_META = {
     </div>
 
     <!-- Modals -->
-    <PartnersPartnerSearchAssign v-if="showAssignModal" @close="showAssignModal = false" @assigned="showAssignModal = false; ctx.refreshPartners()" />
+    <PartnersPartnerSearchAssign v-if="showAssignModal" mode="outreach" @close="showAssignModal = false" @assigned="showAssignModal = false; ctx.refreshPartners()" />
   </div>
 </template>
 

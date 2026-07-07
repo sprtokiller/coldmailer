@@ -131,7 +131,7 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
       />
     </div>
 
-    <PartnersPartnerSearchAssign v-if="showAssignModal" @close="showAssignModal = false" @assigned="onPartnerAdded" />
+    <PartnersPartnerSearchAssign v-if="showAssignModal" mode="negotiation" @close="showAssignModal = false" @assigned="onPartnerAdded" />
 
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <table class="w-full text-sm">
