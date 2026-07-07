@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
         where: negotiationWhere,
         select: {
           negotiationStatus: true,
-          emails: { select: { sentAt: true }, orderBy: { sentAt: 'desc' }, take: 1 },
+          emails: { select: { sentAt: true, isRead: true }, orderBy: { sentAt: 'desc' } },
           notes: { select: { updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
           _count: { select: { emails: true } },
         },
@@ -69,6 +69,7 @@ export default defineEventHandler(async (event) => {
       assignees: r.negotiationAssignees.map(a => a.user),
       lastInteractionAt,
       interactionCount: negotiation?._count.emails ?? 0,
+      unreadEmailCount: negotiation?.emails.filter(e => !e.isRead).length ?? 0,
       negotiationStatus: negotiation?.negotiationStatus ?? null,
       inProject: !!negotiation,
     }

@@ -33,37 +33,38 @@ interface GlobalRecord {
 const activeTab = ref<'PARTNER'>('PARTNER')
 const records   = ref<GlobalRecord[]>([])
 const loading   = ref(false)
-const offset    = ref(0)
-const limit     = 100
+const page      = ref(1)
+const limit     = 50
+const total     = ref(0)
 const search     = ref('')
 const filterSize = ref('')
 
 const canManageAll = ref(false)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit)))
 
-async function fetchRecords(reset = false) {
-  if (reset) offset.value = 0
+async function fetchRecords() {
   loading.value = true
   try {
-    const data = await $fetch<{ records: GlobalRecord[]; canManageAll: boolean }>('/api/records', {
-      query: { type: activeTab.value, offset: offset.value, limit, search: search.value || undefined },
+    const data = await $fetch<{ records: GlobalRecord[]; total: number; canManageAll: boolean }>('/api/records', {
+      query: { type: activeTab.value, offset: (page.value - 1) * limit, limit, search: search.value || undefined, withCount: 'true' },
     })
-    records.value = reset ? data.records : [...records.value, ...data.records]
+    records.value = data.records
+    total.value = data.total
     canManageAll.value = data.canManageAll
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => fetchRecords(true))
+onMounted(() => fetchRecords())
 
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 watch(search, () => {
   clearTimeout(searchDebounce)
-  searchDebounce = setTimeout(() => fetchRecords(true), 300)
+  searchDebounce = setTimeout(() => { page.value = 1; fetchRecords() }, 300)
 })
 
-const hasMore = computed(() => records.value.length > 0 && records.value.length === offset.value + limit)
-function loadMore() { offset.value += limit; fetchRecords(false) }
+watch(page, () => fetchRecords())
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ function getEvidence(rec: GlobalRecord): EvidenceEntry[] {
 
 // ── Client-side filters ───────────────────────────────────────────────────────
 // Name search is server-side (see fetchRecords/watch above) so it covers the
-// full dataset, not just the currently loaded page.
+// full dataset. filterSize only applies within the currently loaded page.
 
 const availableSizes = computed(() =>
   Object.keys(SIZE_LABELS).filter(s => records.value.some(r => String(r.payload.size ?? '') === s)),
@@ -127,11 +128,19 @@ function isInActiveProject(rec: GlobalRecord): boolean {
   return rec.negotiations.some(pr => pr.project.id === activeProject.value?.id)
 }
 
+/** Skočí na první stránku a znovu načte — použije se po vytvoření/importu nového partnera. */
+function goToFirstPageAndRefetch() {
+  if (page.value === 1) fetchRecords()
+  else page.value = 1
+}
+
+watch(totalPages, (tp) => { if (page.value > tp) page.value = tp })
+
 async function removeFromProject(rec: GlobalRecord) {
   if (!confirm(`Opravdu odebrat partnera "${rec.canonicalName}" z projektu "${activeProject.value?.name}"? Historie jednání, e-mailů a poznámek zůstane zachována.`)) return
   await $fetch(`/api/partners/${rec.id}/project`, { method: 'DELETE' })
   toast.show(`Partner "${rec.canonicalName}" odebrán z projektu`, 'success')
-  fetchRecords(true)
+  fetchRecords()
 }
 
 // ── Permissions ─────────────────────────────────────────────────────────────
@@ -150,7 +159,7 @@ if (route.query.create === '1' && canCreatePartner.value) {
 
 function onPartnerCreated() {
   showCreatePartnerModal.value = false
-  if (activeTab.value === 'PARTNER') fetchRecords(true)
+  if (activeTab.value === 'PARTNER') goToFirstPageAndRefetch()
 }
 
 function openTextImport(prefill?: string) {
@@ -176,7 +185,7 @@ function openJsonFilePicker() {
 
 function onImportSaved() {
   showImportModal.value = false
-  fetchRecords(true)
+  goToFirstPageAndRefetch()
 }
 
 function onImportClose() {
@@ -250,8 +259,15 @@ function onImportClose() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            <tr v-if="loading && records.length === 0">
-              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
+            <tr v-if="loading">
+              <td colspan="6" class="py-12">
+                <div class="flex justify-center">
+                  <svg class="w-5 h-5 animate-spin text-gray-300" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                </div>
+              </td>
             </tr>
             <tr v-else-if="filteredRecords.length === 0">
               <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Žádní partneři</td>
@@ -402,14 +418,22 @@ function onImportClose() {
         </table>
       </div>
 
-    <div v-if="hasMore" class="mt-4 text-center">
-      <button :disabled="loading" class="text-sm px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors" @click="loadMore()">
-        {{ loading ? 'Načítám...' : 'Načíst další' }}
-      </button>
+    <div v-if="totalPages > 1" class="mt-4 flex items-center justify-center gap-3">
+      <button
+        class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+        :disabled="page === 1 || loading"
+        @click="page--"
+      >Předchozí</button>
+      <span class="text-xs text-gray-400">Strana {{ page }} z {{ totalPages }}</span>
+      <button
+        class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+        :disabled="page === totalPages || loading"
+        @click="page++"
+      >Další</button>
     </div>
 
     <PartnersPartnerFormModal v-if="showCreatePartnerModal" mode="create" @close="showCreatePartnerModal = false" @saved="onPartnerCreated" />
-    <PartnersPartnerFormModal v-if="editingPartner" mode="edit" :partner="editingPartner" @close="editingPartner = null" @saved="editingPartner = null; fetchRecords(true)" @deleted="editingPartner = null; fetchRecords(true)" />
+    <PartnersPartnerFormModal v-if="editingPartner" mode="edit" :partner="editingPartner" @close="editingPartner = null" @saved="editingPartner = null; fetchRecords()" @deleted="editingPartner = null; fetchRecords()" />
     <PartnersPartnerSearchAssign
       v-if="partnerToAssign"
       mode="choice"
@@ -422,7 +446,7 @@ function onImportClose() {
         hasNegotiation: false
       }"
       @close="partnerToAssign = null"
-      @assigned="partnerToAssign = null; fetchRecords(true)"
+      @assigned="partnerToAssign = null; fetchRecords()"
     />
     <PartnersPartnerImportModal v-if="showImportModal" :prefill="importPrefill" @close="onImportClose" @saved="onImportSaved" />
 

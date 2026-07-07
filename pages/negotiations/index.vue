@@ -11,6 +11,7 @@ interface Partner {
   assignees: AssigneeUser[]
   lastInteractionAt: string | null
   interactionCount: number
+  unreadEmailCount: number
   negotiationStatus: string | null
   inProject: boolean
 }
@@ -56,6 +57,16 @@ const sortedPartners = computed(() => {
     ...sortByLastInteraction(others),
   ]
 })
+
+// ── Pagination (client-side — the full list is already fetched/sorted above) ──
+
+const page = ref(1)
+const pageSize = 25
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedPartners.value.length / pageSize)))
+const pagedPartners = computed(() => sortedPartners.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+
+watch(search, () => { page.value = 1 })
+watch(totalPages, (tp) => { if (page.value > tp) page.value = tp })
 
 /** Vrátí true, pokud je partner READ-ONLY pro přihlášeného uživatele (není mu přiřazen, nebo je admin) */
 function isReadOnly(p: Partner): boolean {
@@ -142,20 +153,28 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
 
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Nepřečteno</th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs">Poslední kontakt</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-if="pending">
-            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">Načítám...</td>
+            <td colspan="6" class="py-12">
+              <div class="flex justify-center">
+                <svg class="w-5 h-5 animate-spin text-gray-300" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </div>
+            </td>
           </tr>
           <tr v-else-if="!sortedPartners?.length">
-            <td colspan="5" class="text-center py-12 text-gray-400 text-sm">
+            <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
               {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
           <tr
-            v-for="p in sortedPartners"
+            v-for="p in pagedPartners"
             :key="p.id"
             :class="[
               'cursor-pointer transition-colors',
@@ -220,6 +239,14 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
             <td class="px-4 py-3 text-center">
               <span class="text-xs font-medium" :class="isReadOnly(p) ? 'text-gray-400' : 'text-gray-700'">{{ p.interactionCount }}</span>
             </td>
+            <td class="px-4 py-3 text-center">
+              <span
+                v-if="p.unreadEmailCount > 0"
+                class="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                :class="isReadOnly(p) ? 'bg-gray-100 text-gray-400' : 'bg-red-50 text-red-600 border border-red-200'"
+              >{{ p.unreadEmailCount }}</span>
+              <span v-else class="text-xs text-gray-300">—</span>
+            </td>
             <td
               class="px-4 py-3 text-xs"
               :class="isReadOnly(p) ? 'text-gray-400' : (lastInteractionColor(p) ? [lastInteractionColor(p), 'rounded font-medium'] : 'text-gray-400')"
@@ -229,6 +256,20 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="!pending && sortedPartners.length > pageSize" class="mt-4 flex items-center justify-center gap-3">
+      <button
+        class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+        :disabled="page === 1"
+        @click="page--"
+      >Předchozí</button>
+      <span class="text-xs text-gray-400">Strana {{ page }} z {{ totalPages }}</span>
+      <button
+        class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+        :disabled="page === totalPages"
+        @click="page++"
+      >Další</button>
     </div>
 
   </div>

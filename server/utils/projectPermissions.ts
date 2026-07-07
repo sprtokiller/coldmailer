@@ -51,14 +51,9 @@ export async function getInteractionAccess(userId: string, projectId: string) {
   }
 }
 
-// Returns true if user can create/edit interactions and update status for this partner.
-// Allowed for: Admin, Vedení obchodu (canEditAll), the OutreachAssignment holder (oslovení),
-// or a NegotiationAssignee (jednání) for this partner.
-export async function canEditNegotiation(userId: string, projectId: string, globalRecordId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } })
-  if (user?.isAdmin) return true
-  const perms = await getProjectPermissions(userId, projectId)
-  if (perms.includes('project.interactions.edit_all')) return true
+// Returns true if the user is personally the OutreachAssignment holder (oslovení) or a
+// NegotiationAssignee (jednání) for this partner — independent of admin/role-based permissions.
+export async function isAssignedToNegotiation(userId: string, projectId: string, globalRecordId: string): Promise<boolean> {
   const [outreachAssignment, negotiationAssignee] = await Promise.all([
     prisma.outreachAssignment.findFirst({
       where: { projectId, globalRecordId, assigneeId: userId },
@@ -70,6 +65,17 @@ export async function canEditNegotiation(userId: string, projectId: string, glob
     }),
   ])
   return !!outreachAssignment || !!negotiationAssignee
+}
+
+// Returns true if user can create/edit interactions and update status for this partner.
+// Allowed for: Admin, Vedení obchodu (canEditAll), the OutreachAssignment holder (oslovení),
+// or a NegotiationAssignee (jednání) for this partner.
+export async function canEditNegotiation(userId: string, projectId: string, globalRecordId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } })
+  if (user?.isAdmin) return true
+  const perms = await getProjectPermissions(userId, projectId)
+  if (perms.includes('project.interactions.edit_all')) return true
+  return isAssignedToNegotiation(userId, projectId, globalRecordId)
 }
 
 async function resolveInteractionAccess(

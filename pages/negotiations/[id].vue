@@ -593,13 +593,14 @@ async function toggleEvent(i: Interaction) {
   opening ? s.add(i.id) : s.delete(i.id)
   expandedEvents.value = s
 
-  // Přečtení = rozbalení. Vedení obchodu / admin (canEditAll) čtou jako kontrola, netriggerují přečtení.
-  if (opening && !i.isRead && !access.value.canEditAll) {
-    i.isRead = true
+  // Přečtení = rozbalení. Server rozhoduje, jestli čtení počítá (kontrola bez přiřazení
+  // nezapočítává, ale přiřazený oslovovatel/řešitel ano, i když je zároveň Vedení obchodu/admin).
+  if (opening && !i.isRead) {
     try {
-      await $fetch(`/api/partners/${id}/emails/${i.id}/read`, { method: 'PATCH' })
+      const res = await $fetch<{ isRead: boolean }>(`/api/partners/${id}/emails/${i.id}/read`, { method: 'PATCH' })
+      i.isRead = res.isRead
     } catch {
-      i.isRead = false
+      // ponecháme beze změny
     }
   }
 }
