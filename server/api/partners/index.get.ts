@@ -1,13 +1,17 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
+import { getInteractionAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const user = await requireAuth(event)
   const query = getQuery(event)
   const search = query.search as string | undefined
   const scope = await getActiveScope(event)
   const projectId = scope.project?.id
+
+  const access = projectId ? await getInteractionAccess(user.id, projectId) : null
+  const canManageAll = access ? access.isAdmin || access.canEditAll : false
 
   const negotiationWhere = projectId ? { projectId, removedAt: null } : { removedAt: null }
 
@@ -23,6 +27,7 @@ export default defineEventHandler(async (event) => {
             { notes: { some: {} } },
             { myToThem: { not: null } },
             { themToUs: { not: null } },
+            { manuallyAddedAt: { not: null } },
           ],
         },
       },
@@ -46,7 +51,7 @@ export default defineEventHandler(async (event) => {
     orderBy: { canonicalName: 'asc' },
   })
 
-  return records.map((r) => {
+  const partners = records.map((r) => {
     const negotiation = r.negotiations[0] ?? null
     const lastEmailAt = negotiation?.emails[0]?.sentAt ?? null
     const lastNoteAt = negotiation?.notes[0]?.updatedAt ?? null
@@ -68,4 +73,6 @@ export default defineEventHandler(async (event) => {
       inProject: !!negotiation,
     }
   })
+
+  return { partners, canManageAll }
 })

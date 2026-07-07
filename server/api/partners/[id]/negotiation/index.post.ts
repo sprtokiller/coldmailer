@@ -4,10 +4,14 @@
  * Ensures a partner is visible in the active project's outreach/negotiation
  * workspace (creates the Negotiation row if missing), optionally pre-assigning
  * responsibility. Replaces the old "content-less FULFILLMENT interaction" trick.
+ * Marks the row as manually added (manuallyAddedAt) so it shows up in Jednání
+ * immediately, without waiting for a first e-mail/note. Admin/Vedení obchodu only
+ * — ostatní členové obchodního týmu se k partnerovi dostanou jen přes Oslovování.
  */
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
+import { getInteractionAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -19,13 +23,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Není vybrán žádný projekt.' })
   }
 
+  const access = await getInteractionAccess(session.id, projectId)
+  if (!access.isAdmin && !access.canEditAll) {
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění přidávat partnery do projektu.' })
+  }
+
   const body = await readBody<{ assigneeIds?: string[] }>(event)
   const assigneeIds = body.assigneeIds ?? []
 
   const negotiation = await prisma.negotiation.upsert({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    create: { projectId, globalRecordId },
-    update: { removedAt: null },
+    create: { projectId, globalRecordId, manuallyAddedAt: new Date() },
+    update: { removedAt: null, manuallyAddedAt: new Date() },
   })
 
   if (assigneeIds.length > 0) {

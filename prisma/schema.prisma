@@ -454,6 +454,7 @@ model Negotiation {
   emailDisplayMode  String             @default("text")
   autoIncludeDomain Boolean? // null = auto-detect from contacts; true/false = explicit user override
   removedAt         DateTime? // partner odebrán z projektu; řádek (a historie) zůstává, jen se skryje z Jednání/Oslovování
+  manuallyAddedAt   DateTime? // ručně přidáno do Jednání (Vedení obchodu/admin) bez nutnosti mít e-mail/poznámku
 
   // Obsah plnění – 1:1 s jednáním, prosté sloupce, žádný typový enum
   myToThem String?

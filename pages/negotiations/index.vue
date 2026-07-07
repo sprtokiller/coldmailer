@@ -16,11 +16,19 @@ interface Partner {
 }
 
 const search = ref('')
-const { data: allPartners, pending, refresh: refreshPartners } = await useFetch<Partner[]>('/api/partners')
+const { data: partnersData, pending, refresh: refreshPartners } = await useFetch<{ partners: Partner[]; canManageAll: boolean }>('/api/partners')
 const { data: meData } = await useFetch<{ user: { id: string; isAdmin: boolean } }>('/api/settings/me')
 
+const allPartners = computed(() => partnersData.value?.partners ?? [])
+const canManageAll = computed(() => partnersData.value?.canManageAll ?? false)
 const currentUserId = computed(() => meData.value?.user?.id ?? null)
 const isAdmin = computed(() => meData.value?.user?.isAdmin ?? false)
+
+const showAssignModal = ref(false)
+function onPartnerAdded() {
+  showAssignModal.value = false
+  refreshPartners()
+}
 
 /** Seřadí skupinu partnerů dle lastInteractionAt DESC, záznamy bez data na konec */
 function sortByLastInteraction(list: Partner[]): Partner[] {
@@ -102,9 +110,16 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
 
 <template>
   <div>
-    <div class="mb-6">
-      <h1 class="text-2xl font-semibold text-gray-800">Oslovení partneři</h1>
-      <p class="text-sm text-gray-400 mt-1">Partneři s probíhající komunikací</p>
+    <div class="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-800">Oslovení partneři</h1>
+        <p class="text-sm text-gray-400 mt-1">Partneři s probíhající komunikací</p>
+      </div>
+      <button
+        v-if="canManageAll"
+        class="shrink-0 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+        @click="showAssignModal = true"
+      >+ Přidat firmu</button>
     </div>
 
     <div class="mb-4">
@@ -115,6 +130,8 @@ const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
     </div>
+
+    <PartnersPartnerSearchAssign v-if="showAssignModal" @close="showAssignModal = false" @assigned="onPartnerAdded" />
 
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <table class="w-full text-sm">
