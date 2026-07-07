@@ -548,6 +548,14 @@ async function updateStatus(value: string | null) {
   await refreshPartner()
 }
 
+// v-model (not a plain :value/@change) so Vue's SSR renderer marks the right <option> as
+// selected — a bound :value on a native <select> only sets the DOM property client-side,
+// which caused a hydration mismatch on every load with a non-empty negotiationStatus.
+const negotiationStatusModel = computed({
+  get: () => partner.value?.negotiationStatus ?? '',
+  set: (value: string) => { updateStatus(value || null) },
+})
+
 
 async function deleteInteraction(i: Interaction) {
   if (!confirm('Opravdu chcete smazat tuto položku? Tato akce je nevratná.')) return
@@ -803,9 +811,8 @@ const TYPE_COLORS: Record<string, string> = {
             <span class="text-xs text-gray-400 font-medium whitespace-nowrap">Stav:</span>
             <select
               v-if="canEdit"
-              :value="partner.negotiationStatus ?? ''"
+              v-model="negotiationStatusModel"
               class="text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-36"
-              @change="updateStatus(($event.target as HTMLSelectElement).value || null)"
             >
               <option value="">—</option>
               <option v-for="(label, key) in NEGOTIATION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
