@@ -242,7 +242,7 @@ function availableProjectRoles(user: AdminUser) {
                   <span
                     class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border"
                     :class="lastLoginColor(u.lastLoginAt)"
-                    :title="u.lastLoginAt ? `Poslední přihlášení: ${new Date(u.lastLoginAt).toLocaleString('cs-CZ')}` : 'Uživatel se ještě nikdy nepřihlásil'"
+                    :title="u.lastLoginAt ? `Poslední aktivita: ${new Date(u.lastLoginAt).toLocaleString('cs-CZ')}` : 'Uživatel ještě nebyl v aplikaci'"
                   >
                     🕐 {{ lastLoginLabel(u.lastLoginAt) }}
                   </span>
@@ -347,12 +347,12 @@ function availableProjectRoles(user: AdminUser) {
                       :class="lastLoginColor(u.lastLoginAt)"
                     >
                       <span>🕐</span>
-                      <span>Poslední přihlášení: {{ lastLoginLabel(u.lastLoginAt) }}</span>
+                      <span>Poslední aktivita: {{ lastLoginLabel(u.lastLoginAt) }}</span>
                     </span>
                     <span v-if="u.lastLoginAt" class="text-xs text-gray-400">
                       {{ new Date(u.lastLoginAt).toLocaleString('cs-CZ') }}
                     </span>
-                    <span v-else class="text-xs text-gray-400 italic">Uživatel se ještě nikdy nepřihlásil.</span>
+                    <span v-else class="text-xs text-gray-400 italic">Uživatel ještě nebyl v aplikaci.</span>
                   </div>
                 </div>
 

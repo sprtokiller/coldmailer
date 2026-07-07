@@ -21,6 +21,7 @@ export interface OutreachPartner {
   contacts: Array<{
     id: string; address: string | null; label: string | null; firstName: string | null
     lastName: string | null; role: string | null; contactType: string | null; priority: number
+    note: string | null
   }>
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null
@@ -71,7 +72,9 @@ export interface ProjectOutreachContext {
   runDraft: (opts: { selectedContact?: Record<string, unknown>; selectedArgumentIds?: string[] }) => Promise<void>
   cancelDraft: () => void
   saveDraft: (fields: { toAddress: string; subject: string; body: string; config?: Record<string, unknown> }) => Promise<void>
-  sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) => Promise<{ scheduledId: string; gracePeriodMs: number }>
+  sendDraft: (fields: { toAddress: string; subject: string; body: string; signatureContent?: string; scheduledFor?: string }) => Promise<
+    { scheduled: false; scheduledId: string; gracePeriodMs: number } | { scheduled: true; scheduledEmail: { scheduledFor: string } }
+  >
   claimPartner: () => Promise<void>
   unclaimPartner: () => Promise<void>
   assignPartner: (userId: string | null) => Promise<void>
@@ -338,10 +341,12 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
     await refreshPartners(); await refreshDetail()
   }
 
-  async function sendDraft(fields: { toAddress: string; subject: string; body: string; signatureContent?: string }) {
+  async function sendDraft(fields: { toAddress: string; subject: string; body: string; signatureContent?: string; scheduledFor?: string }) {
     const pid = projectIdRef.value; const gid = selectedPartnerId.value
     if (!pid || !gid) throw new Error('Není vybrán partner nebo projekt.')
-    const result = await $fetch<{ scheduledId: string; gracePeriodMs: number }>(`/api/projects/${pid}/outreach/${gid}/send`, { method: 'POST', body: fields })
+    const result = await $fetch<
+      { scheduled: false; scheduledId: string; gracePeriodMs: number } | { scheduled: true; scheduledEmail: { scheduledFor: string } }
+    >(`/api/projects/${pid}/outreach/${gid}/send`, { method: 'POST', body: fields })
     return result
   }
 

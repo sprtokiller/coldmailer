@@ -1,8 +1,12 @@
 /**
  * POST /api/projects/[projectId]/outreach/[globalRecordId]/send
  *
- * Naplánuje odeslání e-mailu přes Gmail s grace period.
- * Vrací { scheduledId, gracePeriodMs }.
+ * Bez `scheduledFor`: odešle e-mail přes Gmail hned, s grace period pro undo.
+ * Vrací { scheduled: false, scheduledId, gracePeriodMs }.
+ *
+ * S `scheduledFor` (budoucí ISO datetime): vytvoří ScheduledEmail místo
+ * okamžitého odeslání — stejný mechanismus jako /negotiations.
+ * Vrací { scheduled: true, scheduledEmail }.
  */
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
@@ -21,6 +25,7 @@ interface SendBody {
   subject: string
   body: string
   signatureContent?: string
+  scheduledFor?: string // ISO datetime — if set and in the future, schedules instead of sending now
 }
 
 export default defineEventHandler(async (event) => {
@@ -56,6 +61,30 @@ export default defineEventHandler(async (event) => {
     create: { projectId, globalRecordId, toAddress: body.toAddress, subject: body.subject, body: body.body, savedById: user.id },
     update: { toAddress: body.toAddress, subject: body.subject, body: body.body },
   })
+
+  if (body.scheduledFor) {
+    const scheduledFor = new Date(body.scheduledFor)
+    if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() <= Date.now()) {
+      throw createError({ statusCode: 400, message: 'Naplánovaný čas musí být v budoucnosti.' })
+    }
+
+    const fullBody = body.signatureContent ? body.body + SIGNATURE_SEPARATOR + body.signatureContent : body.body
+
+    const scheduledEmail = await prisma.scheduledEmail.create({
+      data: {
+        projectId,
+        globalRecordId,
+        toAddress: body.toAddress,
+        subject: body.subject,
+        body: fullBody,
+        scheduledFor,
+        createdById: user.id,
+      },
+      include: { createdBy: { select: { id: true, name: true, image: true } } },
+    })
+
+    return { scheduled: true as const, scheduledEmail }
+  }
 
   const scheduledId = `project:${projectId}:${globalRecordId}`
 
@@ -117,5 +146,5 @@ export default defineEventHandler(async (event) => {
     console.log(`[outreach-send] sent to ${body.toAddress} for globalRecord ${globalRecordId}`)
   })
 
-  return { scheduledId, gracePeriodMs: GRACE_PERIOD_MS }
+  return { scheduled: false as const, scheduledId, gracePeriodMs: GRACE_PERIOD_MS }
 })

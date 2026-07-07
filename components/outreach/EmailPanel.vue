@@ -4,7 +4,26 @@ import { GROUP_FONTS } from '~/config/pipeline'
 
 type ContactWithAddress = OutreachPartner['contacts'][number] & { address: string }
 
+interface ScheduledEmailItem {
+  id: string
+  toAddress: string
+  subject: string
+  scheduledFor: string | null
+  status: 'PENDING' | 'SENDING' | 'FAILED'
+  errorMessage: string | null
+  createdBy: { id: string; name: string; image: string | null }
+  source?: 'app' | 'gmail'
+}
+
+const CONTACT_TYPE_COLORS: Record<string, string> = {
+  PR: '#dbeafe', HR: '#ede9fe', Marketing: '#ffedd5', CEO: '#fee2e2', General: '#f3f4f6',
+}
+const CONTACT_TYPE_TEXT_COLORS: Record<string, string> = {
+  PR: '#1d4ed8', HR: '#6d28d9', Marketing: '#c2410c', CEO: '#b91c1c', General: '#4b5563',
+}
+
 const ctx = inject(projectOutreachKey)!
+const toast = useToast()
 const { notifications: sendNotifs, add: notifAdd, markSent: notifMarkSent, markError: notifMarkError } = useSendNotifications()
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -19,6 +38,8 @@ const saving = ref(false)
 const configCollapsed = ref(false)
 const recsCollapsed = ref(true)
 const streamBoxEl = ref<HTMLElement | null>(null)
+const pendingScheduled = ref<ScheduledEmailItem[]>([])
+const scheduledActionLoading = ref<string | null>(null)
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const alignment = computed(() => {
@@ -29,6 +50,13 @@ const alignment = computed(() => {
 
 const contacts = computed(() => (ctx.selectedPartner.value?.contacts ?? []).filter((c): c is ContactWithAddress => !!c.address))
 const selectedContact = computed(() => contacts.value[selectedContactIdx.value ?? 0] ?? null)
+
+async function refreshScheduled() {
+  const gid = ctx.selectedPartnerId.value
+  if (!gid) { pendingScheduled.value = []; return }
+  pendingScheduled.value = await $fetch<ScheduledEmailItem[]>(`/api/partners/${gid}/scheduled-emails`)
+}
+watch(() => ctx.selectedPartnerId.value, refreshScheduled, { immediate: true })
 
 const topArguments = computed(() => {
   const a = alignment.value
@@ -165,7 +193,106 @@ const isSubstitutingSend = computed(() => {
 })
 const needsSendConfirm = computed(() => isSubstitutingSend.value || hasActiveCommunication.value)
 
-function handleSendClick() {
+// ── Scheduling ("Odeslat později") ──────────────────────────────────────────
+function dateToDatetimeLocal(d: Date): string {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function fmtDateTime(d: Date): string {
+  return d.toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtScheduled(iso: string) {
+  return fmtDateTime(new Date(iso))
+}
+
+const schedulePopoverOpen = ref(false)
+const schedulePopoverView = ref<'menu' | 'picker'>('menu')
+const scheduledForInput = ref('')
+const pendingScheduleIso = ref<string | null>(null)
+
+function defaultScheduleTime(): Date {
+  const d = new Date(Date.now() + 15 * 60 * 1000)
+  const remainder = d.getMinutes() % 30
+  if (remainder !== 0) d.setMinutes(d.getMinutes() + (30 - remainder))
+  d.setSeconds(0, 0)
+  return d
+}
+
+function toggleSchedulePopover() {
+  if (schedulePopoverOpen.value) {
+    closeSchedulePopover()
+  } else {
+    schedulePopoverOpen.value = true
+    schedulePopoverView.value = 'menu'
+  }
+}
+
+function closeSchedulePopover() {
+  schedulePopoverOpen.value = false
+  schedulePopoverView.value = 'menu'
+}
+
+function openSchedulePicker() {
+  schedulePopoverView.value = 'picker'
+  if (!scheduledForInput.value) scheduledForInput.value = dateToDatetimeLocal(defaultScheduleTime())
+}
+
+function pickIn30Min() {
+  const d = new Date(Date.now() + 30 * 60 * 1000)
+  d.setSeconds(0, 0)
+  scheduledForInput.value = dateToDatetimeLocal(d)
+}
+
+function pickNextMonday() {
+  const d = new Date()
+  d.setHours(8, 0, 0, 0)
+  let daysUntilMonday = (1 - d.getDay() + 7) % 7
+  if (daysUntilMonday === 0 && d.getTime() <= Date.now()) daysUntilMonday = 7
+  d.setDate(d.getDate() + daysUntilMonday)
+  scheduledForInput.value = dateToDatetimeLocal(d)
+}
+
+function pickTomorrow() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(7, 0, 0, 0)
+  scheduledForInput.value = dateToDatetimeLocal(d)
+}
+
+const scheduledForDate = computed(() => scheduledForInput.value ? new Date(scheduledForInput.value) : null)
+const scheduleValid = computed(() => !!scheduledForDate.value && scheduledForDate.value.getTime() > Date.now())
+
+function submitSchedule() {
+  if (!scheduleValid.value) return
+  closeSchedulePopover()
+  handleSendClick(scheduledForDate.value!.toISOString())
+}
+
+async function cancelScheduled(se: ScheduledEmailItem) {
+  if (!confirm('Opravdu zrušit toto naplánované odeslání?')) return
+  scheduledActionLoading.value = se.id
+  try {
+    await $fetch(`/api/partners/${ctx.selectedPartnerId.value}/scheduled-emails/${se.id}`, { method: 'DELETE' })
+    toast.show('Naplánované odeslání zrušeno', 'success')
+    await refreshScheduled()
+  } catch (err) {
+    toast.show(`Zrušení selhalo: ${err instanceof Error ? err.message : String(err)}`, 'error')
+  } finally {
+    scheduledActionLoading.value = null
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeSchedulePopover)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', closeSchedulePopover)
+})
+
+function handleSendClick(scheduledFor?: string) {
+  pendingScheduleIso.value = scheduledFor ?? null
   if (needsSendConfirm.value) {
     showSenderConfirmModal.value = true
   } else {
@@ -176,6 +303,8 @@ function handleSendClick() {
 async function doSend() {
   showSenderConfirmModal.value = false
   saving.value = true
+  const scheduledForIso = pendingScheduleIso.value
+  pendingScheduleIso.value = null
   try {
     const sig = sigs.value.find(s => s.id === selectedSignatureId.value)
     const res = await ctx.sendDraft({
@@ -183,7 +312,16 @@ async function doSend() {
       subject: emailSubject.value,
       body: emailBody.value,
       signatureContent: sig?.content,
+      scheduledFor: scheduledForIso ?? undefined,
     })
+
+    if (res.scheduled) {
+      toast.show(`E-mail bude odeslán ${fmtDateTime(new Date(res.scheduledEmail.scheduledFor))}`, 'success')
+      scheduledForInput.value = ''
+      await refreshScheduled()
+      return
+    }
+
     const partnerName = ctx.selectedPartner.value?.canonicalName ?? ''
     const globalRecordId = ctx.selectedPartnerId.value ?? ''
     const projectId = ctx.projectId.value ?? ''
@@ -281,17 +419,24 @@ function relTime(iso: string | null | undefined) {
           <div class="config-grid">
             <div class="field-group">
               <label class="field-label">Kontakt</label>
-              <select
-                v-if="contacts.length"
-                :value="selectedContactIdx ?? 0"
-                class="field-select"
-                :disabled="isExecutingHere"
-                @change="selectedContactIdx = Number(($event.target as HTMLSelectElement).value)"
-              >
-                <option v-for="(c, i) in contacts" :key="c.id" :value="i">
-                  {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
-                </option>
-              </select>
+              <div v-if="contacts.length" class="contact-select-row">
+                <select
+                  :value="selectedContactIdx ?? 0"
+                  class="field-select"
+                  :disabled="isExecutingHere"
+                  @change="selectedContactIdx = Number(($event.target as HTMLSelectElement).value)"
+                >
+                  <option v-for="(c, i) in contacts" :key="c.id" :value="i">
+                    {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
+                  </option>
+                </select>
+                <span
+                  v-if="selectedContact?.contactType"
+                  class="contact-type-badge"
+                  :style="{ background: CONTACT_TYPE_COLORS[selectedContact.contactType] ?? '#f3f4f6', color: CONTACT_TYPE_TEXT_COLORS[selectedContact.contactType] ?? '#4b5563' }"
+                  :title="selectedContact.note || undefined"
+                >{{ selectedContact.contactType }}</span>
+              </div>
               <div v-else class="no-contact">Žádný e-mail</div>
             </div>
             <div class="field-group">
@@ -438,6 +583,28 @@ function relTime(iso: string | null | undefined) {
         </ul>
       </div>
 
+      <!-- ── Scheduled emails (not yet sent) ───────────────────── -->
+      <div v-if="pendingScheduled.length" class="scheduled-panel">
+        <div v-for="se in pendingScheduled" :key="se.id" class="scheduled-item">
+          <div class="scheduled-item-main">
+            <span class="scheduled-badge">
+              {{ se.source === 'gmail' ? 'Naplánováno v Gmailu' : se.status === 'FAILED' ? 'Selhalo' : se.status === 'SENDING' ? 'Odesílá se…' : 'Naplánováno' }}
+            </span>
+            <span class="scheduled-item-text">
+              Komu: <strong>{{ se.toAddress }}</strong>
+              <template v-if="se.source !== 'gmail' && se.scheduledFor"> · odejde <strong>{{ fmtScheduled(se.scheduledFor) }}</strong></template>
+            </span>
+            <p v-if="se.status === 'FAILED' && se.errorMessage" class="scheduled-error">{{ se.errorMessage }}</p>
+          </div>
+          <button
+            v-if="se.source !== 'gmail' && (se.status === 'PENDING' || se.status === 'FAILED')"
+            :disabled="scheduledActionLoading === se.id"
+            class="scheduled-cancel-btn"
+            @click="cancelScheduled(se)"
+          >Zrušit</button>
+        </div>
+      </div>
+
       <!-- ── Footer ───────────────────────────────────────────── -->
       <div class="panel-footer">
         <div class="footer-meta">
@@ -460,13 +627,49 @@ function relTime(iso: string | null | undefined) {
             </svg>
             Uložit
           </button>
-          <button
-            :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend || isExecutingHere"
-            class="btn-primary"
-            @click="handleSendClick"
-          >
-            Uložit a odeslat
-          </button>
+          <div class="send-split-btn">
+            <button
+              :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend || isExecutingHere"
+              class="btn-primary send-split-btn-main"
+              @click="handleSendClick()"
+            >
+              Uložit a odeslat
+            </button>
+            <button
+              type="button"
+              class="btn-primary send-split-btn-arrow"
+              :disabled="!emailTo.trim() || !emailSubject.trim() || !selectedSignatureId || saving || hasPendingSend || isExecutingHere"
+              title="Odeslat později"
+              @click.stop="toggleSchedulePopover"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
+            </button>
+
+            <div v-if="schedulePopoverOpen" class="schedule-popover" @click.stop>
+              <button v-if="schedulePopoverView === 'menu'" type="button" class="schedule-menu-item" @click="openSchedulePicker">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7v5l3 3" /></svg>
+                Odeslat později
+              </button>
+
+              <template v-else>
+                <div class="schedule-quick">
+                  <button type="button" @click="pickIn30Min">Za 30 min</button>
+                  <button type="button" @click="pickNextMonday">Pondělí 8:00</button>
+                  <button type="button" @click="pickTomorrow">Zítra 7:00</button>
+                </div>
+                <input
+                  v-model="scheduledForInput"
+                  type="datetime-local"
+                  class="field-input"
+                  :class="{ 'field-input--error': scheduledForInput && !scheduleValid }"
+                />
+                <div class="schedule-actions">
+                  <button type="button" class="btn-secondary" @click="closeSchedulePopover">Zrušit</button>
+                  <button type="button" class="btn-primary" :disabled="!scheduleValid" @click="submitSchedule">Naplánovat</button>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -683,6 +886,26 @@ function relTime(iso: string | null | undefined) {
 .field-textarea {
   resize: none;
   line-height: 1.5;
+}
+
+.contact-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contact-select-row .field-select {
+  flex: 1;
+}
+
+.contact-type-badge {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .no-contact {
@@ -1055,6 +1278,152 @@ function relTime(iso: string | null | undefined) {
 
 .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+/* ── Send split button + schedule popover ───────────────── */
+.send-split-btn {
+  position: relative;
+  display: flex;
+}
+
+.send-split-btn-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.send-split-btn-arrow {
+  padding: 7px 9px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.schedule-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 230px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  z-index: 20;
+}
+
+.schedule-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.schedule-menu-item:hover { background: #f3f4f6; }
+
+.schedule-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.schedule-quick button {
+  flex: 1 1 auto;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.schedule-quick button:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+
+.schedule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.field-input--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+/* ── Scheduled emails panel ──────────────────────────────── */
+.scheduled-panel {
+  border-top: 1px solid #e9eaec;
+  padding: 10px 16px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fffbeb;
+}
+
+.scheduled-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scheduled-item-main {
+  min-width: 0;
+}
+
+.scheduled-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fde68a;
+  color: #78350f;
+  margin-right: 6px;
+}
+
+.scheduled-item-text {
+  font-size: 12px;
+  color: #92400e;
+}
+
+.scheduled-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.scheduled-cancel-btn {
+  flex-shrink: 0;
+  border: 1px solid #fcd34d;
+  background: #fff;
+  color: #92400e;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.scheduled-cancel-btn:hover:not(:disabled) { background: #fffbeb; }
+.scheduled-cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Sender confirmation modal ──────────────────────────── */
 .modal-backdrop {

@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
         contacts: {
           where: { address: { contains: '@' } },
           orderBy: [{ priority: 'asc' }],
-          select: { id: true, address: true, label: true, firstName: true, lastName: true, role: true, contactType: true, priority: true },
+          select: { id: true, address: true, label: true, firstName: true, lastName: true, role: true, contactType: true, priority: true, note: true },
         },
       },
       orderBy: { canonicalName: 'asc' },

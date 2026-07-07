@@ -3,7 +3,7 @@
  *
  * Vrací projekty, kde má přihlášený uživatel oprávnění `project.pipeline.manage`
  * (tj. role "Vedení obchodu"), spolu se seznamem členů každého projektu
- * a jejich posledním přihlášením.
+ * a jejich poslední aktivitou v aplikaci.
  *
  * Admini vidí všechny projekty – pro ně tato sekce nemá smysl, ale endpoint
  * je dostupný i pro ně bez omezení.

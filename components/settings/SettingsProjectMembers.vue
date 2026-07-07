@@ -116,8 +116,8 @@ function lastLoginColor(lastLoginAt: string | null): string {
             class="text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 whitespace-nowrap"
             :class="lastLoginColor(member.lastLoginAt)"
             :title="member.lastLoginAt
-              ? `Poslední přihlášení: ${new Date(member.lastLoginAt).toLocaleString('cs-CZ')}`
-              : 'Uživatel se ještě nikdy nepřihlásil'"
+              ? `Poslední aktivita: ${new Date(member.lastLoginAt).toLocaleString('cs-CZ')}`
+              : 'Uživatel ještě nebyl v aplikaci'"
           >
             🕐 {{ lastLoginLabel(member.lastLoginAt) }}
           </span>
