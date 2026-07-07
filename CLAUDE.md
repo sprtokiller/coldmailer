@@ -88,6 +88,19 @@ Copy `.env.example` to `.env` and fill in:
 - `NUXT_OPEN_ROUTER_API_KEY` — OpenRouter inference key (all AI calls go through OpenRouter, not direct Anthropic/OpenAI)
 - `NUXT_OPEN_ROUTER_MANAGEMENT_KEY` — OpenRouter management key for usage/cost tracking (optional for local dev)
 
+## Safe Schema Changes (don't break prod)
+
+Production's `scripts/entrypoint.sh` runs `prisma db push --skip-generate` on **every container boot** — deliberately **without** `--accept-data-loss`. History: that flag was added on 2026-07-04 (`4830074`) to stop a crash-loop when a column drop needed confirmation Prisma couldn't get non-interactively, then removed again the same day (`9b9cad7`) because an unconditional flag in prod would silently let *any* future destructive change (including an accidental one) wipe data with no human ever seeing the warning. **Do not re-add `--accept-data-loss` to `entrypoint.sh`.**
+
+What this means for a schema change:
+- **Additive changes** (new nullable column, new table) are always safe — `db push` applies them with zero confirmation needed. Nothing else to do.
+- **Destructive-looking changes** (renamed/dropped table or column, new non-nullable column without a default, type change) make `db push` refuse and exit non-zero → container crash-loops → deploy fails at the health check. This fails *safe* (no data loss, just a failed deploy), but still blocks the release.
+- The fix is a hand-written, idempotent backfill SQL script in `scripts/`, run from `entrypoint.sh` *before* the `db push` line — see `scripts/backfill-negotiation-split.sql` for the reference pattern (it renamed `ProjectRecord`→`Negotiation` preserving data/ids, copied `Interaction` rows into the new `Email`/`Note` tables, then dropped the old tables itself). By the time `db push` runs, Prisma sees no destructive diff left to confirm.
+- Guard the script so it's a no-op after it has run once — `entrypoint.sh` executes it on *every* boot, not just the first. The reference script checks `IF NOT EXISTS ("Interaction" table) THEN RETURN;` at the top for exactly this reason.
+- Wire the new script into `entrypoint.sh` the same way the two existing ones are (`if [ -f scripts/your-script.sql ]; then ... fi`, before `db push`).
+
+Local dev note: `bun run db:push` calls `prisma db push` directly and does **not** run these backfill scripts (those only execute inside `entrypoint.sh`, i.e. in Docker) — so a local dev DB can drift from what production actually has. If local `db push` demands `--accept-data-loss`, treat that as a signal prod will need a backfill script too, not just something to wave through locally. Only pass `--accept-data-loss` locally when the data is genuinely disposable dev data, and never as "the fix" for production.
+
 ## Architecture
 
 ### Tech Stack
