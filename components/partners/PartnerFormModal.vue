@@ -25,6 +25,8 @@ const SIZE_OPTIONS = [
 ]
 const CONTACT_TYPE_OPTIONS = ['Partnerships', 'PR', 'HR', 'Marketing', 'CEO', 'General']
 
+interface EvidenceEntry { event: string; role: string; year: string; source: string }
+
 const payload = props.partner?.payload ?? {}
 const form = reactive({
   canonicalName: props.partner?.canonicalName ?? '',
@@ -42,12 +44,33 @@ const form = reactive({
 })
 const originalForm = { ...form }
 
+const partnershipStyle = ref<string[]>(Array.isArray(payload.partnershipStyle) ? payload.partnershipStyle.map(String) : [])
+const recentHighlights = ref<string[]>(Array.isArray(payload.recentHighlights) ? payload.recentHighlights.map(String) : [])
+const partnershipEvidence = ref<EvidenceEntry[]>(
+  Array.isArray(payload.partnershipEvidence)
+    ? (payload.partnershipEvidence as Record<string, unknown>[]).map(e => ({
+        event: String(e.event ?? ''), role: String(e.role ?? ''), year: String(e.year ?? ''), source: String(e.source ?? ''),
+      }))
+    : [],
+)
+const originalPartnershipStyleJSON = JSON.stringify(partnershipStyle.value)
+const originalRecentHighlightsJSON = JSON.stringify(recentHighlights.value)
+const originalPartnershipEvidenceJSON = JSON.stringify(partnershipEvidence.value)
+
+function addPartnershipStyle() { partnershipStyle.value.push('') }
+function removePartnershipStyle(i: number) { partnershipStyle.value.splice(i, 1) }
+function addHighlight() { recentHighlights.value.push('') }
+function removeHighlight(i: number) { recentHighlights.value.splice(i, 1) }
+function addEvidence() { partnershipEvidence.value.push({ event: '', role: '', year: '', source: '' }) }
+function removeEvidence(i: number) { partnershipEvidence.value.splice(i, 1) }
+
 // Fields not covered by the named inputs above (legacy data from imports/old pipeline
 // runs, or anything a pasted JSON adds) — shown as raw JSON so nothing is hidden or
 // silently dropped when saving.
 const NAMED_PAYLOAD_KEYS = [
   'website', 'linkedinUrl', 'instagramUrl', 'industry', 'size', 'sizeNote',
   'parentCompany', 'summary', 'activities', 'socialInvolvement', 'researchNotes', 'contacts',
+  'partnershipStyle', 'recentHighlights', 'partnershipEvidence',
 ]
 const extraPayloadEntries = Object.entries(payload).filter(([key]) => !NAMED_PAYLOAD_KEYS.includes(key))
 const extraJson = ref(extraPayloadEntries.length > 0 ? JSON.stringify(Object.fromEntries(extraPayloadEntries), null, 2) : '')
@@ -135,6 +158,11 @@ async function save() {
   }
 
   const filteredContacts = contacts.value
+  const filteredPartnershipStyle = partnershipStyle.value.map(s => s.trim()).filter(Boolean)
+  const filteredHighlights = recentHighlights.value.map(s => s.trim()).filter(Boolean)
+  const filteredEvidence = partnershipEvidence.value
+    .map(e => ({ event: e.event.trim(), role: e.role.trim(), year: e.year.trim(), source: e.source.trim() }))
+    .filter(e => e.event || e.role || e.year || e.source)
 
   const payloadData: Record<string, unknown> = {}
   if (props.mode === 'create') {
@@ -150,6 +178,9 @@ async function save() {
     if (form.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
     if (form.researchNotes) payloadData.researchNotes = form.researchNotes
     if (filteredContacts.length > 0) payloadData.contacts = filteredContacts
+    if (filteredPartnershipStyle.length > 0) payloadData.partnershipStyle = filteredPartnershipStyle
+    if (filteredHighlights.length > 0) payloadData.recentHighlights = filteredHighlights
+    if (filteredEvidence.length > 0) payloadData.partnershipEvidence = filteredEvidence
     Object.assign(payloadData, extraPayload)
   } else {
     // Only send fields the user actually changed in this window — resending
@@ -167,6 +198,9 @@ async function save() {
     if (form.socialInvolvement !== originalForm.socialInvolvement) payloadData.socialInvolvement = form.socialInvolvement
     if (form.researchNotes !== originalForm.researchNotes) payloadData.researchNotes = form.researchNotes
     if (JSON.stringify(filteredContacts) !== originalContactsJSON) payloadData.contacts = filteredContacts
+    if (JSON.stringify(filteredPartnershipStyle) !== originalPartnershipStyleJSON) payloadData.partnershipStyle = filteredPartnershipStyle
+    if (JSON.stringify(filteredHighlights) !== originalRecentHighlightsJSON) payloadData.recentHighlights = filteredHighlights
+    if (JSON.stringify(filteredEvidence) !== originalPartnershipEvidenceJSON) payloadData.partnershipEvidence = filteredEvidence
     if (extraJson.value !== originalExtraJson) {
       // Keys removed from the JSON box must be sent as null so the backend deletes
       // them — a plain merge PATCH can only add/overwrite, never unset a key.
@@ -309,6 +343,56 @@ async function save() {
               <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Poznámky k výzkumu</label>
                 <textarea v-model="form.researchNotes" rows="2" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-y" />
+              </div>
+            </div>
+          </section>
+
+          <!-- Section: Partnerství -->
+          <section>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Partnerství</h3>
+            <div class="space-y-4">
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-medium text-gray-600">Styl partnerství</label>
+                  <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" @click="addPartnershipStyle">+ Přidat</button>
+                </div>
+                <div v-if="partnershipStyle.length === 0" class="text-xs text-gray-400 py-1">Žádný záznam</div>
+                <div v-for="(s, i) in partnershipStyle" :key="i" class="flex items-center gap-2 mb-1.5">
+                  <input v-model="partnershipStyle[i]" type="text" placeholder="Např. generální partner" class="flex-1 text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                  <button class="text-xs text-red-500 hover:text-red-700" @click="removePartnershipStyle(i)">Odebrat</button>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-medium text-gray-600">Poslední novinky</label>
+                  <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" @click="addHighlight">+ Přidat</button>
+                </div>
+                <div v-if="recentHighlights.length === 0" class="text-xs text-gray-400 py-1">Žádný záznam</div>
+                <div v-for="(h, i) in recentHighlights" :key="i" class="flex items-center gap-2 mb-1.5">
+                  <input v-model="recentHighlights[i]" type="text" placeholder="Např. schválení investičního rozpočtu na modernizaci sítě" class="flex-1 text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                  <button class="text-xs text-red-500 hover:text-red-700" @click="removeHighlight(i)">Odebrat</button>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-medium text-gray-600">Doklady o partnerství</label>
+                  <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" @click="addEvidence">+ Přidat</button>
+                </div>
+                <div v-if="partnershipEvidence.length === 0" class="text-xs text-gray-400 py-1">Žádný záznam</div>
+                <div v-for="(e, i) in partnershipEvidence" :key="i" class="border border-gray-100 rounded-lg p-3 mb-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-gray-500">Záznam {{ i + 1 }}</span>
+                    <button class="text-xs text-red-500 hover:text-red-700" @click="removeEvidence(i)">Odebrat</button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input v-model="e.event" type="text" placeholder="Akce / událost" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                    <input v-model="e.role" type="text" placeholder="Role" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                    <input v-model="e.year" type="text" placeholder="Rok" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                    <input v-model="e.source" type="text" placeholder="Zdroj (URL)" class="text-sm px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
+                  </div>
+                </div>
               </div>
             </div>
           </section>

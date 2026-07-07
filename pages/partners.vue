@@ -84,6 +84,16 @@ function getArr(rec: GlobalRecord, key: string): string[] {
   return []
 }
 
+interface EvidenceEntry { event: string; role: string; year: string; source: string }
+function getEvidence(rec: GlobalRecord): EvidenceEntry[] {
+  const v = rec.payload.partnershipEvidence
+  if (!Array.isArray(v)) return []
+  return v.map((e) => {
+    const o = (e ?? {}) as Record<string, unknown>
+    return { event: String(o.event ?? ''), role: String(o.role ?? ''), year: String(o.year ?? ''), source: String(o.source ?? '') }
+  })
+}
+
 // ── Client-side filters ───────────────────────────────────────────────────────
 // Name search is server-side (see fetchRecords/watch above) so it covers the
 // full dataset, not just the currently loaded page.
@@ -312,7 +322,6 @@ function onImportClose() {
                         <span v-if="rec.payload.industry" class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-600">{{ rec.payload.industry }}</span>
                         <span v-if="rec.payload.size" class="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-600">{{ SIZE_LABELS[String(rec.payload.size)] ?? rec.payload.size }}</span>
                         <span v-if="rec.payload.parentCompany" class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">{{ rec.payload.parentCompany }}</span>
-                        <span v-if="rec.payload.partnershipStyle" class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600">{{ rec.payload.partnershipStyle }}</span>
                       </div>
 
                       <!-- Links -->
@@ -327,6 +336,35 @@ function onImportClose() {
                         <p class="text-xs font-medium text-gray-500 mb-1">Aktivity</p>
                         <div class="flex flex-wrap gap-1">
                           <span v-for="(a, i) in getArr(rec, 'activities')" :key="i" class="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600">{{ a }}</span>
+                        </div>
+                      </div>
+
+                      <!-- Partnership style -->
+                      <div v-if="getArr(rec, 'partnershipStyle').length > 0">
+                        <p class="text-xs font-medium text-gray-500 mb-1">Styl partnerství</p>
+                        <div class="flex flex-wrap gap-1">
+                          <span v-for="(s, i) in getArr(rec, 'partnershipStyle')" :key="i" class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-600">{{ s }}</span>
+                        </div>
+                      </div>
+
+                      <!-- Recent highlights -->
+                      <div v-if="getArr(rec, 'recentHighlights').length > 0">
+                        <p class="text-xs font-medium text-gray-500 mb-1">Poslední novinky</p>
+                        <ul class="text-xs text-gray-600 space-y-0.5 list-disc list-inside">
+                          <li v-for="(h, i) in getArr(rec, 'recentHighlights')" :key="i">{{ h }}</li>
+                        </ul>
+                      </div>
+
+                      <!-- Partnership evidence -->
+                      <div v-if="getEvidence(rec).length > 0">
+                        <p class="text-xs font-medium text-gray-500 mb-1">Doklady o partnerství</p>
+                        <div class="space-y-1">
+                          <div v-for="(e, i) in getEvidence(rec)" :key="i" class="text-xs text-gray-600">
+                            <span class="font-medium">{{ e.event }}</span>
+                            <span v-if="e.role"> — {{ e.role }}</span>
+                            <span v-if="e.year" class="text-gray-400"> ({{ e.year }})</span>
+                            <a v-if="e.source" :href="e.source" target="_blank" rel="noopener" class="text-indigo-500 hover:underline ml-1" @click.stop>zdroj ↗</a>
+                          </div>
                         </div>
                       </div>
 
