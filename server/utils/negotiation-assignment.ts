@@ -2,7 +2,9 @@ import { prisma } from '~/server/utils/prisma'
 
 /**
  * Upserts NegotiationAssignee rows for each userId (jednání can have several
- * people, unlike the single-owner OutreachAssignment).
+ * people, unlike the single-owner OutreachAssignment). The first assignee ever
+ * added promotes negotiationStatus to V_JEDNANI, unless it has already
+ * progressed further (never regresses an advanced status).
  */
 export async function upsertNegotiationAssignees(
   projectId: string,
@@ -18,6 +20,10 @@ export async function upsertNegotiationAssignees(
       update: {},
     })),
   )
+  await prisma.negotiation.updateMany({
+    where: { projectId, globalRecordId, OR: [{ negotiationStatus: null }, { negotiationStatus: 'PRED_OSLOVENIM' }] },
+    data: { negotiationStatus: 'V_JEDNANI' },
+  })
 }
 
 /**
@@ -33,7 +39,7 @@ export async function assignNegotiationOnSend(projectId: string, globalRecordId:
     update: {},
   })
   await prisma.negotiation.updateMany({
-    where: { projectId, globalRecordId, negotiationStatus: null },
+    where: { projectId, globalRecordId, OR: [{ negotiationStatus: null }, { negotiationStatus: { in: ['PRED_OSLOVENIM', 'V_JEDNANI'] } }] },
     data: { negotiationStatus: 'CONTACTED' },
   })
 

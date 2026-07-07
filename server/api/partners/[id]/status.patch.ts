@@ -2,6 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { getInteractionAccess, canEditNegotiation } from '~/server/utils/projectPermissions'
+import { upsertNegotiationAssignees } from '~/server/utils/negotiation-assignment'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -17,6 +18,9 @@ export default defineEventHandler(async (event) => {
   const { negotiationStatus, addAssigneeId, removeAssigneeId } = body
 
   if (negotiationStatus !== undefined) {
+    if (negotiationStatus === 'PRED_OSLOVENIM') {
+      throw createError({ statusCode: 400, message: 'Stav "Před oslovením" nelze nastavit ručně.' })
+    }
     const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
     if (!canEdit) {
       throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat stav tohoto partnera. Nejste přiřazeni k tomuto partnerovi.' })
@@ -39,11 +43,7 @@ export default defineEventHandler(async (event) => {
     const assigneeExists = await prisma.user.findUnique({ where: { id: addAssigneeId }, select: { id: true } })
     if (!assigneeExists) throw createError({ statusCode: 400, message: 'Uživatel nenalezen.' })
 
-    await prisma.negotiationAssignee.upsert({
-      where: { projectId_globalRecordId_userId: { projectId, globalRecordId, userId: addAssigneeId } },
-      create: { projectId, globalRecordId, userId: addAssigneeId, assignedById: session.id },
-      update: {},
-    })
+    await upsertNegotiationAssignees(projectId, globalRecordId, [addAssigneeId], session.id)
   }
 
   if (removeAssigneeId) {

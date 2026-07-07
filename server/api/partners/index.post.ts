@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
       }
 
       negotiation = await prisma.negotiation.create({
-        data: { globalRecordId: record.id, projectId },
+        data: { globalRecordId: record.id, projectId, negotiationStatus: 'PRED_OSLOVENIM' },
       })
       if (assigneeIds.length > 0) {
         await prisma.fulfillmentAssignee.createMany({

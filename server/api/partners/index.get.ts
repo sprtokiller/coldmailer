@@ -22,13 +22,7 @@ export default defineEventHandler(async (event) => {
       negotiations: {
         some: {
           ...negotiationWhere,
-          OR: [
-            { emails: { some: {} } },
-            { notes: { some: {} } },
-            { myToThem: { not: null } },
-            { themToUs: { not: null } },
-            { manuallyAddedAt: { not: null } },
-          ],
+          negotiationStatus: { notIn: ['PRED_OSLOVENIM'] },
         },
       },
     },

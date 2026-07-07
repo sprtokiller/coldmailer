@@ -329,6 +329,8 @@ model PartnerContact {
 // ── Negotiation: e-maily, poznámky, plnění ────────────────────────────────────
 
 enum NegotiationStatus {
+  PRED_OSLOVENIM
+  V_JEDNANI
   CONTACTED
   REMINDED
   WAITING_FOR_THEM

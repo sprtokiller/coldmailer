@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { sanitizeEmailHtml } from '~/utils/html-normalize'
+import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS, EDITABLE_NEGOTIATION_STATUSES } from '~/utils/negotiationStatus'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -713,28 +714,6 @@ function fmtDateShort(d: string) {
   return new Date(d).toLocaleDateString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const NEGOTIATION_STATUS_LABELS: Record<string, string> = {
-  CONTACTED: 'Osloveno',
-  REMINDED: 'Připomenuto',
-  WAITING_FOR_THEM: 'Čekání na ně',
-  WAITING_FOR_US: 'Čekání na nás',
-  FULFILLING: 'Plnění',
-  THANKS_REMAINING: 'Zbývá poděkovat',
-  COMPLETED: 'Dokončeno',
-  NOT_INTERESTED: 'Nezájem',
-  NOT_THIS_TIME: 'Tentokrát nezájem',
-}
-const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
-  CONTACTED: 'bg-blue-100 text-blue-700',
-  REMINDED: 'bg-yellow-100 text-yellow-700',
-  WAITING_FOR_THEM: 'bg-orange-100 text-orange-700',
-  WAITING_FOR_US: 'bg-red-100 text-red-700',
-  FULFILLING: 'bg-purple-100 text-purple-700',
-  THANKS_REMAINING: 'bg-teal-100 text-teal-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  NOT_INTERESTED: 'bg-gray-100 text-gray-500',
-  NOT_THIS_TIME: 'bg-gray-200 text-gray-600',
-}
 const TYPE_LABELS: Record<string, string> = {
   NOTE: 'Poznámky',
   EMAIL: 'Email',
@@ -815,7 +794,7 @@ const TYPE_COLORS: Record<string, string> = {
               class="text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-36"
             >
               <option value="">—</option>
-              <option v-for="(label, key) in NEGOTIATION_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+              <option v-for="key in EDITABLE_NEGOTIATION_STATUSES" :key="key" :value="key">{{ NEGOTIATION_STATUS_LABELS[key] }}</option>
             </select>
             <span
               v-else-if="partner.negotiationStatus"

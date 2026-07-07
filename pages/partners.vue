@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS } from '~/utils/negotiationStatus'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -24,7 +26,7 @@ interface GlobalRecord {
   payload: Record<string, unknown>
   creator: { id: string; name: string; image: string | null }
   _count: { events: number }
-  negotiations: Array<{ project: { id: string; name: string } }>
+  negotiations: Array<{ project: { id: string; name: string }; negotiationStatus: string | null }>
   contacts: Contact[]
 }
 
@@ -126,6 +128,12 @@ const partnerToAssign = ref<GlobalRecord | null>(null)
 
 function isInActiveProject(rec: GlobalRecord): boolean {
   return rec.negotiations.some(pr => pr.project.id === activeProject.value?.id)
+}
+
+function activeProjectStatus(rec: GlobalRecord): string | null {
+  const entry = rec.negotiations.find(pr => pr.project.id === activeProject.value?.id)
+  if (!entry) return null
+  return entry.negotiationStatus ?? 'PRED_OSLOVENIM'
 }
 
 /** Skočí na první stránku a znovu načte — použije se po vytvoření/importu nového partnera. */
@@ -255,12 +263,13 @@ function onImportClose() {
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Odvětví</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav</th>
               <th class="px-4 py-3 font-medium text-gray-500 text-xs">Projekty</th>
+              <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav v projektu</th>
               <th class="px-4 py-3 w-10" />
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
             <tr v-if="loading">
-              <td colspan="6" class="py-12">
+              <td colspan="7" class="py-12">
                 <div class="flex justify-center">
                   <svg class="w-5 h-5 animate-spin text-gray-300" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -270,7 +279,7 @@ function onImportClose() {
               </td>
             </tr>
             <tr v-else-if="filteredRecords.length === 0">
-              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">Žádní partneři</td>
+              <td colspan="7" class="text-center py-12 text-gray-400 text-sm">Žádní partneři</td>
             </tr>
             <template v-else>
               <template v-for="rec in filteredRecords" :key="rec.id">
@@ -297,6 +306,13 @@ function onImportClose() {
                     <div class="flex items-center gap-1 flex-wrap max-w-56">
                       <span v-for="pr in rec.negotiations" :key="pr.project.id" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ pr.project.name }}</span>
                     </div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span
+                      v-if="activeProjectStatus(rec)"
+                      :class="['text-xs px-2 py-0.5 rounded-full font-medium', NEGOTIATION_STATUS_COLORS[activeProjectStatus(rec)!] ?? 'bg-gray-100 text-gray-500']"
+                    >{{ NEGOTIATION_STATUS_LABELS[activeProjectStatus(rec)!] }}</span>
+                    <span v-else class="text-xs text-gray-300">–</span>
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-end gap-3">
@@ -331,7 +347,7 @@ function onImportClose() {
 
                 <tr v-if="expandedIds.has(rec.id)" class="bg-indigo-50/20">
                   <td />
-                  <td colspan="5" class="px-4 py-4 space-y-3">
+                  <td colspan="6" class="px-4 py-4 space-y-3">
                     <!-- Profiled partner: rich detail -->
                     <template v-if="isProfiled(rec)">
                       <p class="text-sm text-gray-700 leading-relaxed">{{ rec.payload.summary }}</p>

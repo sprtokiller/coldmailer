@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS } from '~/utils/negotiationStatus'
+
 definePageMeta({ middleware: 'auth' })
 
 interface Contact { id: string; address: string | null; label: string | null }
@@ -94,29 +96,6 @@ function lastInteractionColor(p: Partner): string {
   return 'bg-red-100 text-red-700'
 }
 
-const NEGOTIATION_STATUS_LABELS: Record<string, string> = {
-  CONTACTED: 'Osloveno',
-  REMINDED: 'Připomenuto',
-  WAITING_FOR_THEM: 'Čekání na ně',
-  WAITING_FOR_US: 'Čekání na nás',
-  FULFILLING: 'Plnění',
-  THANKS_REMAINING: 'Zbývá poděkovat',
-  COMPLETED: 'Dokončeno',
-  NOT_INTERESTED: 'Nezájem',
-  NOT_THIS_TIME: 'Tentokrát nezájem',
-}
-
-const NEGOTIATION_STATUS_COLORS: Record<string, string> = {
-  CONTACTED: 'bg-blue-100 text-blue-700',
-  REMINDED: 'bg-yellow-100 text-yellow-700',
-  WAITING_FOR_THEM: 'bg-orange-100 text-orange-700',
-  WAITING_FOR_US: 'bg-red-100 text-red-700',
-  FULFILLING: 'bg-purple-100 text-purple-700',
-  THANKS_REMAINING: 'bg-teal-100 text-teal-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  NOT_INTERESTED: 'bg-gray-100 text-gray-500',
-  NOT_THIS_TIME: 'bg-gray-200 text-gray-600',
-}
 </script>
 
 <template>
