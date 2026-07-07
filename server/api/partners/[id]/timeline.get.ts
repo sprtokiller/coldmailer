@@ -18,6 +18,7 @@ const EMAIL_SELECT = {
   fromAddress: true,
   toAddress: true,
   ccAddress: true,
+  bccAddress: true,
   gmailId: true,
   threadId: true,
   content: true,
@@ -83,7 +84,7 @@ export default defineEventHandler(async (event) => {
   if (!canViewFull) {
     items = items.map((i) => {
       if (i.type === 'EMAIL') {
-        return { ...i, content: null, fromAddress: null, toAddress: null, ccAddress: null, gmailId: null }
+        return { ...i, content: null, fromAddress: null, toAddress: null, ccAddress: null, bccAddress: null, gmailId: null }
       }
       return { ...i, content: null }
     })

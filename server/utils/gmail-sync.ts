@@ -664,6 +664,7 @@ async function processMessage(
           fromAddress: from,
           toAddress: to,
           ccAddress: cc || null,
+          bccAddress: bcc || null,
           gmailId: msg.id,
           threadId: msg.threadId,
           content: htmlBody,

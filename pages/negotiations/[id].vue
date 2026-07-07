@@ -26,6 +26,7 @@ interface EmailItem {
   fromAddress: string | null
   toAddress: string | null
   ccAddress: string | null
+  bccAddress: string | null
   gmailId: string | null
   threadId: string | null
   canEdit: boolean
@@ -61,7 +62,7 @@ interface Partner {
   id: string; canonicalName: string; payload: Record<string, string>
   contacts: Contact[]
   assignees: AssigneeUser[]
-  negotiationStatus: 'CONTACTED' | 'REMINDED' | 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'FULFILLING' | 'THANKS_REMAINING' | 'COMPLETED' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | null
+  negotiationStatus: 'CONTACTED' | 'REMINDED' | 'WAITING_FOR_THEM' | 'WAITING_FOR_US' | 'PRED_SCHUZKOU' | 'FULFILLING' | 'THANKS_REMAINING' | 'COMPLETED' | 'NOT_INTERESTED' | 'NOT_THIS_TIME' | null
 }
 interface AppUser { id: string; name: string; image: string | null; email: string }
 

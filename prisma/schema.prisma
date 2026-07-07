@@ -335,6 +335,7 @@ enum NegotiationStatus {
   REMINDED
   WAITING_FOR_THEM
   WAITING_FOR_US
+  PRED_SCHUZKOU
   FULFILLING
   THANKS_REMAINING
   COMPLETED
@@ -352,6 +353,7 @@ model Email {
   fromAddress   String?
   toAddress     String?
   ccAddress     String?
+  bccAddress    String?
   gmailId       String?
   threadId      String?
   content       String?

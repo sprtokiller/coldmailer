@@ -595,6 +595,64 @@ export function splitQuotedText(text: string): QuotedSplit {
   }
 }
 
+// Gmail/Outlook nest each earlier message in the thread in its own <blockquote>, not literal
+// '>' text — so converting the whole e-mail to flat text first (via htmlToText) and only then
+// looking for a leading '>' never matches, and the entire thread collapses to one flat block.
+// This walks the DOM instead, so each nesting level of <blockquote> gets one more leading '>',
+// mirroring how plain-text mail clients render quoted replies (">", ">>", ">>>", ...).
+const QUOTE_LINE_BREAK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TR'])
+
+function collectQuotedLines(el: Element, depth: number, lines: string[]): void {
+  let current = ''
+
+  const flush = () => {
+    const prefix = depth > 0 ? `${'>'.repeat(depth)} ` : ''
+    lines.push(current.trim() ? prefix + current.trim() : (depth > 0 ? prefix.trimEnd() : ''))
+    current = ''
+  }
+
+  const walk = (node: ChildNode) => {
+    if (node.nodeType === 3) { current += node.textContent ?? ''; return }
+    if (!(node instanceof Element)) return
+    if (node.tagName === 'BR') { flush(); return }
+    if (node.tagName === 'BLOCKQUOTE') {
+      if (current.trim()) flush()
+      current = ''
+      collectQuotedLines(node, depth + 1, lines)
+      return
+    }
+    for (const child of Array.from(node.childNodes)) walk(child)
+    if (QUOTE_LINE_BREAK_TAGS.has(node.tagName)) flush()
+  }
+
+  for (const child of Array.from(el.childNodes)) walk(child)
+  if (current.trim()) flush()
+}
+
+export function htmlToQuotedText(html: string): string {
+  if (!html) return ''
+  if (typeof DOMParser === 'undefined') return htmlToText(html)
+
+  const doc = new DOMParser().parseFromString(`<body><div id="__root">${html}</div></body>`, 'text/html')
+  const root = doc.getElementById('__root')!
+  const lines: string[] = []
+  collectQuotedLines(root, 0, lines)
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+// Splits an e-mail into "main" vs "quoted" using the HTML <blockquote> structure (same
+// boundary as splitQuotedHtml), then renders each half to plain text — so text-mode display
+// gets the same split as HTML-mode, instead of the flatten-then-search-for-'>' approach in
+// splitQuotedText, which only works for genuine plain-text e-mails without any <blockquote>.
+export function splitQuotedTextFromHtml(html: string): QuotedSplit {
+  if (!html) return { main: '', quoted: '' }
+  const { main, quoted } = splitQuotedHtml(html)
+  if (quoted) {
+    return { main: htmlToText(main), quoted: htmlToQuotedText(quoted) }
+  }
+  return splitQuotedText(htmlToText(html))
+}
+
 // ---------------------------------------------------------------------------
 // Serialisation helpers
 // ---------------------------------------------------------------------------

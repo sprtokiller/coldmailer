@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { sanitizeEmailHtml, splitQuotedHtml, splitQuotedText, htmlToText } from '~/utils/html-normalize'
+import { sanitizeEmailHtml, splitQuotedHtml, splitQuotedTextFromHtml } from '~/utils/html-normalize'
 
 interface AssigneeUser { id: string; name: string; image: string | null }
 interface InteractionAssignee { userId: string; user: AssigneeUser }
@@ -15,6 +15,8 @@ interface EmailItem {
   subject: string | null
   sentAt: string | null
   toAddress: string | null
+  ccAddress: string | null
+  bccAddress: string | null
   canEdit: boolean
   isRead: boolean
 }
@@ -46,7 +48,7 @@ const htmlSplit = computed(() => {
 })
 const textSplit = computed(() => {
   if (props.emailDisplayMode !== 'text' || !props.email.content) return { main: '', quoted: '' }
-  return splitQuotedText(htmlToText(props.email.content))
+  return splitQuotedTextFromHtml(sanitizeEmailHtml(props.email.content))
 })
 
 function fmtDate(d: string) {
@@ -97,6 +99,12 @@ function fmtDate(d: string) {
     <!-- Recipients -->
     <p v-if="email.toAddress" class="text-[11px] text-gray-400 truncate mb-1" :title="email.toAddress">
       Komu: <span class="text-gray-500">{{ email.toAddress }}</span>
+    </p>
+    <p v-if="expanded && email.ccAddress" class="text-[11px] text-gray-400 truncate mb-1" :title="email.ccAddress">
+      Kopie: <span class="text-gray-500">{{ email.ccAddress }}</span>
+    </p>
+    <p v-if="expanded && email.bccAddress" class="text-[11px] text-gray-400 truncate mb-1" :title="email.bccAddress">
+      Skrytá kopie: <span class="text-gray-500">{{ email.bccAddress }}</span>
     </p>
 
     <!-- Subject -->

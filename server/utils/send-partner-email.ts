@@ -60,7 +60,8 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
   // surface as a send failure (that would mark an already-delivered e-mail as
   // FAILED/retryable and risk a duplicate send). Only the To: recipients become
   // tracked project contacts — Cc/Bcc addresses are often internal/incidental,
-  // not the partner's own contact, so they're intentionally left untouched.
+  // not the partner's own contact, so they're intentionally left untouched
+  // (though still recorded on the Email row itself for display purposes).
   //
   // toAddress may be in RFC 2822 display-name format: `"Name" <addr>` or `Name <addr>`
   // Extract just the bare email address before storing it.
@@ -83,6 +84,7 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
       fromAddress: dbUser.email,
       toAddress,
       ccAddress: cc || null,
+      bccAddress: bcc || null,
       gmailId: result.id,
       content: fullBody,
       createdBy: userId,
