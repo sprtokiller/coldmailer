@@ -249,7 +249,6 @@ function availableProjectRoles(user: AdminUser) {
                   <span v-if="u.budget" class="text-xs text-gray-500 tabular-nums">
                     ${{ u.budget.usedUsd.toFixed(2) }}<span class="text-gray-300"> / {{ u.budget.limitUsd != null ? `$${u.budget.limitUsd.toFixed(2)}` : '∞' }}</span>
                   </span>
-                  <span v-else class="text-gray-300 text-xs">—</span>
                 </div>
 
                 <svg
