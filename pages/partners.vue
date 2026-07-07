@@ -4,7 +4,6 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const router = useRouter()
 
-const isAdmin = await useIsAdmin()
 const { activeProject } = useActiveProject()
 const toast = useToast()
 
@@ -39,14 +38,17 @@ const limit     = 100
 const search     = ref('')
 const filterSize = ref('')
 
+const canManageAll = ref(false)
+
 async function fetchRecords(reset = false) {
   if (reset) offset.value = 0
   loading.value = true
   try {
-    const data = await $fetch<GlobalRecord[]>('/api/records', {
+    const data = await $fetch<{ records: GlobalRecord[]; canManageAll: boolean }>('/api/records', {
       query: { type: activeTab.value, offset: offset.value, limit, search: search.value || undefined },
     })
-    records.value = reset ? data : [...records.value, ...data]
+    records.value = reset ? data.records : [...records.value, ...data.records]
+    canManageAll.value = data.canManageAll
   } finally {
     loading.value = false
   }
@@ -283,7 +285,7 @@ function onImportClose() {
                   <td class="px-4 py-3">
                     <div class="flex items-center justify-end gap-3">
                       <button
-                        v-if="isAdmin && isInActiveProject(rec)"
+                        v-if="canManageAll && isInActiveProject(rec)"
                         class="text-red-400 hover:text-red-600 transition-colors"
                         title="Odebrat z aktuálního projektu"
                         @click.stop="removeFromProject(rec)"
@@ -293,7 +295,7 @@ function onImportClose() {
                         </svg>
                       </button>
                       <button
-                        v-else-if="isAdmin"
+                        v-else-if="canManageAll"
                         class="text-indigo-400 hover:text-indigo-600 transition-colors"
                         title="Přiřadit do aktuálního projektu"
                         @click.stop="partnerToAssign = rec"

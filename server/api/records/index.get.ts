@@ -1,8 +1,10 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { getActiveScope } from '~/server/utils/activeProject'
+import { getInteractionAccess } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const session = await requireAuth(event)
   const query = getQuery(event)
 
   const type = query.type as string | undefined
@@ -30,9 +32,14 @@ export default defineEventHandler(async (event) => {
     take: limit,
   })
 
-  if (!withCount) return findMany
+  const scope = await getActiveScope(event)
+  const projectId = scope.project?.id
+  const access = projectId ? await getInteractionAccess(session.id, projectId) : null
+  const canManageAll = access ? access.isAdmin || access.canEditAll : false
+
+  if (!withCount) return { records: await findMany, canManageAll }
 
   const [records, total] = await Promise.all([findMany, prisma.globalRecord.count({ where })])
-  return { records, total }
+  return { records, total, canManageAll }
 })
 
