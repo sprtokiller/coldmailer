@@ -361,6 +361,8 @@ model Email {
   isUnknownContact      Boolean @default(false)
   unknownContactAddress String?
 
+  isRead Boolean @default(false)
+
   assignees EmailAssignee[]
 
   @@unique([gmailId, negotiationId])

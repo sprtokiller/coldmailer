@@ -10,6 +10,7 @@
  */
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
+import { getUnreadCountForUser } from '~/server/utils/unread-email-count'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -83,7 +84,7 @@ export default defineEventHandler(async (event) => {
     orderBy: { name: 'asc' },
   })
 
-  return projects.map(project => {
+  return Promise.all(projects.map(async project => {
     // Deduplikace uživatelů – uživatel může mít víc rolí ve stejném projektu
     const memberMap = new Map<string, {
       id: string
@@ -111,6 +112,12 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const members = await Promise.all(
+      [...memberMap.values()]
+        .sort((a, b) => a.name.localeCompare(b.name, 'cs'))
+        .map(async m => ({ ...m, unreadEmailCount: await getUnreadCountForUser(m.id, project.id) })),
+    )
+
     return {
       id: project.id,
       name: project.name,
@@ -120,7 +127,7 @@ export default defineEventHandler(async (event) => {
         name: project.group.name,
         color: project.group.color,
       },
-      members: [...memberMap.values()].sort((a, b) => a.name.localeCompare(b.name, 'cs')),
+      members,
     }
-  })
+  }))
 })

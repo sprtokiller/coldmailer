@@ -1,5 +1,6 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAdmin } from '~/server/utils/permissions'
+import { getUnreadCountForUser } from '~/server/utils/unread-email-count'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
     orderBy: { createdAt: 'asc' },
   })
 
-  return users.map(u => ({
+  return Promise.all(users.map(async u => ({
     id: u.id,
     email: u.email,
     name: u.name,
@@ -33,6 +34,7 @@ export default defineEventHandler(async (event) => {
       project: upr.projectRole.project,
     })),
     budget: u.budget,
-  }))
+    unreadEmailCount: await getUnreadCountForUser(u.id),
+  })))
 })
 

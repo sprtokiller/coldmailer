@@ -111,6 +111,43 @@ async function toggleAdmin(user: AdminUser) {
   }
 }
 
+// ── Gmail sync ────────────────────────────────────────────────────────────
+const syncingAll = ref(false)
+async function syncAllUsers() {
+  syncingAll.value = true
+  try {
+    const res = await $fetch<{ totalSynced: number }>('/api/admin/gmail-sync-all', { method: 'POST' })
+    const n = res.totalSynced
+    const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'
+    toast.show(`Synchronizace dokončena — ${n} nových ${word}`, 'success')
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Synchronizace selhala', 'error')
+  } finally {
+    syncingAll.value = false
+  }
+}
+
+const syncingUserId = ref<string | null>(null)
+async function syncUser(user: AdminUser) {
+  syncingUserId.value = user.id
+  try {
+    const res = await $fetch<{ synced: number; skipped?: string }>(`/api/admin/users/${user.id}/gmail-sync`, { method: 'POST' })
+    if (res.skipped === 'no-token') {
+      toast.show(`${user.name} nemá napojený Google účet`, 'info')
+    } else {
+      const n = res.synced
+      const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'
+      toast.show(`Synchronizováno ${n} ${word}`, 'success')
+    }
+    emit('refreshUsers')
+  } catch (err: any) {
+    toast.show(err?.data?.message ?? 'Synchronizace selhala', 'error')
+  } finally {
+    syncingUserId.value = null
+  }
+}
+
 // ── Delete user ──────────────────────────────────────────────────────────
 async function deleteUser(user: AdminUser) {
   if (!confirm(`Opravdu smazat uživatele ${user.name} (${user.email})? Tuto akci nelze vrátit zpět.`)) return
@@ -138,9 +175,20 @@ function availableProjectRoles(user: AdminUser) {
           <h2 class="text-base font-semibold text-gray-800">Správa uživatelů</h2>
           <p class="text-xs text-gray-400 mt-0.5">Přiřazujte projektové role a spravujte administrátory.</p>
         </div>
-        <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
-          {{ adminUsers?.length ?? 0 }} uživatelů
-        </span>
+        <div class="flex items-center gap-2">
+          <button
+            :disabled="syncingAll"
+            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+            @click="syncAllUsers"
+          >
+            <svg v-if="syncingAll" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+            <svg v-else class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            {{ syncingAll ? 'Synchronizuji…' : 'Synchronizovat vše' }}
+          </button>
+          <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
+            {{ adminUsers?.length ?? 0 }} uživatelů
+          </span>
+        </div>
       </div>
 
       <div v-if="!adminUsers || adminUsers.length === 0" class="py-16 text-center text-gray-400 text-sm">
@@ -184,6 +232,13 @@ function availableProjectRoles(user: AdminUser) {
                 </div>
 
                 <div class="hidden md:flex flex-col items-end gap-1 shrink-0">
+                  <span
+                    v-if="u.unreadEmailCount > 0"
+                    class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200"
+                    title="Nepřečtené e-maily v jednáních, kde je uživatel oslovovatel nebo řešitel"
+                  >
+                    ✉ {{ u.unreadEmailCount }} nepřečteno
+                  </span>
                   <span
                     class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border"
                     :class="lastLoginColor(u.lastLoginAt)"
@@ -243,6 +298,18 @@ function availableProjectRoles(user: AdminUser) {
                       <span class="ml-1 opacity-70">· {{ pr.project.name }}</span>
                     </button>
                     <span v-if="availableProjectRoles(u).length === 0" class="text-xs text-gray-300 block">Vše přiřazeno</span>
+                  </div>
+
+                  <!-- Gmail sync -->
+                  <div class="mt-4 pt-4 border-t border-gray-100">
+                    <button
+                      :disabled="syncingUserId === u.id"
+                      class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40 transition-colors w-full flex items-center justify-center gap-1.5"
+                      @click.stop="syncUser(u)"
+                    >
+                      <svg v-if="syncingUserId === u.id" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                      {{ syncingUserId === u.id ? 'Synchronizuji…' : 'Synchronizovat maily' }}
+                    </button>
                   </div>
 
                   <!-- Admin toggle -->

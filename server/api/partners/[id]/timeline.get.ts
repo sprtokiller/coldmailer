@@ -22,6 +22,7 @@ const EMAIL_SELECT = {
   content: true,
   isUnknownContact: true,
   unknownContactAddress: true,
+  isRead: true,
 } as const
 
 const NOTE_SELECT = {

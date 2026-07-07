@@ -30,6 +30,7 @@ interface EmailItem {
   canEdit: boolean
   isUnknownContact: boolean
   unknownContactAddress: string | null
+  isRead: boolean
 }
 interface NoteItem {
   type: 'NOTE'
@@ -585,10 +586,22 @@ async function removeSolutionAssignee(userId: string) {
   await refreshPartner()
 }
 
-function toggleEvent(evId: string) {
+async function toggleEvent(i: Interaction) {
+  if (i.type !== 'EMAIL') return
   const s = new Set(expandedEvents.value)
-  s.has(evId) ? s.delete(evId) : s.add(evId)
+  const opening = !s.has(i.id)
+  opening ? s.add(i.id) : s.delete(i.id)
   expandedEvents.value = s
+
+  // Přečtení = rozbalení. Vedení obchodu / admin (canEditAll) čtou jako kontrola, netriggerují přečtení.
+  if (opening && !i.isRead && !access.value.canEditAll) {
+    i.isRead = true
+    try {
+      await $fetch(`/api/partners/${id}/emails/${i.id}/read`, { method: 'PATCH' })
+    } catch {
+      i.isRead = false
+    }
+  }
 }
 
 const unassignedSolutionUsers = computed(() => {
@@ -1195,12 +1208,13 @@ const TYPE_COLORS: Record<string, string> = {
         v-for="i in filteredInteractions"
         :key="i.id"
         :class="[
-          'bg-white border rounded-xl p-4 transition-colors',
+          'border rounded-xl p-4 transition-colors',
           i.type === 'EMAIL' && i.direction === 'SENT' ? 'border-blue-100 cursor-pointer' :
           i.type === 'EMAIL' && i.direction === 'RECEIVED' ? 'border-green-100 cursor-pointer' :
           'border-gray-200',
+          i.type === 'EMAIL' && !i.isRead ? 'bg-amber-50/60 ring-1 ring-amber-200' : 'bg-white',
         ]"
-        @click="i.type === 'EMAIL' && toggleEvent(i.id)"
+        @click="toggleEvent(i)"
       >
         <!-- Header row -->
         <div class="flex items-center justify-between gap-2 mb-2">
@@ -1241,7 +1255,10 @@ const TYPE_COLORS: Record<string, string> = {
         </p>
 
         <!-- Email subject -->
-        <p v-if="i.type === 'EMAIL' && i.subject" class="text-sm font-medium text-gray-800 mb-1">{{ i.subject }}</p>
+        <p v-if="i.type === 'EMAIL' && i.subject" :class="['text-sm mb-1 flex items-center gap-1.5', i.isRead ? 'font-medium text-gray-800' : 'font-bold text-gray-900']">
+          <span v-if="!i.isRead" class="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="Nepřečteno" />
+          {{ i.subject }}
+        </p>
 
         <!-- Note / Email body -->
         <div v-if="editingId === i.id && i.type === 'NOTE'">

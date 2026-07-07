@@ -207,6 +207,28 @@ async function ensureFreshToken(user: {
   return user.accessToken
 }
 
+export async function syncGmailForAllUsers(): Promise<{ totalSynced: number; perUser: { userId: string; synced: number; error?: string }[] }> {
+  const users = await prisma.user.findMany({
+    where: { accessToken: { not: null }, googleId: { not: 'system' } },
+    select: { id: true },
+  })
+
+  const perUser: { userId: string; synced: number; error?: string }[] = []
+  let totalSynced = 0
+
+  for (const u of users) {
+    try {
+      const result = await syncGmailForUser(u.id)
+      perUser.push({ userId: u.id, synced: result.synced })
+      totalSynced += result.synced
+    } catch (err: any) {
+      perUser.push({ userId: u.id, synced: 0, error: err?.message ?? String(err) })
+    }
+  }
+
+  return { totalSynced, perUser }
+}
+
 export async function getEmailSyncHistoryDays(): Promise<number> {
   const row = await prisma.systemConfig.findUnique({ where: { key: 'email.syncHistoryDays' } })
   return typeof row?.value === 'number' ? (row.value as number) : 30

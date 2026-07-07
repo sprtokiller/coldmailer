@@ -102,6 +102,15 @@ function lastLoginColor(lastLoginAt: string | null): string {
             <div class="text-xs text-gray-400 mt-0.5 truncate">{{ member.email }}</div>
           </div>
 
+          <!-- Unread mail badge -->
+          <span
+            v-if="member.unreadEmailCount > 0"
+            class="text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 whitespace-nowrap bg-red-50 text-red-600 border-red-200"
+            title="Nepřečtené e-maily v jednáních, kde je člen oslovovatel nebo řešitel"
+          >
+            ✉ {{ member.unreadEmailCount }} nepřečteno
+          </span>
+
           <!-- Last login badge -->
           <span
             class="text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 whitespace-nowrap"

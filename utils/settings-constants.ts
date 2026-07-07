@@ -37,6 +37,7 @@ export type AdminUser = {
   isAdmin: boolean; createdAt: string; lastLoginAt: string | null
   projectRoles: ProjectRoleAssignment[]
   budget: Budget | null
+  unreadEmailCount: number
 }
 
 export type BudgetUser = {
@@ -53,6 +54,7 @@ export type ProjectMember = {
   id: string; name: string; email: string; image: string | null
   lastLoginAt: string | null
   roles: string[]
+  unreadEmailCount: number
 }
 export type ManagedProject = {
   id: string; name: string; slug: string
