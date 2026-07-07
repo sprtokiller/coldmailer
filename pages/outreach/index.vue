@@ -120,7 +120,7 @@ onUnmounted(() => { document.removeEventListener('click', closeAssignDropdown) }
               <div v-if="ctx.canManageAll.value && ctx.selectedPartnerId.value" class="assignment-ctrl" @click.stop>
                 <button class="assignment-ctrl-btn" @click="openAssignDropdown">
                   <span v-if="ctx.selectedPartner.value?.assignment">
-                    {{ ctx.selectedPartner.value.assignment.assignee.name.split(' ')[0] }}
+                    {{ ctx.selectedPartner.value.assignment.assignee.name }}
                   </span>
                   <span v-else class="assignment-ctrl-free">Přiřadit</span>
                   <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

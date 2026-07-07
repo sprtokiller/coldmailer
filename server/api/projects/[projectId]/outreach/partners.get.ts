@@ -22,7 +22,16 @@ export default defineEventHandler(async (event) => {
   const access = await getInteractionAccess(user.id, projectId)
   const canManageAll = access.isAdmin || access.canEditAll
 
-  const negotiations = await prisma.negotiation.findMany({ where: { projectId, removedAt: null }, select: { globalRecordId: true } })
+  const negotiations = await prisma.negotiation.findMany({
+    where: { projectId, removedAt: null },
+    select: {
+      globalRecordId: true,
+      manuallyAddedAt: true,
+      myToThem: true,
+      themToUs: true,
+      _count: { select: { emails: true, notes: true } },
+    },
+  })
   const globalRecordIds = [...new Set(negotiations.map(n => n.globalRecordId))]
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }
@@ -65,6 +74,13 @@ export default defineEventHandler(async (event) => {
   const draftMap = new Map(drafts.map(d => [d.globalRecordId, d]))
   const assignmentMap = new Map(assignments.map(a => [a.globalRecordId, a]))
   const sentEmailSet = new Set(sentEmails.map(e => e.negotiation.globalRecordId))
+  // Same "counts as a real negotiation" criteria as /api/partners — an e-mail, a
+  // note, fulfillment content, or a manual add, none of which require each other.
+  const negotiationSet = new Set(
+    negotiations
+      .filter(n => n._count.emails > 0 || n._count.notes > 0 || n.myToThem !== null || n.themToUs !== null || n.manuallyAddedAt !== null)
+      .map(n => n.globalRecordId),
+  )
 
   const partners = globalRecords.map(gr => ({
     id: gr.id,
@@ -76,6 +92,7 @@ export default defineEventHandler(async (event) => {
     draft: draftMap.get(gr.id) ?? null,
     assignment: assignmentMap.get(gr.id) ?? null,
     hasActiveCommunication: sentEmailSet.has(gr.id),
+    hasNegotiation: negotiationSet.has(gr.id),
   }))
 
   return { partners, canManageAll }

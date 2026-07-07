@@ -365,7 +365,7 @@ function relTime(iso: string | null | undefined) {
 
           <!-- Row 5: manual context -->
           <div class="field-group">
-            <label class="field-label">Vlastní kontext</label>
+            <label class="field-label">Vlastní kontext pro e-mail</label>
             <textarea
               v-model="ctx.opConfig.value.manualContext"
               rows="2"

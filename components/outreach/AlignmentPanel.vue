@@ -148,7 +148,7 @@ function relTime(iso: string | null | undefined): string {
 
         <!-- Manual context -->
         <div class="field-group">
-          <label class="field-label">Vlastní kontext</label>
+          <label class="field-label">Vlastní kontext pro analýzu</label>
           <textarea
             v-model="ctx.vaConfig.value.manualContext"
             rows="2"

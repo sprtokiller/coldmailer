@@ -15,6 +15,9 @@ const filtered = computed(() => {
 
   if (ctx.canManageAll.value) {
     return [...all].sort((a, b) => {
+      const aNeg = a.hasNegotiation ? 1 : 0
+      const bNeg = b.hasNegotiation ? 1 : 0
+      if (aNeg !== bNeg) return aNeg - bNeg
       const aScore = !a.assignment ? 1 : a.assignment.assigneeId === myId.value ? 0 : 2
       const bScore = !b.assignment ? 1 : b.assignment.assigneeId === myId.value ? 0 : 2
       return aScore - bScore || a.canonicalName.localeCompare(b.canonicalName)
@@ -25,6 +28,9 @@ const filtered = computed(() => {
   return [...all]
     .filter(p => !p.assignment || p.assignment.assigneeId === myId.value)
     .sort((a, b) => {
+      const aNeg = a.hasNegotiation ? 1 : 0
+      const bNeg = b.hasNegotiation ? 1 : 0
+      if (aNeg !== bNeg) return aNeg - bNeg
       const aScore = a.assignment ? 0 : 1
       const bScore = b.assignment ? 0 : 1
       return aScore - bScore || a.canonicalName.localeCompare(b.canonicalName)
@@ -94,7 +100,7 @@ const STATUS_META = {
         v-for="p in filtered"
         :key="p.id"
         class="partner-item"
-        :class="{ 'partner-item--active': ctx.selectedPartnerId.value === p.id }"
+        :class="{ 'partner-item--active': ctx.selectedPartnerId.value === p.id, 'partner-item--negotiation': p.hasNegotiation }"
         @click="ctx.selectPartner(p.id)"
       >
         <!-- Avatar / initials -->
@@ -110,18 +116,23 @@ const STATUS_META = {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span
-              v-if="getStatus(p)"
-              class="partner-status"
-              :class="STATUS_META[getStatus(p)!].cls"
-            >
-              {{ STATUS_META[getStatus(p)!].icon }} {{ STATUS_META[getStatus(p)!].label }}
+            <span v-if="p.hasNegotiation" class="partner-status status--negotiation">
+              V jednání
             </span>
-            <span v-if="p.hasActiveCommunication" class="assignment-tag assignment-tag--active-comm" title="Již probíhá aktivní komunikace">
-              ⚠ aktivní
-            </span>
+            <template v-else>
+              <span
+                v-if="getStatus(p)"
+                class="partner-status"
+                :class="STATUS_META[getStatus(p)!].cls"
+              >
+                {{ STATUS_META[getStatus(p)!].icon }} {{ STATUS_META[getStatus(p)!].label }}
+              </span>
+              <span v-if="p.hasActiveCommunication" class="assignment-tag assignment-tag--active-comm" title="Již probíhá aktivní komunikace">
+                ⚠ aktivní
+              </span>
+            </template>
             <span v-if="p.assignment" class="assignment-tag assignment-tag--assigned" :title="p.assignment.assignee.name">
-              {{ p.assignment.assigneeId === myId ? 'Moje' : p.assignment.assignee.name.split(' ')[0] }}
+              {{ p.assignment.assigneeId === myId ? 'Moje' : p.assignment.assignee.name }}
             </span>
             <span v-else class="assignment-tag assignment-tag--free">Volno</span>
           </div>
@@ -240,6 +251,10 @@ const STATUS_META = {
   background: #f0ebff;
 }
 
+.partner-item--negotiation {
+  opacity: 0.6;
+}
+
 /* ── Avatar ──────────────────────────────────────────────── */
 .partner-avatar {
   width: 32px;
@@ -306,9 +321,10 @@ const STATUS_META = {
   flex-shrink: 0;
 }
 
-.status--sent    { color: #2563eb; }
-.status--saved   { color: #059669; }
-.status--aligned { color: #7c3aed; }
+.status--sent        { color: #2563eb; }
+.status--saved       { color: #059669; }
+.status--aligned     { color: #7c3aed; }
+.status--negotiation { color: #6b7280; }
 
 /* ── Assignment tags ─────────────────────────────────────── */
 .assignment-tag {

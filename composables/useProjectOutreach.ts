@@ -26,6 +26,7 @@ export interface OutreachPartner {
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null
   assignment: OutreachAssignment | null
   hasActiveCommunication: boolean
+  hasNegotiation: boolean
 }
 
 export interface OutreachConfig {
