@@ -104,6 +104,7 @@ export default defineEventHandler(async (event) => {
         gmailId: result.id,
         content: fullBody,
         createdBy: user.id,
+        isRead: true,
       },
     }).catch(err => console.error(`[outreach] failed to create email:`, err))
 

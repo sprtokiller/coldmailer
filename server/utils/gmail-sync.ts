@@ -653,6 +653,7 @@ async function processMessage(
           threadId: msg.threadId,
           content: htmlBody,
           createdBy: userId,
+          isRead: direction === 'SENT',
           isUnknownContact: !!unknownAddr,
           unknownContactAddress: unknownAddr,
         },

@@ -12,6 +12,11 @@ if [ "${SKIP_DB_SETUP:-}" != "true" ]; then
     node node_modules/prisma/build/index.js db execute --file scripts/backfill-negotiation-split.sql --schema prisma/schema.prisma
   fi
 
+  if [ -f scripts/backfill-sent-email-isread.sql ]; then
+    echo "Running pre-push backfills (sent email isRead)..."
+    node node_modules/prisma/build/index.js db execute --file scripts/backfill-sent-email-isread.sql --schema prisma/schema.prisma
+  fi
+
   echo "Syncing database schema..."
   node node_modules/prisma/build/index.js db push --skip-generate
 

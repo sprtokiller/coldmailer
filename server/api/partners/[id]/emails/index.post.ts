@@ -52,6 +52,7 @@ export default defineEventHandler(async (event) => {
       fromAddress: body.fromAddress?.trim() ?? null,
       toAddress: body.toAddress?.trim() ?? null,
       gmailId: body.gmailId ?? null,
+      isRead: body.direction === 'SENT',
       assignees: assigneeIds.length > 0
         ? { create: assigneeIds.map(userId => ({ userId })) }
         : undefined,

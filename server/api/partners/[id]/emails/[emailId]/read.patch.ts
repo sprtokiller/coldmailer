@@ -14,11 +14,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const updated = await prisma.email.update({
-    where: { id: emailId },
-    data: { isRead: true },
-    select: { isRead: true },
-  })
+  // Raw query so marking as read doesn't bump `updatedAt` (Prisma's @updatedAt fires on any
+  // update()) — that field drives the "(upraveno)" badge, which should reflect real content
+  // edits, not read-tracking.
+  await prisma.$executeRaw`UPDATE "Email" SET "isRead" = true WHERE "id" = ${emailId}`
 
-  return updated
+  return { isRead: true }
 })

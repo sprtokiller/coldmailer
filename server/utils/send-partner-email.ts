@@ -86,6 +86,7 @@ export async function sendPartnerEmailNow(opts: SendPartnerEmailOptions) {
       gmailId: result.id,
       content: fullBody,
       createdBy: userId,
+      isRead: true,
     },
     include: {
       creator: { select: { id: true, name: true, image: true } },
