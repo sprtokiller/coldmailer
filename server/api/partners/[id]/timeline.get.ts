@@ -19,6 +19,7 @@ const EMAIL_SELECT = {
   toAddress: true,
   ccAddress: true,
   gmailId: true,
+  threadId: true,
   content: true,
   isUnknownContact: true,
   unknownContactAddress: true,

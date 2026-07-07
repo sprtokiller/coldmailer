@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { sanitizeEmailHtml } from '~/utils/html-normalize'
 import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS, EDITABLE_NEGOTIATION_STATUSES } from '~/utils/negotiationStatus'
 
 definePageMeta({ middleware: 'auth' })
@@ -28,6 +27,7 @@ interface EmailItem {
   toAddress: string | null
   ccAddress: string | null
   gmailId: string | null
+  threadId: string | null
   canEdit: boolean
   isUnknownContact: boolean
   unknownContactAddress: string | null
@@ -153,7 +153,14 @@ onMounted(() => {
 const showProfileModal = ref(false)
 const showEditModal = ref(false)
 const expandedEvents = ref(new Set<string>())
+const expandedThreads = ref(new Set<string>())
 const showCrossProject = ref(false)
+
+function toggleThread(key: string) {
+  const s = new Set(expandedThreads.value)
+  s.has(key) ? s.delete(key) : s.add(key)
+  expandedThreads.value = s
+}
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 
@@ -332,21 +339,6 @@ async function toggleEmailDisplayMode() {
   await refreshBlacklist()
 }
 
-function stripHtml(html: string): string {
-  if (!html) return ''
-  // Convert block-level elements and line breaks to newlines before stripping tags
-  const withBreaks = html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<\/h[1-6]>/gi, '\n')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<\/tr>/gi, '\n')
-  if (typeof DOMParser === 'undefined') return withBreaks.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim()
-  const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
-  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
-}
-
 // ── Filter ───────────────────────────────────────────────────────────────────
 
 type TypeFilter = 'NOTE' | 'EMAIL' | 'FULFILLMENT'
@@ -360,6 +352,37 @@ const filteredInteractions = computed(() => {
 })
 
 const fulfillment = computed(() => interactionsData.value?.fulfillment ?? { myToThem: null, themToUs: null })
+
+// ── Email threading ──────────────────────────────────────────────────────────
+// Gmail's own threadId groups a conversation's messages; without it every reply
+// showed up as its own flat "followup" entry. Group by threadId (falling back to
+// the email's own id for anything synced before this field existed) and collapse
+// everything but the latest message per thread, like Gmail's conversation view.
+
+interface EmailThreadGroup { key: string; items: EmailItem[] }
+
+const emailThreadGroups = computed<EmailThreadGroup[]>(() => {
+  const emails = filteredInteractions.value.filter((i): i is EmailItem => i.type === 'EMAIL')
+  const map = new Map<string, EmailItem[]>()
+  for (const e of emails) {
+    const key = e.threadId ?? e.id
+    const list = map.get(key)
+    if (list) list.push(e)
+    else map.set(key, [e])
+  }
+  const groups = [...map.entries()].map(([key, items]) => ({
+    key,
+    items: items.sort((a, b) => new Date(a.sentAt ?? a.createdAt).getTime() - new Date(b.sentAt ?? b.createdAt).getTime()),
+  }))
+  groups.sort((a, b) => {
+    const aLatest = a.items[a.items.length - 1]
+    const bLatest = b.items[b.items.length - 1]
+    return new Date(bLatest.sentAt ?? bLatest.createdAt).getTime() - new Date(aLatest.sentAt ?? aLatest.createdAt).getTime()
+  })
+  return groups
+})
+
+const noteInteractions = computed<NoteItem[]>(() => filteredInteractions.value.filter((i): i is NoteItem => i.type === 'NOTE'))
 
 // ── Interaction CRUD ─────────────────────────────────────────────────────────
 
@@ -1185,82 +1208,93 @@ const TYPE_COLORS: Record<string, string> = {
 
     <!-- ── Interaction List ── -->
     <div class="space-y-3">
-      <div
-        v-for="i in filteredInteractions"
-        :key="i.id"
-        :class="[
-          'border rounded-xl p-4 transition-colors',
-          i.type === 'EMAIL' && i.direction === 'SENT' ? 'border-blue-100 cursor-pointer' :
-          i.type === 'EMAIL' && i.direction === 'RECEIVED' ? 'border-green-100 cursor-pointer' :
-          'border-gray-200',
-          i.type === 'EMAIL' && !i.isRead ? 'bg-amber-50/60 ring-1 ring-amber-200' : 'bg-white',
-        ]"
-        @click="toggleEvent(i)"
-      >
-        <!-- Header row -->
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-            <span v-if="i.type === 'EMAIL' && i.direction" :class="['text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', i.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
-              {{ i.direction === 'SENT' ? '↑ Odesláno' : '↓ Obdrženo' }}
-            </span>
-            <span v-if="i.type === 'NOTE' && typeFilter === 'FULFILLMENT'" class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-50 text-violet-600 shrink-0">Poznámka</span>
-            <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover shrink-0" referrerpolicy="no-referrer" />
-            <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
-            <template v-for="a in i.assignees" :key="a.userId">
-              <span class="text-gray-300">+</span>
-              <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover shrink-0" referrerpolicy="no-referrer" />
-              <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ a.user.name.charAt(0).toUpperCase() }}</div>
-            </template>
-            <span class="truncate">{{ i.creator.name }}</span>
-            <span class="text-gray-300 shrink-0">&middot;</span>
-            <span class="text-gray-300 shrink-0">{{ fmtDate(i.type === 'EMAIL' && i.sentAt ? i.sentAt : i.createdAt) }}</span>
-            <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
-          </div>
-          <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
-            <button v-if="i.type === 'EMAIL'" title="Odpovědět" class="p-1 text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i)">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+      <!-- Emails: grouped into Gmail-style threads, only the latest message per thread shown by default -->
+      <template v-if="typeFilter === 'EMAIL'">
+        <div v-for="group in emailThreadGroups" :key="group.key" class="space-y-2">
+          <NegotiationsEmailInteractionCard
+            :email="group.items[group.items.length - 1]"
+            :expanded="expandedEvents.has(group.items[group.items.length - 1].id)"
+            :email-display-mode="emailDisplayMode"
+            @toggle="toggleEvent(group.items[group.items.length - 1])"
+            @reply="openReply(group.items[group.items.length - 1])"
+            @reply-all="openReply(group.items[group.items.length - 1], true)"
+            @delete="deleteInteraction(group.items[group.items.length - 1])"
+          />
+          <template v-if="group.items.length > 1">
+            <button
+              class="text-xs text-gray-400 hover:text-gray-600 pl-1 transition-colors"
+              @click="toggleThread(group.key)"
+            >
+              {{ expandedThreads.has(group.key) ? '▾' : '▸' }}
+              {{ expandedThreads.has(group.key) ? 'Skrýt' : 'Zobrazit' }}
+              {{ group.items.length - 1 }} {{ group.items.length - 1 === 1 ? 'starší zprávu' : group.items.length - 1 < 5 ? 'starší zprávy' : 'starších zpráv' }} ve vlákně
             </button>
-            <button v-if="i.type === 'EMAIL'" title="Odpovědět všem" class="p-1 text-gray-300 hover:text-blue-500 transition-colors" @click.stop="openReply(i, true)">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15 5 9m0 0 6-6M5 9h9a6 6 0 0 1 0 12h-2" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 15 1 9m0 0 6-6" /></svg>
-            </button>
-            <button v-if="i.type === 'NOTE'" class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
-            <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i)">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
-          </div>
+            <div v-if="expandedThreads.has(group.key)" class="space-y-2 pl-3 border-l-2 border-gray-100">
+              <NegotiationsEmailInteractionCard
+                v-for="i in group.items.slice(0, -1)"
+                :key="i.id"
+                :email="i"
+                :expanded="expandedEvents.has(i.id)"
+                :email-display-mode="emailDisplayMode"
+                @toggle="toggleEvent(i)"
+                @reply="openReply(i)"
+                @reply-all="openReply(i, true)"
+                @delete="deleteInteraction(i)"
+              />
+            </div>
+          </template>
         </div>
 
-        <!-- Email recipients -->
-        <p v-if="i.type === 'EMAIL' && i.toAddress" class="text-[11px] text-gray-400 truncate mb-1" :title="i.toAddress">
-          Komu: <span class="text-gray-500">{{ i.toAddress }}</span>
+        <p v-if="!emailThreadGroups.length" class="text-center py-16 text-gray-300 text-sm select-none">
+          Žádná jednání tohoto typu
         </p>
+      </template>
 
-        <!-- Email subject -->
-        <p v-if="i.type === 'EMAIL' && i.subject" :class="['text-sm mb-1 flex items-center gap-1.5', i.isRead ? 'font-medium text-gray-800' : 'font-bold text-gray-900']">
-          <span v-if="!i.isRead" class="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="Nepřečteno" />
-          {{ i.subject }}
-        </p>
-
-        <!-- Note / Email body -->
-        <div v-if="editingId === i.id && i.type === 'NOTE'">
-          <textarea v-model="editingContent" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
-          <div class="flex gap-2 mt-2">
-            <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="saveEdit">Uložit</button>
-            <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors" @click="editingId = null">Zrušit</button>
+      <!-- Notes -->
+      <template v-else>
+        <div
+          v-for="i in noteInteractions"
+          :key="i.id"
+          class="border rounded-xl p-4 transition-colors border-gray-200 bg-white"
+        >
+          <!-- Header row -->
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
+              <span v-if="typeFilter === 'FULFILLMENT'" class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-50 text-violet-600 shrink-0">Poznámka</span>
+              <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover shrink-0" referrerpolicy="no-referrer" />
+              <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
+              <template v-for="a in i.assignees" :key="a.userId">
+                <span class="text-gray-300">+</span>
+                <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover shrink-0" referrerpolicy="no-referrer" />
+                <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ a.user.name.charAt(0).toUpperCase() }}</div>
+              </template>
+              <span class="truncate">{{ i.creator.name }}</span>
+              <span class="text-gray-300 shrink-0">&middot;</span>
+              <span class="text-gray-300 shrink-0">{{ fmtDate(i.createdAt) }}</span>
+              <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
+            </div>
+            <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
+              <button class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
+              <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i)">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
           </div>
+
+          <div v-if="editingId === i.id">
+            <textarea v-model="editingContent" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
+            <div class="flex gap-2 mt-2">
+              <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="saveEdit">Uložit</button>
+              <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors" @click="editingId = null">Zrušit</button>
+            </div>
+          </div>
+          <p v-else-if="i.content" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ i.content }}</p>
         </div>
-        <template v-else>
-          <p v-if="i.type === 'NOTE' && i.content" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ i.content }}</p>
-          <div v-if="i.type === 'EMAIL' && expandedEvents.has(i.id) && i.content" class="mt-2 pt-2 border-t border-gray-100">
-            <div v-if="emailDisplayMode === 'html'" class="email-html-preview text-sm text-gray-700 leading-relaxed" v-html="sanitizeEmailHtml(i.content)" />
-            <div v-else class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{{ stripHtml(i.content) }}</div>
-          </div>
-        </template>
-      </div>
 
-      <p v-if="!filteredInteractions.length" class="text-center py-16 text-gray-300 text-sm select-none">
-        Žádná jednání tohoto typu
-      </p>
+        <p v-if="!noteInteractions.length" class="text-center py-16 text-gray-300 text-sm select-none">
+          Žádná jednání tohoto typu
+        </p>
+      </template>
     </div>
 
     <!-- ── Cross-Project Visibility ── -->
@@ -1448,46 +1482,3 @@ const TYPE_COLORS: Record<string, string> = {
     @sent="composerOpen = false; refreshInteractions(); refreshScheduledEmails()"
   />
 </template>
-
-<style scoped>
-.email-html-preview {
-  overflow-x: auto;
-  word-break: break-word;
-}
-.email-html-preview :deep(img) {
-  max-width: 100%;
-  height: auto;
-}
-.email-html-preview :deep(a) {
-  color: #4f46e5;
-  text-decoration: underline;
-}
-.email-html-preview :deep(blockquote) {
-  border-left: 3px solid #e5e7eb;
-  padding-left: 0.75rem;
-  margin: 0.5rem 0;
-  color: #6b7280;
-}
-.email-html-preview :deep(p) {
-  margin: 0.25rem 0;
-}
-.email-html-preview :deep(table) {
-  max-width: 100%;
-  border-collapse: collapse;
-}
-.email-html-preview :deep(td),
-.email-html-preview :deep(th) {
-  vertical-align: top;
-}
-.email-html-preview :deep(h1),
-.email-html-preview :deep(h2),
-.email-html-preview :deep(h3) {
-  margin: 0.5rem 0 0.25rem;
-  font-weight: 600;
-}
-.email-html-preview :deep(hr) {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 0.5rem 0;
-}
-</style>

@@ -538,6 +538,64 @@ function cleanupEmptyStyleAttrs(root: HTMLElement): void {
 }
 
 // ---------------------------------------------------------------------------
+// Quoted reply splitting (collapse everything from the first blockquote on,
+// mirroring Gmail/Outlook's own "show quoted text" behaviour)
+// ---------------------------------------------------------------------------
+
+export interface QuotedSplit {
+  main: string
+  quoted: string
+}
+
+export function splitQuotedHtml(html: string): QuotedSplit {
+  if (!html || typeof DOMParser === 'undefined') return { main: html, quoted: '' }
+
+  const doc = new DOMParser().parseFromString(`<body><div id="__root">${html}</div></body>`, 'text/html')
+  const root = doc.getElementById('__root')!
+
+  const children = Array.from(root.childNodes)
+  const splitIndex = children.findIndex(
+    node => node instanceof Element && (node.tagName === 'BLOCKQUOTE' || !!node.querySelector('blockquote')),
+  )
+  if (splitIndex === -1) return { main: html, quoted: '' }
+
+  const mainDiv = doc.createElement('div')
+  const quotedDiv = doc.createElement('div')
+  children.forEach((node, i) => {
+    (i < splitIndex ? mainDiv : quotedDiv).appendChild(node)
+  })
+
+  return { main: mainDiv.innerHTML, quoted: quotedDiv.innerHTML }
+}
+
+export function htmlToText(html: string): string {
+  if (!html) return ''
+  // Convert block-level elements and line breaks to newlines before stripping tags
+  const withBreaks = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+  if (typeof DOMParser === 'undefined') return withBreaks.replace(/<[^>]*>/g, '').replace(/\n{3,}/g, '\n\n').trim()
+  const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
+  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+export function splitQuotedText(text: string): QuotedSplit {
+  if (!text) return { main: text, quoted: '' }
+  const lines = text.split('\n')
+  const splitIndex = lines.findIndex(l => l.trimStart().startsWith('>'))
+  if (splitIndex === -1) return { main: text, quoted: '' }
+
+  return {
+    main: lines.slice(0, splitIndex).join('\n').trimEnd(),
+    quoted: lines.slice(splitIndex).join('\n'),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Serialisation helpers
 // ---------------------------------------------------------------------------
 

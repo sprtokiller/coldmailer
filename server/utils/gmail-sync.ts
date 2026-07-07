@@ -650,6 +650,7 @@ async function processMessage(
           toAddress: to,
           ccAddress: cc || null,
           gmailId: msg.id,
+          threadId: msg.threadId,
           content: htmlBody,
           createdBy: userId,
           isUnknownContact: !!unknownAddr,

@@ -353,6 +353,7 @@ model Email {
   toAddress     String?
   ccAddress     String?
   gmailId       String?
+  threadId      String?
   content       String?
   createdBy     String
   creator       User          @relation("EmailCreator", fields: [createdBy], references: [id])
