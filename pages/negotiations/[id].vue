@@ -32,6 +32,7 @@ interface EmailItem {
   isUnknownContact: boolean
   unknownContactAddress: string | null
   isRead: boolean
+  isCalendarBooking: boolean
 }
 interface NoteItem {
   type: 'NOTE'

@@ -22,6 +22,7 @@ interface EmailItem {
   isUnknownContact: boolean
   unknownContactAddress: string | null
   isRead: boolean
+  isCalendarBooking: boolean
 }
 
 const props = defineProps<{

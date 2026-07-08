@@ -368,6 +368,8 @@ model Email {
 
   isRead Boolean @default(false)
 
+  isCalendarBooking Boolean @default(false)
+
   assignees EmailAssignee[]
 
   @@unique([gmailId, negotiationId])

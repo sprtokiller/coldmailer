@@ -19,6 +19,7 @@ interface EmailItem {
   bccAddress: string | null
   canEdit: boolean
   isRead: boolean
+  isCalendarBooking: boolean
 }
 
 const props = defineProps<{
@@ -68,7 +69,13 @@ function fmtDate(d: string) {
     <!-- Header row -->
     <div class="flex items-center justify-between gap-2 mb-2">
       <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-        <span :class="['text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', email.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
+        <span
+          v-if="email.isCalendarBooking"
+          class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 bg-cyan-50 text-cyan-600"
+        >
+          📅 Schůzka
+        </span>
+        <span v-else :class="['text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', email.direction === 'SENT' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600']">
           {{ email.direction === 'SENT' ? '↑ Odesláno' : '↓ Obdrženo' }}
         </span>
         <img v-if="email.creator.image" :src="email.creator.image" :alt="email.creator.name" :title="email.creator.name" class="w-4 h-4 rounded-full object-cover shrink-0" referrerpolicy="no-referrer" />
@@ -81,7 +88,6 @@ function fmtDate(d: string) {
         <span class="truncate">{{ email.creator.name }}</span>
         <span class="text-gray-300 shrink-0">&middot;</span>
         <span class="text-gray-300 shrink-0">{{ fmtDate(email.sentAt ?? email.createdAt) }}</span>
-        <span v-if="email.createdAt !== email.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
       </div>
       <div v-if="email.canEdit" class="flex items-center gap-1 flex-shrink-0">
         <button title="Odpovědět" class="p-1 text-gray-300 hover:text-blue-500 transition-colors" @click.stop="emit('reply')">

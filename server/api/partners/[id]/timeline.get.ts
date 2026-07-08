@@ -25,6 +25,7 @@ const EMAIL_SELECT = {
   isUnknownContact: true,
   unknownContactAddress: true,
   isRead: true,
+  isCalendarBooking: true,
 } as const
 
 const NOTE_SELECT = {

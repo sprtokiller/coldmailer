@@ -676,6 +676,7 @@ async function processMessage(
           isRead: direction === 'SENT',
           isUnknownContact: !!unknownAddr,
           unknownContactAddress: unknownAddr,
+          isCalendarBooking,
         },
       })
       created++
