@@ -1,11 +1,11 @@
 /**
  * GET /api/projects/[projectId]/outreach/partners
  *
- * Vrátí všechny GlobalRecordy asociované s tímto projektem – bez závislosti
- * na konkrétním kroku pipeline. Zahrnuje záznamy nalezené přes Negotiation
- * (e-maily/poznámky/plnění vždy vyžadují existující Negotiation, takže její
- * existence sama o sobě znamená "partner má v projektu nějakou aktivitu"),
- * kromě těch, které byly z projektu odebrány (removedAt).
+ * Vrátí GlobalRecordy z tohoto projektu, které ještě nevstoupily do jednání –
+ * jakmile Negotiation.negotiationStatus opustí PRED_OSLOVENIM (přiřazením
+ * NegotiationAssignee, odesláním e-mailu, nebo objevením e-mailu přes Gmail
+ * sync), partner navždy zmizí z tohoto výpisu a žije dál jen v /negotiations.
+ * Kromě těch, které byly z projektu odebrány (removedAt).
  *
  * Každý záznam obsahuje stav PartnerAlignment a PartnerOutreachDraft.
  */
@@ -23,14 +23,14 @@ export default defineEventHandler(async (event) => {
   const canManageAll = access.isAdmin || access.canEditAll
 
   const negotiations = await prisma.negotiation.findMany({
-    where: { projectId, removedAt: null },
-    select: { globalRecordId: true, negotiationStatus: true },
+    where: { projectId, removedAt: null, OR: [{ negotiationStatus: null }, { negotiationStatus: 'PRED_OSLOVENIM' }] },
+    select: { globalRecordId: true },
   })
   const globalRecordIds = [...new Set(negotiations.map(n => n.globalRecordId))]
 
   if (globalRecordIds.length === 0) return { partners: [], canManageAll }
 
-  const [globalRecords, alignments, drafts, assignments, sentEmails] = await Promise.all([
+  const [globalRecords, alignments, drafts, assignments] = await Promise.all([
     prisma.globalRecord.findMany({
       where: { id: { in: globalRecordIds } },
       include: {
@@ -54,21 +54,11 @@ export default defineEventHandler(async (event) => {
       where: { projectId, globalRecordId: { in: globalRecordIds } },
       select: { globalRecordId: true, assigneeId: true, assignee: { select: { id: true, name: true, image: true } } },
     }),
-    // Any e-mail we've ever sent this partner in this project — via this workspace,
-    // the negotiations page, or discovered by Gmail sync — counts as active
-    // communication, regardless of whether an outreach draft was ever generated.
-    prisma.email.findMany({
-      where: { negotiation: { projectId, globalRecordId: { in: globalRecordIds } }, direction: 'SENT' },
-      select: { negotiation: { select: { globalRecordId: true } } },
-      distinct: ['negotiationId'],
-    }),
   ])
 
   const alignmentMap = new Map(alignments.map(a => [a.globalRecordId, a]))
   const draftMap = new Map(drafts.map(d => [d.globalRecordId, d]))
   const assignmentMap = new Map(assignments.map(a => [a.globalRecordId, a]))
-  const sentEmailSet = new Set(sentEmails.map(e => e.negotiation.globalRecordId))
-  const statusMap = new Map(negotiations.map(n => [n.globalRecordId, n.negotiationStatus]))
 
   const partners = globalRecords.map(gr => ({
     id: gr.id,
@@ -79,8 +69,6 @@ export default defineEventHandler(async (event) => {
     alignment: alignmentMap.get(gr.id) ?? null,
     draft: draftMap.get(gr.id) ?? null,
     assignment: assignmentMap.get(gr.id) ?? null,
-    hasActiveCommunication: sentEmailSet.has(gr.id),
-    negotiationStatus: statusMap.get(gr.id) ?? null,
   }))
 
   return { partners, canManageAll }

@@ -26,8 +26,6 @@ export interface OutreachPartner {
   alignment: { globalRecordId: string; createdAt: string; updatedAt: string; author: { name: string } } | null
   draft: { globalRecordId: string; savedAt: string; sentAt: string | null; sendError: string | null; toAddress: string; subject: string; savedBy: { name: string } } | null
   assignment: OutreachAssignment | null
-  hasActiveCommunication: boolean
-  negotiationStatus: string | null
 }
 
 export interface OutreachConfig {
