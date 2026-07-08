@@ -615,8 +615,10 @@ async function processMessage(
 
   if (matchedEntries.length === 0) return { created: 0, newEmails: [] }
 
-  const fromAddresses = extractEmailAddresses(from)
-  const direction = fromAddresses.includes(normalizedUserEmail) ? 'SENT' : 'RECEIVED'
+  // Gmail's SENT label (not the From header) is authoritative for direction — some inbound
+  // mail (e.g. Google Calendar confirmations) sets From to the recipient's own address.
+  const direction = (msg.labelIds ?? []).includes('SENT') ? 'SENT' : 'RECEIVED'
+  const isCalendarBooking = isCalendarBookingConfirmation(headers, msg.payload)
 
   let htmlBody = extractHtmlBody(msg.payload)
   const attachments = extractAttachments(msg.payload)
@@ -636,7 +638,9 @@ async function processMessage(
       ? null
       : (newlyDiscovered.get(`${entry.globalRecordId}:${entry.projectId}`) ?? null)
 
-    const newStatus = direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US'
+    const newStatus = isCalendarBooking
+      ? 'PRED_SCHUZKOU'
+      : (direction === 'SENT' ? 'WAITING_FOR_THEM' : 'WAITING_FOR_US')
     const negotiation = await prisma.negotiation.upsert({
       where: { projectId_globalRecordId: { projectId: entry.projectId, globalRecordId: entry.globalRecordId } },
       create: { projectId: entry.projectId, globalRecordId: entry.globalRecordId, negotiationStatus: newStatus },
@@ -783,6 +787,25 @@ function extractAttachments(payload: GmailMessagePart): { filename: string; mime
 
   walk(payload)
   return attachments
+}
+
+// Google Calendar sends a new/updated booking as a text/calendar body part with
+// method=REQUEST (cancellations use method=CANCEL, replies method=REPLY) alongside a
+// Sender header of calendar-notification@google.com — both checked to avoid false
+// positives from calendar .ics attachments forwarded by someone else.
+function isCalendarBookingConfirmation(headers: Record<string, string>, payload: GmailMessagePart): boolean {
+  const sender = (headers['sender'] ?? '').toLowerCase()
+  if (!sender.includes('calendar-notification@google.com')) return false
+
+  function hasRequestPart(part: GmailMessagePart): boolean {
+    if (part.mimeType === 'text/calendar') {
+      const contentType = part.headers?.find(h => h.name.toLowerCase() === 'content-type')?.value ?? ''
+      if (/method\s*=\s*request/i.test(contentType)) return true
+    }
+    return part.parts?.some(hasRequestPart) ?? false
+  }
+
+  return hasRequestPart(payload)
 }
 
 function base64UrlDecode(data: string): string {
