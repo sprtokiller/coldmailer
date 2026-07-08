@@ -553,7 +553,28 @@ export function splitQuotedHtml(html: string): QuotedSplit {
   const doc = new DOMParser().parseFromString(`<body><div id="__root">${html}</div></body>`, 'text/html')
   const root = doc.getElementById('__root')!
 
-  const children = Array.from(root.childNodes)
+  // Gmail/Outlook often wrap the entire message (reply text AND the quoted chain) in a single
+  // outer <div> (e.g. Gmail's `dir="ltr"` wrapper). Checking only root's direct children for a
+  // nested blockquote then treated that single wrapper as "the quoted part", collapsing the
+  // whole email — including the actual reply — behind "show quoted text". Descend through such
+  // single-child wrappers first, so the split happens at the level that actually separates the
+  // reply from the quote.
+  let container: Element = root
+  let carriedStyle = ''
+  while (true) {
+    const meaningfulKids = Array.from(container.childNodes).filter(
+      n => !(n.nodeType === 3 && !n.textContent?.trim()),
+    )
+    if (meaningfulKids.length !== 1 || !(meaningfulKids[0] instanceof Element)) break
+    const only = meaningfulKids[0] as Element
+    if (only.tagName === 'BLOCKQUOTE' || !only.querySelector('blockquote')) break
+
+    const style = only.getAttribute('style')
+    if (style) carriedStyle = carriedStyle ? `${carriedStyle}; ${style}` : style
+    container = only
+  }
+
+  const children = Array.from(container.childNodes)
   const splitIndex = children.findIndex(
     node => node instanceof Element && (node.tagName === 'BLOCKQUOTE' || !!node.querySelector('blockquote')),
   )
@@ -565,7 +586,11 @@ export function splitQuotedHtml(html: string): QuotedSplit {
     (i < splitIndex ? mainDiv : quotedDiv).appendChild(node)
   })
 
-  return { main: mainDiv.innerHTML, quoted: quotedDiv.innerHTML }
+  if (!carriedStyle) return { main: mainDiv.innerHTML, quoted: quotedDiv.innerHTML }
+
+  mainDiv.setAttribute('style', carriedStyle)
+  quotedDiv.setAttribute('style', carriedStyle)
+  return { main: mainDiv.outerHTML, quoted: quotedDiv.outerHTML }
 }
 
 export function htmlToText(html: string): string {
