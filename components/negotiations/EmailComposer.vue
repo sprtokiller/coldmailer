@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sanitizeEmailHtml } from '~/utils/html-normalize'
+
 interface Contact {
   id: string
   address: string
@@ -30,6 +32,7 @@ interface Props {
   prefilledCc?: string
   prefilledSubject?: string
   inReplyToGmailId?: string
+  replyContext?: { content: string; sentAt: string; fromAddress: string } | null
   editScheduled?: EditScheduled | null
   hasPriorCommunication?: boolean
 }
@@ -141,8 +144,52 @@ const signatures = computed<SigItem[]>(() => {
   return d.personal ?? []
 })
 
-watch(signatures, (val) => {
-  if (!isEdit.value && !selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0].id
+const sigDataLoaded = ref(false)
+
+watch(sigsData, (val) => {
+  if (val === null || val === undefined) return
+  if (!isEdit.value && !selectedSignatureId.value && signatures.value.length > 0) selectedSignatureId.value = signatures.value[0].id
+  sigDataLoaded.value = true
+}, { immediate: true })
+
+// Gmail-style reply quoting: "Dne <datum> napsal(a) <odesílatel>:" followed by the
+// original message, indented as a blockquote.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function buildQuoteHtml(ctx: { content: string; sentAt: string; fromAddress: string }): string {
+  const date = new Date(ctx.sentAt).toLocaleString('cs-CZ', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+  const header = `<div>Dne ${date} napsal(a) ${escapeHtml(ctx.fromAddress)}:</div>`
+  const quoted = `<blockquote style="margin:0 0 0 0.8ex;border-left:2px solid #ccc;padding-left:1ex">${sanitizeEmailHtml(ctx.content ?? '')}</blockquote>`
+  return header + quoted
+}
+
+// Signature + quoted thread are composed into the editable body itself (not appended
+// silently at send time) so the user sees — and can edit — exactly what will be sent,
+// the same way Gmail's compose window works.
+function composeAutoBody(): string | null {
+  const sig = includeSignature.value ? signatures.value.find(s => s.id === selectedSignatureId.value) : undefined
+  const extras: string[] = []
+  if (sig) extras.push(sig.content)
+  if (props.replyContext) extras.push(buildQuoteHtml(props.replyContext))
+  if (extras.length === 0) return null
+  return '<p></p>' + extras.join('')
+}
+
+// Keeps the auto-composed part in sync with the signature picker, but only while the
+// body still matches what we last auto-generated — once the user starts typing their
+// own reply, stop overwriting it.
+let lastAutoBody = ''
+watch([selectedSignatureId, includeSignature, sigDataLoaded], () => {
+  if (isEdit.value || !sigDataLoaded.value) return
+  if (body.value !== lastAutoBody) return
+  const next = composeAutoBody()
+  if (next === null) return
+  lastAutoBody = next
+  body.value = next
 }, { immediate: true })
 
 const title = computed(() => isEdit.value ? 'Upravit naplánovaný e-mail' : props.inReplyToGmailId ? 'Odpovědět' : 'Nový e-mail')
@@ -187,7 +234,6 @@ async function submitEmail(scheduled: boolean) {
         },
       })
     } else {
-      const sig = includeSignature.value ? signatures.value.find(s => s.id === selectedSignatureId.value) : undefined
       await $fetch(`/api/partners/${props.globalRecordId}/send-email`, {
         method: 'POST',
         body: {
@@ -196,7 +242,6 @@ async function submitEmail(scheduled: boolean) {
           bcc: bcc.value.trim() || undefined,
           subject: subject.value.trim(),
           body: body.value,
-          signatureContent: sig?.content,
           inReplyToGmailId: props.inReplyToGmailId,
           scheduledFor: scheduled ? scheduledForDate.value!.toISOString() : undefined,
         },

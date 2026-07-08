@@ -287,6 +287,7 @@ const composerPrefilledTo = ref('')
 const composerPrefilledCc = ref('')
 const composerPrefilledSubject = ref('')
 const composerReplyToGmailId = ref<string | null>(null)
+const composerReplyContext = ref<{ content: string; sentAt: string; fromAddress: string } | null>(null)
 const composerEditScheduled = ref<(ScheduledEmailItem & { scheduledFor: string }) | null>(null)
 
 function openNewEmail() {
@@ -294,6 +295,7 @@ function openNewEmail() {
   composerPrefilledCc.value = ''
   composerPrefilledSubject.value = ''
   composerReplyToGmailId.value = null
+  composerReplyContext.value = null
   composerEditScheduled.value = null
   composerOpen.value = true
 }
@@ -321,6 +323,9 @@ function openReply(i: EmailItem, replyAll = false) {
   const subj = i.subject ?? ''
   composerPrefilledSubject.value = /^re:/i.test(subj) ? subj : `Re: ${subj}`
   composerReplyToGmailId.value = i.gmailId
+  composerReplyContext.value = i.content
+    ? { content: i.content, sentAt: i.sentAt ?? i.createdAt, fromAddress: i.fromAddress ?? '' }
+    : null
   composerEditScheduled.value = null
   composerOpen.value = true
 }
@@ -596,6 +601,7 @@ const TYPE_LABELS: Record<string, string> = {
     :prefilled-cc="composerPrefilledCc"
     :prefilled-subject="composerPrefilledSubject"
     :in-reply-to-gmail-id="composerReplyToGmailId ?? undefined"
+    :reply-context="composerReplyContext"
     :edit-scheduled="composerEditScheduled"
     :has-prior-communication="hasSentEmail"
     @close="composerOpen = false"

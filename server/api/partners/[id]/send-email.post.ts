@@ -4,15 +4,12 @@ import { getActiveScope } from '~/server/utils/activeProject'
 import { canEditNegotiation } from '~/server/utils/projectPermissions'
 import { sendPartnerEmailNow } from '~/server/utils/send-partner-email'
 
-const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
-
 interface SendEmailBody {
   toAddress: string
   cc?: string
   bcc?: string
   subject: string
   body: string
-  signatureContent?: string
   inReplyToGmailId?: string
   scheduledFor?: string // ISO datetime — if set and in the future, schedules instead of sending now
 }
@@ -38,9 +35,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Nemáte oprávnění odeslat e-mail. Nejste přiřazeni k tomuto partnerovi.' })
   }
 
-  const fullBody = body.signatureContent
-    ? body.body + SIGNATURE_SEPARATOR + body.signatureContent
-    : body.body
+  const fullBody = body.body
 
   if (body.scheduledFor) {
     const scheduledFor = new Date(body.scheduledFor)
