@@ -889,17 +889,21 @@ function relTime(iso: string | null | undefined) {
 }
 
 .contact-select-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  position: relative;
 }
 
 .contact-select-row .field-select {
-  flex: 1;
+  width: 100%;
+  padding-right: 96px;
+  text-overflow: ellipsis;
 }
 
 .contact-type-badge {
-  flex-shrink: 0;
+  position: absolute;
+  top: 50%;
+  right: 30px;
+  transform: translateY(-50%);
+  pointer-events: none;
   padding: 4px 9px;
   border-radius: 20px;
   font-size: 11px;
