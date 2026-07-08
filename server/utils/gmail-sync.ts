@@ -729,19 +729,17 @@ function getHeaders(payload: GmailMessagePart): Record<string, string> {
 }
 
 function extractEmailAddresses(headerValue: string): string[] {
-  const addresses: string[] = []
+  const addresses = new Set<string>()
   const angleBracketRegex = /<([^>]+)>/g
   let match
   while ((match = angleBracketRegex.exec(headerValue)) !== null) {
-    addresses.push(match[1].toLowerCase())
+    addresses.add(match[1].toLowerCase())
   }
-  if (addresses.length === 0 && headerValue.includes('@')) {
-    const bareEmailRegex = /[\w.+-]+@[\w.-]+\.\w+/g
-    while ((match = bareEmailRegex.exec(headerValue)) !== null) {
-      addresses.push(match[0].toLowerCase())
-    }
+  const bareEmailRegex = /[\w.+-]+@[\w.-]+\.\w+/g
+  while ((match = bareEmailRegex.exec(headerValue)) !== null) {
+    addresses.add(match[0].toLowerCase())
   }
-  return addresses
+  return [...addresses]
 }
 
 function extractHtmlBody(payload: GmailMessagePart): string {
