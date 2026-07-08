@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS, EDITABLE_NEGOTIATION_STATUSES } from '~/utils/negotiationStatus'
+import { normalizeChecklist } from '~/utils/checklist'
 
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
-const router = useRouter()
 const id = route.params.id as string
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -103,71 +102,19 @@ async function refresh() {
   await Promise.all([refreshPartner(), refreshInteractions(), refreshBlacklist(), refreshScheduledEmails()])
 }
 
-// ── Sync ─────────────────────────────────────────────────────────────────────
-
 const toast = useToast()
-const { isSyncing: gmailSyncActive, lastSyncAt } = useGmailSyncState()
-const showSyncDropdown = ref(false)
-const syncLookbackDays = ref(90)
-
-const now = ref(Date.now())
-let nowTimer: ReturnType<typeof setInterval>
-onMounted(() => {
-  nowTimer = setInterval(() => { now.value = Date.now() }, 1000)
-})
-onUnmounted(() => {
-  if (nowTimer) clearInterval(nowTimer)
-})
-
-const syncCooldownActive = computed(() => now.value - lastSyncAt.value < 10_000)
-const syncDisabled = computed(() => gmailSyncActive.value || syncCooldownActive.value)
-
-async function syncNow(lookbackDays?: number) {
-  if (gmailSyncActive.value) return
-  gmailSyncActive.value = true
-  showSyncDropdown.value = false
-  try {
-    const body = { lookbackDays: lookbackDays ?? syncLookbackDays.value }
-    const res = await $fetch<{ synced: number; skipped?: string }>(`/api/partners/${id}/sync-assignees`, { method: 'POST', body })
-    if (res.skipped === 'no-assignees') {
-      toast.show('K tomuto jednání není nikdo přiřazený', 'info')
-    } else {
-      const n = res.synced
-      const word = n === 1 ? 'email' : n >= 2 && n <= 4 ? 'emaily' : 'emailů'
-      toast.show(`Synchronizováno ${n} ${word}`, 'success')
-    }
-    await Promise.all([refreshInteractions(), refreshPartner()])
-  } catch {
-    toast.show('Sync selhal', 'error')
-  } finally {
-    lastSyncAt.value = Date.now()
-    gmailSyncActive.value = false
-  }
-}
 
 // ── UI state ──────────────────────────────────────────────────────────────────
-
-onMounted(() => {
-  document.addEventListener('click', () => { showSyncDropdown.value = false; showAddAssignee.value = false })
-})
 
 const showProfileModal = ref(false)
 const showEditModal = ref(false)
 const expandedEvents = ref(new Set<string>())
-const expandedThreads = ref(new Set<string>())
 const showCrossProject = ref(false)
-
-function toggleThread(key: string) {
-  const s = new Set(expandedThreads.value)
-  s.has(key) ? s.delete(key) : s.add(key)
-  expandedThreads.value = s
-}
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 
 const interactions = computed(() => interactionsData.value?.items ?? [])
 const crossProjectSummary = computed(() => interactionsData.value?.crossProjectSummary ?? [])
-const access = computed(() => interactionsData.value?.access ?? { canViewAll: false, canEditAll: false })
 const firstContact = computed(() => partner.value?.contacts[0] ?? null)
 const hasSentEmail = computed(() => interactions.value.some(i => i.type === 'EMAIL' && i.direction === 'SENT'))
 
@@ -202,130 +149,12 @@ const composerContacts = computed(() => {
   return [...known.filter(c => !blacklisted.has(c.address)), ...extra]
 })
 
-const unknownContactActionLoading = ref<string | null>(null)
-const CONTACT_TYPE_OPTIONS = ['Partnerships', 'PR', 'HR', 'Marketing', 'CEO', 'General']
-
-async function handleUnknownContactAction(action: 'blacklist' | 'save_local' | 'add_contact', email: string, extra?: { firstName?: string; lastName?: string; role?: string; contactType?: string; note?: string }) {
-  unknownContactActionLoading.value = email
-  try {
-    await $fetch(`/api/partners/${id}/unknown-contact-action`, {
-      method: 'POST',
-      body: { action, email, ...extra },
-    })
-    if (action === 'add_contact') toast.show('Kontakt uložen globálně', 'success')
-    else if (action === 'save_local') toast.show('Adresa uložena mezi přídavné adresy', 'success')
-    else if (action === 'blacklist') toast.show('Kontakt přidán na blacklist', 'success')
-    await refresh()
-  } finally {
-    unknownContactActionLoading.value = null
-  }
-}
-
-const addContactForm = ref<{ email: string; firstName: string; lastName: string; role: string; contactType: string; note: string } | null>(null)
-
-function openAddContactForm(email: string) {
-  addContactForm.value = { email, firstName: '', lastName: '', role: '', contactType: 'General', note: '' }
-}
-
-async function submitAddContact() {
-  if (!addContactForm.value) return
-  await handleUnknownContactAction('add_contact', addContactForm.value.email, {
-    firstName: addContactForm.value.firstName || undefined,
-    lastName: addContactForm.value.lastName || undefined,
-    role: addContactForm.value.role || undefined,
-    contactType: addContactForm.value.contactType || undefined,
-    note: addContactForm.value.note || undefined,
-  })
-  addContactForm.value = null
-}
-
-// ── Blacklist management ─────────────────────────────────────────────────────
+// ── Blacklist / additional addresses (managed by ContactManagementPanel) ────
 
 const blacklist = computed(() => blacklistData.value?.blacklist ?? [])
-const showBlacklist = ref(false)
-const newBlacklistEmail = ref('')
-const blacklistError = ref('')
-
-async function addToBlacklist() {
-  blacklistError.value = ''
-  const email = newBlacklistEmail.value.trim().toLowerCase()
-  if (!email) return
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    blacklistError.value = `${email} nevypadá jako platná e-mailová adresa.`
-    return
-  }
-  if (blacklist.value.includes(email)) {
-    blacklistError.value = `${email} už je na blacklistu.`
-    return
-  }
-  if (additionalAddresses.value.includes(email)) {
-    blacklistError.value = `${email} je v přídavných adresách — nejprve ji odeberte.`
-    return
-  }
-  const updated = [...blacklist.value, email]
-  await $fetch(`/api/partners/${id}/settings`, {
-    method: 'PATCH',
-    body: { contactBlacklist: updated },
-  })
-  newBlacklistEmail.value = ''
-  toast.show(`${email} přidán na blacklist`, 'success')
-  await refreshBlacklist()
-}
-
-async function removeFromBlacklist(email: string) {
-  const updated = blacklist.value.filter(e => e !== email)
-  await $fetch(`/api/partners/${id}/settings`, {
-    method: 'PATCH',
-    body: { contactBlacklist: updated.length ? updated : null },
-  })
-  toast.show(`${email} odebrán z blacklistu`, 'success')
-  await refreshBlacklist()
-}
-
-// ── Additional addresses (whitelist) management ──────────────────────────────
-
 const additionalAddresses = computed(() => blacklistData.value?.additionalAddresses ?? [])
 const autoIncludeDomain = computed(() => blacklistData.value?.autoIncludeDomain ?? false)
 const detectedDomain = computed(() => blacklistData.value?.detectedDomain ?? null)
-const showAdditionalAddresses = ref(false)
-const newAdditionalEmail = ref('')
-const additionalError = ref('')
-
-async function addAdditionalAddress() {
-  additionalError.value = ''
-  const email = newAdditionalEmail.value.trim().toLowerCase()
-  if (!email) return
-  if (blacklist.value.includes(email)) {
-    additionalError.value = `${email} je na blacklistu — nejprve ji odeberte.`
-    return
-  }
-  const updated = [...additionalAddresses.value, email]
-  await $fetch(`/api/partners/${id}/settings`, {
-    method: 'PATCH',
-    body: { additionalAddresses: updated },
-  })
-  newAdditionalEmail.value = ''
-  toast.show(`${email} přidán mezi přídavné adresy`, 'success')
-  await refreshBlacklist()
-}
-
-async function removeAdditionalAddress(email: string) {
-  const updated = additionalAddresses.value.filter(e => e !== email)
-  await $fetch(`/api/partners/${id}/settings`, {
-    method: 'PATCH',
-    body: { additionalAddresses: updated.length ? updated : null },
-  })
-  toast.show(`${email} odebrán z přídavných adres`, 'success')
-  await refreshBlacklist()
-}
-
-async function toggleAutoIncludeDomain() {
-  await $fetch(`/api/partners/${id}/settings`, {
-    method: 'PATCH',
-    body: { autoIncludeDomain: !autoIncludeDomain.value },
-  })
-  await refreshBlacklist()
-}
 
 // ── Email display mode ───────────────────────────────────────────────────────
 
@@ -352,101 +181,18 @@ const filteredInteractions = computed(() => {
   return interactions.value.filter(i => i.type === typeFilter.value && !(i.type === 'EMAIL' && i.isUnknownContact))
 })
 
-const fulfillment = computed(() => interactionsData.value?.fulfillment ?? { myToThem: null, themToUs: null })
-
-// ── Email threading ──────────────────────────────────────────────────────────
-// Gmail's own threadId groups a conversation's messages; without it every reply
-// showed up as its own flat "followup" entry. Group by threadId (falling back to
-// the email's own id for anything synced before this field existed) and collapse
-// everything but the latest message per thread, like Gmail's conversation view.
-
-interface EmailThreadGroup { key: string; items: EmailItem[] }
-
-const emailThreadGroups = computed<EmailThreadGroup[]>(() => {
-  const emails = filteredInteractions.value.filter((i): i is EmailItem => i.type === 'EMAIL')
-  const map = new Map<string, EmailItem[]>()
-  for (const e of emails) {
-    const key = e.threadId ?? e.id
-    const list = map.get(key)
-    if (list) list.push(e)
-    else map.set(key, [e])
-  }
-  const groups = [...map.entries()].map(([key, items]) => ({
-    key,
-    items: items.sort((a, b) => new Date(a.sentAt ?? a.createdAt).getTime() - new Date(b.sentAt ?? b.createdAt).getTime()),
-  }))
-  groups.sort((a, b) => {
-    const aLatest = a.items[a.items.length - 1]
-    const bLatest = b.items[b.items.length - 1]
-    return new Date(bLatest.sentAt ?? bLatest.createdAt).getTime() - new Date(aLatest.sentAt ?? aLatest.createdAt).getTime()
-  })
-  return groups
-})
-
+const emailInteractions = computed<EmailItem[]>(() => filteredInteractions.value.filter((i): i is EmailItem => i.type === 'EMAIL'))
 const noteInteractions = computed<NoteItem[]>(() => filteredInteractions.value.filter((i): i is NoteItem => i.type === 'NOTE'))
+
+const fulfillment = computed(() => interactionsData.value?.fulfillment ?? { myToThem: null, themToUs: null })
 
 // ── Interaction CRUD ─────────────────────────────────────────────────────────
 
-type NewInteractionMode = null | 'NOTE' | 'EMAIL'
+type NewInteractionMode = null | 'NOTE'
 const newMode = ref<NewInteractionMode>(null)
-
-const noteForm = ref({ content: '' })
-const mailForm = ref({ direction: 'SENT' as 'SENT' | 'RECEIVED', subject: '', body: '', sentAt: '', fromAddress: '', toAddress: '' })
 
 const editingId = ref<string | null>(null)
 const editingContent = ref('')
-
-const statusForm = ref({ negotiationStatus: null as string | null })
-
-// Assignee management
-const addAssigneeInteractionId = ref<string | null>(null)
-const addAssigneeUserId = ref('')
-
-function resetForms() {
-  newMode.value = null
-  noteForm.value = { content: '' }
-  mailForm.value = { direction: 'SENT', subject: '', body: '', sentAt: '', fromAddress: '', toAddress: '' }
-}
-
-async function createNote() {
-  if (!noteForm.value.content.trim()) return
-  await $fetch(`/api/partners/${id}/notes`, {
-    method: 'POST',
-    body: { content: noteForm.value.content.trim() },
-  })
-  resetForms()
-  toast.show('Poznámka přidána', 'success')
-  await refresh()
-}
-
-async function createEmail() {
-  const f = mailForm.value
-  if (!f.subject.trim() || !f.sentAt) return
-  const toAddr = f.toAddress.trim().toLowerCase()
-  await $fetch(`/api/partners/${id}/emails`, {
-    method: 'POST',
-    body: {
-      direction: f.direction,
-      subject: f.subject.trim(),
-      content: f.body.trim() || null,
-      sentAt: f.sentAt,
-      fromAddress: f.fromAddress.trim() || null,
-      toAddress: toAddr || null,
-    },
-  })
-  if (toAddr && !partner.value?.contacts.some(c => c.address === toAddr)) {
-    const updated = [...additionalAddresses.value, toAddr]
-    if (!additionalAddresses.value.includes(toAddr)) {
-      await $fetch(`/api/partners/${id}/settings`, {
-        method: 'PATCH',
-        body: { additionalAddresses: updated },
-      }).catch(() => {})
-    }
-  }
-  resetForms()
-  toast.show('Email uložen', 'success')
-  await refresh()
-}
 
 function startEdit(i: NoteItem) {
   editingId.value = i.id
@@ -467,54 +213,23 @@ async function saveEdit() {
 // ── Fulfillment inline editing ───────────────────────────────────────────────
 
 const fulfillmentEditingField = ref<{ field: 'myToThem' | 'themToUs'; value: string } | null>(null)
-const fulfillmentTextarea = ref<HTMLTextAreaElement[] | null>(null)
 
-/**
- * Normalize plain text into markdown checklist format.
- * Each non-empty line gets "- [ ] " prefix if it doesn't already have one.
- * Lines that already have - [ ] or - [x] are left as-is.
- * Leading list markers like "- ", "* ", or numbered "1. " are stripped before adding prefix.
- */
-function normalizeChecklist(text: string): string {
-  return text
-    .split('\n')
-    .map(line => {
-      const trimmed = line.trim()
-      if (!trimmed) return ''
-      // Already has checklist syntax
-      if (/^- \[(x| )\]\s*/i.test(trimmed)) return trimmed
-      // Strip common list prefixes before adding checkbox
-      const cleaned = trimmed
-        .replace(/^[-*•]\s+/, '')
-        .replace(/^\d+\.\s+/, '')
-      return `- [ ] ${cleaned}`
-    })
-    .filter(l => l)
-    .join('\n')
+function startFulfillmentEdit(field: 'myToThem' | 'themToUs') {
+  fulfillmentEditingField.value = { field, value: fulfillment.value[field] ?? '' }
 }
 
-interface ChecklistLine {
-  text: string
-  checked: boolean
-  lineIndex: number
-}
-
-function parseChecklistLines(text: string): ChecklistLine[] {
-  return text.split('\n').reduce<ChecklistLine[]>((acc, line, idx) => {
-    const trimmed = line.trim()
-    if (!trimmed) return acc
-    const checkedMatch = /^- \[x\]\s*(.*)/i.exec(trimmed)
-    const uncheckedMatch = /^- \[ \]\s*(.*)/.exec(trimmed)
-    if (checkedMatch) {
-      acc.push({ text: checkedMatch[1], checked: true, lineIndex: idx })
-    } else if (uncheckedMatch) {
-      acc.push({ text: uncheckedMatch[1], checked: false, lineIndex: idx })
-    } else {
-      // Fallback: treat as unchecked
-      acc.push({ text: trimmed, checked: false, lineIndex: idx })
-    }
-    return acc
-  }, [])
+async function saveFulfillmentField() {
+  if (!fulfillmentEditingField.value) return
+  const { field, value } = fulfillmentEditingField.value
+  fulfillmentEditingField.value = null
+  // Normalize to checklist format before saving
+  const normalized = value.trim() ? normalizeChecklist(value) : null
+  await $fetch(`/api/partners/${id}/negotiation/fulfillment`, {
+    method: 'PATCH',
+    body: { [field]: normalized },
+  })
+  toast.show('Obsah plnění uložen', 'success')
+  await refreshInteractions()
 }
 
 const togglingItem = ref<{ field: string; lineIndex: number } | null>(null)
@@ -537,80 +252,12 @@ async function toggleCheckItem(field: 'myToThem' | 'themToUs', lineIndex: number
   }
 }
 
-function startFulfillmentEdit(field: 'myToThem' | 'themToUs') {
-  fulfillmentEditingField.value = { field, value: fulfillment.value[field] ?? '' }
-  nextTick(() => {
-    fulfillmentTextarea.value?.[0]?.focus()
-  })
-}
-
-async function saveFulfillmentField() {
-  if (!fulfillmentEditingField.value) return
-  const { field, value } = fulfillmentEditingField.value
-  fulfillmentEditingField.value = null
-  // Normalize to checklist format before saving
-  const normalized = value.trim() ? normalizeChecklist(value) : null
-  await $fetch(`/api/partners/${id}/negotiation/fulfillment`, {
-    method: 'PATCH',
-    body: { [field]: normalized },
-  })
-  toast.show('Obsah plnění uložen', 'success')
-  await refreshInteractions()
-}
-
-async function updateStatus(value: string | null) {
-  await $fetch(`/api/partners/${id}/status`, {
-    method: 'PATCH',
-    body: { negotiationStatus: value },
-  })
-  toast.show('Stav jednání aktualizován', 'success')
-  await refreshPartner()
-}
-
-// v-model (not a plain :value/@change) so Vue's SSR renderer marks the right <option> as
-// selected — a bound :value on a native <select> only sets the DOM property client-side,
-// which caused a hydration mismatch on every load with a non-empty negotiationStatus.
-const negotiationStatusModel = computed({
-  get: () => partner.value?.negotiationStatus ?? '',
-  set: (value: string) => { updateStatus(value || null) },
-})
-
-
 async function deleteInteraction(i: Interaction) {
   if (!confirm('Opravdu chcete smazat tuto položku? Tato akce je nevratná.')) return
   const path = i.type === 'EMAIL' ? 'emails' : 'notes'
   await $fetch(`/api/partners/${id}/${path}/${i.id}`, { method: 'DELETE' })
   toast.show('Položka smazána', 'success')
   await refresh()
-}
-
-const showAddAssignee = ref(false)
-const addAssigneeSelectEl = ref<HTMLSelectElement | null>(null)
-
-function openAddAssignee() {
-  showAddAssignee.value = true
-}
-
-async function addSolutionAssignee() {
-  if (!addAssigneeUserId.value) return
-  await $fetch(`/api/partners/${id}/status`, {
-    method: 'PATCH',
-    body: { addAssigneeId: addAssigneeUserId.value },
-  })
-  addAssigneeUserId.value = ''
-  showAddAssignee.value = false
-  toast.show('Řešitel přidán', 'success')
-  await refreshPartner()
-}
-
-async function removeSolutionAssignee(userId: string) {
-  if (!confirm('Odstranit tohoto uživatele z řešitelů partnera?')) return
-  await $fetch(`/api/partners/${id}/status`, {
-    method: 'PATCH',
-    body: { removeAssigneeId: userId },
-  })
-  toast.show('Řešitel odebrán', 'success')
-  await refreshPartner()
 }
 
 async function toggleEvent(i: Interaction) {
@@ -631,11 +278,6 @@ async function toggleEvent(i: Interaction) {
     }
   }
 }
-
-const unassignedSolutionUsers = computed(() => {
-  const assigned = new Set(partner.value?.assignees.map(a => a.id))
-  return (allUsers.value ?? []).filter(u => !assigned.has(u.id))
-})
 
 // ── Email composer ────────────────────────────────────────────────────────────
 
@@ -719,15 +361,8 @@ async function cancelScheduledEmail(se: ScheduledEmailItem) {
   }
 }
 
-function fmtScheduled(iso: string) {
-  return new Date(iso).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 function fmtDateShort(d: string) {
   return new Date(d).toLocaleDateString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
@@ -737,160 +372,21 @@ const TYPE_LABELS: Record<string, string> = {
   EMAIL: 'Email',
   FULFILLMENT: 'Obsah plnění',
 }
-const TYPE_COLORS: Record<string, string> = {
-  NOTE: 'bg-violet-100 text-violet-700',
-  EMAIL: 'bg-blue-100 text-blue-700',
-  FULFILLMENT: 'bg-emerald-100 text-emerald-700',
-}
 </script>
 
 <template>
   <div v-if="partner">
-    <!-- ── Header ── -->
-    <div class="mb-6">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="text-2xl font-semibold text-gray-800">{{ partner.canonicalName }}</h1>
-            <a
-              v-if="partner.payload.website || partner.payload.url"
-              :href="partner.payload.website || partner.payload.url"
-              target="_blank"
-              rel="noopener"
-              class="text-indigo-400 hover:text-indigo-600 text-sm"
-            >↗ web</a>
-            <span
-              v-if="partner.payload.industry || partner.payload.type"
-              class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600"
-            >{{ partner.payload.industry || partner.payload.type }}</span>
-          </div>
-          <div v-if="partner.payload.summary || partner.payload.description" class="mt-1.5 text-sm text-gray-400 max-w-xl line-clamp-2">
-            {{ partner.payload.summary || partner.payload.description }}
-          </div>
-        </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
-          <div v-if="canEdit" class="relative flex">
-            <button
-              class="text-xs px-3 py-1.5 rounded-l-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-1.5 disabled:opacity-40"
-              :disabled="syncDisabled"
-              @click="syncNow()"
-            >
-              <svg v-if="gmailSyncActive" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-              <svg v-else class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              {{ gmailSyncActive ? 'Sync...' : 'Sync' }}
-            </button>
-            <button
-              class="text-xs px-1.5 py-1.5 rounded-r-lg border border-l-0 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-              :disabled="syncDisabled"
-              @click.stop="showSyncDropdown = !showSyncDropdown"
-            >
-              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            <div v-if="showSyncDropdown" class="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl p-4 w-64" @click.stop>
-              <h4 class="text-xs font-medium text-gray-700 mb-2">Hloubka synchronizace</h4>
-              <p class="text-[11px] text-gray-400 mb-3">Znovu načte maily z minulosti. Duplikáty se nevytvoří.</p>
-              <div class="flex items-center gap-2 mb-3">
-                <input v-model.number="syncLookbackDays" type="number" min="1" max="365" class="w-20 text-sm px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 text-center" />
-                <span class="text-xs text-gray-500">dní zpět</span>
-              </div>
-              <div class="flex gap-1 mb-3">
-                <button v-for="d in [30, 90, 180, 365]" :key="d" class="text-[10px] px-2 py-1 rounded border transition-colors" :class="syncLookbackDays === d ? 'border-indigo-300 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'" @click="syncLookbackDays = d">{{ d }}d</button>
-              </div>
-              <button
-                :disabled="syncDisabled"
-                class="w-full text-xs px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                @click="syncNow(syncLookbackDays)"
-              >Synchronizovat {{ syncLookbackDays }} dní zpět</button>
-            </div>
-          </div>
-          <!-- Stav jednání inline vedle tlačítek -->
-          <div v-if="canEdit || partner.negotiationStatus" class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-400 font-medium whitespace-nowrap">Stav:</span>
-            <select
-              v-if="canEdit"
-              v-model="negotiationStatusModel"
-              class="text-xs px-2 py-1.5 border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-indigo-300 bg-white min-w-36"
-            >
-              <option value="">—</option>
-              <option v-for="key in EDITABLE_NEGOTIATION_STATUSES" :key="key" :value="key">{{ NEGOTIATION_STATUS_LABELS[key] }}</option>
-            </select>
-            <span
-              v-else-if="partner.negotiationStatus"
-              :class="['text-xs px-2 py-1 rounded font-medium', NEGOTIATION_STATUS_COLORS[partner.negotiationStatus] ?? 'bg-gray-100 text-gray-600']"
-            >{{ NEGOTIATION_STATUS_LABELS[partner.negotiationStatus] }}</span>
-          </div>
-          <button
-            v-if="partner.payload.description"
-            class="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-            @click="showProfileModal = true"
-          >
-            Profil
-          </button>
-          <button
-            v-if="canManageAssignees"
-            class="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
-            @click="showEditModal = true"
-          >
-            Upravit profil
-          </button>
-        </div>
-      </div>
-
-      <!-- Souhrnné přiřazení -->
-      <div v-if="partner.assignees.length || canManageAssignees" class="mt-4 flex items-center gap-3 flex-wrap">
-        <span class="text-xs text-gray-400 font-medium">Přiřazeni:</span>
-        <div class="flex items-center gap-2">
-          <template v-for="a in partner.assignees" :key="a.id">
-            <button
-              v-if="canManageAssignees"
-              class="group relative flex items-center gap-1.5"
-              :title="a.name"
-              @click="removeSolutionAssignee(a.id)"
-            >
-              <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover group-hover:opacity-60" referrerpolicy="no-referrer" />
-              <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium group-hover:opacity-60">{{ a.name.charAt(0).toUpperCase() }}</div>
-              <span class="text-xs text-gray-500 group-hover:text-red-400">{{ a.name }}</span>
-              <span class="absolute -top-0.5 -left-0.5 hidden group-hover:flex w-3.5 h-3.5 bg-red-400 rounded-full items-center justify-center text-white text-[9px]">×</span>
-            </button>
-            <span v-else :title="a.name" class="flex items-center gap-1.5">
-              <img v-if="a.image" :src="a.image" :alt="a.name" class="w-7 h-7 rounded-full ring-2 ring-white object-cover" referrerpolicy="no-referrer" />
-              <div v-else class="w-7 h-7 rounded-full ring-2 ring-white bg-indigo-400 flex items-center justify-center text-white text-[11px] font-medium">{{ a.name.charAt(0).toUpperCase() }}</div>
-              <span class="text-xs text-gray-500">{{ a.name }}</span>
-            </span>
-          </template>
-          <div class="relative ml-1">
-            <button
-              v-if="canManageAssignees"
-              class="w-7 h-7 rounded-full border border-dashed flex items-center justify-center text-xs transition-colors"
-              :class="showAddAssignee ? 'border-indigo-300 text-indigo-500 bg-indigo-50' : 'border-gray-300 text-gray-400 hover:text-indigo-500 hover:border-indigo-300'"
-              @click.stop="showAddAssignee = !showAddAssignee"
-            >+</button>
-            <div
-              v-if="showAddAssignee && unassignedSolutionUsers.length"
-              class="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl py-1 min-w-36"
-              @click.stop
-            >
-              <button
-                v-for="u in unassignedSolutionUsers"
-                :key="u.id"
-                class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-left transition-colors"
-                @click="addAssigneeUserId = u.id; addSolutionAssignee(); showAddAssignee = false"
-              >
-                <img v-if="u.image" :src="u.image" :alt="u.name" class="w-5 h-5 rounded-full object-cover" referrerpolicy="no-referrer" />
-                <div v-else class="w-5 h-5 rounded-full bg-indigo-400 flex items-center justify-center text-white text-[10px] font-medium">{{ u.name.charAt(0).toUpperCase() }}</div>
-                <span class="text-xs text-gray-700">{{ u.name }}</span>
-              </button>
-            </div>
-            <div
-              v-else-if="showAddAssignee && !unassignedSolutionUsers.length"
-              class="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl py-2 px-3 min-w-36"
-            >
-              <span class="text-xs text-gray-400">Nikdo další</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <NegotiationsPartnerHeader
+      :global-record-id="id"
+      :partner="partner"
+      :can-edit="canEdit"
+      :can-manage-assignees="canManageAssignees"
+      :all-users="allUsers ?? []"
+      @synced="refreshInteractions(); refreshPartner()"
+      @partner-changed="refreshPartner()"
+      @open-profile="showProfileModal = true"
+      @open-edit="showEditModal = true"
+    />
 
     <!-- ── Toolbar ── -->
     <div class="flex items-center justify-between gap-4 mb-6">
@@ -939,362 +435,92 @@ const TYPE_COLORS: Record<string, string> = {
 
     <!-- ── Scheduled emails (not yet sent) ── -->
     <div v-if="scheduledEmails?.length" class="mb-6 space-y-2">
-      <div
-        v-for="se in scheduledEmails"
-        :key="se.id"
-        class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start justify-between gap-3"
-      >
-        <div class="min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span v-if="se.source === 'gmail'" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
-              Naplánováno v Gmailu
-            </span>
-            <span v-else class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 uppercase tracking-wide">
-              {{ se.status === 'FAILED' ? 'Selhalo' : se.status === 'SENDING' ? 'Odesílá se…' : 'Naplánováno' }}
-            </span>
-            <span class="text-sm font-medium text-amber-900">{{ se.subject }}</span>
-          </div>
-          <p v-if="se.source === 'gmail'" class="text-xs text-amber-700 mt-1">
-            Komu: <span class="font-mono">{{ se.toAddress }}</span> · čas odeslání zná jen Gmail · připraveno bokem uživatelem {{ se.createdBy.name }}
-          </p>
-          <p v-else class="text-xs text-amber-700 mt-1">
-            Komu: <span class="font-mono">{{ se.toAddress }}</span> · odejde
-            <strong>{{ fmtScheduled(se.scheduledFor!) }}</strong> · připravil/a {{ se.createdBy.name }}
-          </p>
-          <p v-if="se.status === 'FAILED' && se.errorMessage" class="text-xs text-red-600 mt-1">{{ se.errorMessage }}</p>
-        </div>
-        <div v-if="se.source === 'gmail'" class="flex items-center gap-2 flex-shrink-0">
-          <a
-            href="https://mail.google.com/mail/u/0/#scheduled"
-            target="_blank"
-            rel="noopener"
-            class="text-xs px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors"
-          >Otevřít v Gmailu</a>
-        </div>
-        <div v-else-if="(se.status === 'PENDING' || se.status === 'FAILED') && canEdit" class="flex items-center gap-2 flex-shrink-0">
-          <button
-            v-if="se.status === 'PENDING'"
-            :disabled="scheduledActionLoading === se.id"
-            class="text-xs px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 disabled:opacity-40 transition-colors"
-            @click="editScheduledEmail(se)"
-          >Upravit</button>
-          <button
-            :disabled="scheduledActionLoading === se.id"
-            class="text-xs px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-            @click="sendScheduledNow(se)"
-          >{{ se.status === 'FAILED' ? 'Zkusit znovu' : 'Odeslat nyní' }}</button>
-          <button
-            :disabled="scheduledActionLoading === se.id"
-            class="text-xs px-2.5 py-1.5 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
-            @click="cancelScheduledEmail(se)"
-          >{{ se.status === 'FAILED' ? 'Zavřít' : 'Zrušit' }}</button>
-        </div>
-      </div>
+      <NegotiationsScheduledEmailsPanel
+        :scheduled-emails="scheduledEmails"
+        :can-edit="canEdit"
+        :action-loading="scheduledActionLoading"
+        @edit="editScheduledEmail"
+        @send-now="sendScheduledNow"
+        @cancel="cancelScheduledEmail"
+      />
     </div>
 
     <!-- ── Unknown Contact Warnings ── -->
     <div v-if="unknownContacts.size > 0" class="mb-6 space-y-3">
-      <div
-        v-for="[email, emails] of unknownContacts"
-        :key="email"
-        class="bg-amber-50 border border-amber-200 rounded-xl p-4"
-      >
-        <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-amber-800">
-              Neznámý kontakt: <span class="font-mono">{{ email }}</span>
-            </p>
-            <p class="text-xs text-amber-600 mt-0.5">
-              Nalezeno {{ emails.length }} {{ emails.length === 1 ? 'email' : emails.length < 5 ? 'emaily' : 'emailů' }} se shodnou doménou.
-              Je to validní kontakt pro toto jednání?
-            </p>
-
-            <!-- Add contact globally inline form -->
-            <div v-if="addContactForm?.email === email" class="mt-3 bg-white border border-amber-100 rounded-lg p-3 space-y-2">
-              <div class="grid grid-cols-3 gap-2">
-                <input v-model="addContactForm.firstName" type="text" placeholder="Jméno" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-                <input v-model="addContactForm.lastName" type="text" placeholder="Příjmení" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-                <input v-model="addContactForm.role" type="text" placeholder="Pozice" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-                <select v-model="addContactForm.contactType" class="text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300 bg-white">
-                  <option v-for="t in CONTACT_TYPE_OPTIONS" :key="t" :value="t">{{ t }}</option>
-                </select>
-                <input v-model="addContactForm.note" type="text" placeholder="Poznámka" class="col-span-2 text-sm px-2 py-1.5 border border-gray-200 rounded-md focus:outline-none focus:border-indigo-300" />
-              </div>
-              <div class="flex justify-end gap-2">
-                <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="addContactForm = null">Zrušit</button>
-                <button
-                  :disabled="unknownContactActionLoading === email"
-                  class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                  @click="submitAddContact"
-                >Uložit globálně</button>
-              </div>
-            </div>
-
-            <!-- Action buttons -->
-            <div v-else class="flex items-center gap-2 mt-3">
-              <button
-                :disabled="unknownContactActionLoading === email"
-                class="text-xs px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-40 transition-colors"
-                @click="handleUnknownContactAction('blacklist', email)"
-              >Ne</button>
-              <button
-                :disabled="unknownContactActionLoading === email"
-                class="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                @click="handleUnknownContactAction('save_local', email)"
-              >Uložit</button>
-              <button
-                :disabled="unknownContactActionLoading === email"
-                class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                @click="openAddContactForm(email)"
-              >Uložit globálně</button>
-              <svg v-if="unknownContactActionLoading === email" class="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-            </div>
-          </div>
-        </div>
-      </div>
+      <NegotiationsUnknownContactsPanel
+        :global-record-id="id"
+        :unknown-contacts="unknownContacts"
+        @changed="refresh()"
+      />
     </div>
 
     <!-- ── New Interaction Forms ── -->
-    <!-- NOTE form -->
-    <div v-if="newMode === 'NOTE'" class="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
-      <textarea v-model="noteForm.content" rows="3" placeholder="Nová poznámka..." class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none mb-3" />
-      <div class="flex justify-end gap-2">
-        <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="resetForms">Zrušit</button>
-        <button :disabled="!noteForm.content.trim()" class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors" @click="createNote">Přidat poznámku</button>
-      </div>
-    </div>
-
-    <!-- EMAIL form -->
-    <div v-if="newMode === 'EMAIL'" class="mb-6 bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-      <div class="flex gap-2">
-        <button
-          v-for="dir in [{ key: 'SENT', label: 'Odeslali jsme' }, { key: 'RECEIVED', label: 'Obdrželi jsme' }]"
-          :key="dir.key"
-          :class="['flex-1 text-sm py-2 rounded-lg border transition-colors font-medium', mailForm.direction === dir.key ? (dir.key === 'SENT' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-green-50 border-green-300 text-green-700') : 'border-gray-200 text-gray-500 hover:border-gray-300']"
-          @click="mailForm.direction = dir.key as 'SENT' | 'RECEIVED'"
-        >{{ dir.label }}</button>
-      </div>
-      <input v-model="mailForm.subject" type="text" placeholder="Předmět *" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
-      <div class="flex gap-2">
-        <input v-model="mailForm.sentAt" type="datetime-local" class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
-        <input v-model="mailForm.fromAddress" type="email" :placeholder="mailForm.direction === 'SENT' ? 'Od (nás)' : 'Od (partnera)'" class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300" />
-        <div class="flex-1 relative">
-          <input
-            v-model="mailForm.toAddress"
-            type="email"
-            list="partner-contacts-list"
-            :placeholder="mailForm.direction === 'SENT' ? 'Komu (partner)' : 'Komu (nás)'"
-            class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
-          />
-          <datalist id="partner-contacts-list">
-            <option v-for="c in partner.contacts.filter(c => c.address)" :key="c.id" :value="c.address">
-              {{ [c.firstName, c.lastName].filter(Boolean).join(' ') }}{{ c.role ? ` — ${c.role}` : '' }}
-            </option>
-          </datalist>
-        </div>
-      </div>
-      <textarea v-model="mailForm.body" rows="3" placeholder="Text emailu (volitelný)" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
-      <div class="flex justify-end gap-2">
-        <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50" @click="resetForms">Zrušit</button>
-        <button :disabled="!mailForm.subject.trim() || !mailForm.sentAt" class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors" @click="createEmail">Uložit email</button>
-      </div>
-    </div>
+    <NegotiationsNewInteractionForms
+      :global-record-id="id"
+      :mode="newMode"
+      @cancel="newMode = null"
+      @created="newMode = null; refresh()"
+    />
 
     <!-- ── Fulfillment checklist (jedna na jednání, mimo seznam interakcí) ── -->
     <div v-if="typeFilter === 'FULFILLMENT'" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <h4 class="text-xs font-semibold text-blue-800">My jim</h4>
-          <div class="flex items-center gap-2">
-            <span v-if="fulfillment.myToThem" class="text-[10px] text-blue-400">
-              {{ parseChecklistLines(fulfillment.myToThem).filter(l => l.checked).length }}/{{ parseChecklistLines(fulfillment.myToThem).length }}
-            </span>
-            <button v-if="canEdit" class="text-[10px] text-gray-400 hover:text-blue-600 transition-colors" @click.stop="startFulfillmentEdit('myToThem')">✏️</button>
-          </div>
-        </div>
-        <!-- Progress bar -->
-        <div v-if="fulfillment.myToThem && parseChecklistLines(fulfillment.myToThem).length > 0" class="w-full bg-blue-100 rounded-full h-1 mb-2 overflow-hidden">
-          <div
-            class="bg-blue-500 h-1 rounded-full transition-all duration-300"
-            :style="{ width: (parseChecklistLines(fulfillment.myToThem).filter(l => l.checked).length / parseChecklistLines(fulfillment.myToThem).length * 100) + '%' }"
-          />
-        </div>
-        <div v-if="fulfillmentEditingField?.field === 'myToThem'">
-          <textarea
-            ref="fulfillmentTextarea"
-            :value="fulfillmentEditingField.value"
-            rows="6"
-            placeholder="Každý řádek = jedna položka..."
-            class="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none bg-white font-mono"
-            @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
-            @blur="saveFulfillmentField()"
-            @keydown.escape="fulfillmentEditingField = null"
-          />
-          <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
-        </div>
-        <div v-else class="bg-blue-50 rounded-lg p-3 min-h-[3rem]">
-          <div v-if="fulfillment.myToThem" class="space-y-1">
-            <label
-              v-for="item in parseChecklistLines(fulfillment.myToThem)"
-              :key="item.lineIndex"
-              :class="[
-                'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
-                canEdit ? 'cursor-pointer hover:bg-blue-100/50' : 'cursor-default',
-                togglingItem?.field === 'myToThem' && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
-              ]"
-              @click.prevent="canEdit && toggleCheckItem('myToThem', item.lineIndex)"
-            >
-              <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-blue-300 bg-white group-hover:border-blue-400']">
-                <span v-if="item.checked">✓</span>
-              </span>
-              <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
-            </label>
-          </div>
-          <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="canEdit && startFulfillmentEdit('myToThem')">Klikněte pro přidání...</p>
-        </div>
-      </div>
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <h4 class="text-xs font-semibold text-green-800">Oni nám</h4>
-          <div class="flex items-center gap-2">
-            <span v-if="fulfillment.themToUs" class="text-[10px] text-green-400">
-              {{ parseChecklistLines(fulfillment.themToUs).filter(l => l.checked).length }}/{{ parseChecklistLines(fulfillment.themToUs).length }}
-            </span>
-            <button v-if="canEdit" class="text-[10px] text-gray-400 hover:text-green-600 transition-colors" @click.stop="startFulfillmentEdit('themToUs')">✏️</button>
-          </div>
-        </div>
-        <!-- Progress bar -->
-        <div v-if="fulfillment.themToUs && parseChecklistLines(fulfillment.themToUs).length > 0" class="w-full bg-green-100 rounded-full h-1 mb-2 overflow-hidden">
-          <div
-            class="bg-green-500 h-1 rounded-full transition-all duration-300"
-            :style="{ width: (parseChecklistLines(fulfillment.themToUs).filter(l => l.checked).length / parseChecklistLines(fulfillment.themToUs).length * 100) + '%' }"
-          />
-        </div>
-        <div v-if="fulfillmentEditingField?.field === 'themToUs'">
-          <textarea
-            ref="fulfillmentTextarea"
-            :value="fulfillmentEditingField.value"
-            rows="6"
-            placeholder="Každý řádek = jedna položka..."
-            class="w-full text-sm px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-400 resize-none bg-white font-mono"
-            @input="fulfillmentEditingField!.value = ($event.target as HTMLTextAreaElement).value"
-            @blur="saveFulfillmentField()"
-            @keydown.escape="fulfillmentEditingField = null"
-          />
-          <p class="text-[10px] text-gray-400 mt-1">Každý řádek = položka. Formát se automaticky převede na checklist.</p>
-        </div>
-        <div v-else class="bg-green-50 rounded-lg p-3 min-h-[3rem]">
-          <div v-if="fulfillment.themToUs" class="space-y-1">
-            <label
-              v-for="item in parseChecklistLines(fulfillment.themToUs)"
-              :key="item.lineIndex"
-              :class="[
-                'flex items-start gap-2 py-0.5 rounded transition-all duration-200 group',
-                canEdit ? 'cursor-pointer hover:bg-green-100/50' : 'cursor-default',
-                togglingItem?.field === 'themToUs' && togglingItem?.lineIndex === item.lineIndex ? 'opacity-50' : '',
-              ]"
-              @click.prevent="canEdit && toggleCheckItem('themToUs', item.lineIndex)"
-            >
-              <span :class="['flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px] transition-all duration-200', item.checked ? 'bg-green-500 border-green-500 text-white' : 'border-green-300 bg-white group-hover:border-green-400']">
-                <span v-if="item.checked">✓</span>
-              </span>
-              <span :class="['text-sm leading-snug transition-all duration-200', item.checked ? 'line-through text-gray-400' : 'text-gray-700']">{{ item.text }}</span>
-            </label>
-          </div>
-          <p v-else class="text-xs text-gray-400 italic cursor-pointer" @click="canEdit && startFulfillmentEdit('themToUs')">Klikněte pro přidání...</p>
-        </div>
-      </div>
+      <NegotiationsFulfillmentChecklist
+        title="My jim"
+        theme="blue"
+        :content="fulfillment.myToThem"
+        :can-edit="canEdit"
+        :editing="fulfillmentEditingField?.field === 'myToThem'"
+        :editing-value="fulfillmentEditingField?.field === 'myToThem' ? fulfillmentEditingField.value : ''"
+        :toggling-line-index="togglingItem?.field === 'myToThem' ? togglingItem.lineIndex : null"
+        @start-edit="startFulfillmentEdit('myToThem')"
+        @update:editing-value="v => { if (fulfillmentEditingField) fulfillmentEditingField.value = v }"
+        @save="saveFulfillmentField"
+        @cancel-edit="fulfillmentEditingField = null"
+        @toggle-line="i => toggleCheckItem('myToThem', i)"
+      />
+      <NegotiationsFulfillmentChecklist
+        title="Oni nám"
+        theme="green"
+        :content="fulfillment.themToUs"
+        :can-edit="canEdit"
+        :editing="fulfillmentEditingField?.field === 'themToUs'"
+        :editing-value="fulfillmentEditingField?.field === 'themToUs' ? fulfillmentEditingField.value : ''"
+        :toggling-line-index="togglingItem?.field === 'themToUs' ? togglingItem.lineIndex : null"
+        @start-edit="startFulfillmentEdit('themToUs')"
+        @update:editing-value="v => { if (fulfillmentEditingField) fulfillmentEditingField.value = v }"
+        @save="saveFulfillmentField"
+        @cancel-edit="fulfillmentEditingField = null"
+        @toggle-line="i => toggleCheckItem('themToUs', i)"
+      />
     </div>
 
     <!-- ── Interaction List ── -->
     <div class="space-y-3">
-      <!-- Emails: grouped into Gmail-style threads, only the latest message per thread shown by default -->
       <template v-if="typeFilter === 'EMAIL'">
-        <div v-for="group in emailThreadGroups" :key="group.key" class="space-y-2">
-          <NegotiationsEmailInteractionCard
-            :email="group.items[group.items.length - 1]"
-            :expanded="expandedEvents.has(group.items[group.items.length - 1].id)"
-            :email-display-mode="emailDisplayMode"
-            @toggle="toggleEvent(group.items[group.items.length - 1])"
-            @reply="openReply(group.items[group.items.length - 1])"
-            @reply-all="openReply(group.items[group.items.length - 1], true)"
-            @delete="deleteInteraction(group.items[group.items.length - 1])"
-          />
-          <template v-if="group.items.length > 1">
-            <button
-              class="text-xs text-gray-400 hover:text-gray-600 pl-1 transition-colors"
-              @click="toggleThread(group.key)"
-            >
-              {{ expandedThreads.has(group.key) ? '▾' : '▸' }}
-              {{ expandedThreads.has(group.key) ? 'Skrýt' : 'Zobrazit' }}
-              {{ group.items.length - 1 }} {{ group.items.length - 1 === 1 ? 'starší zprávu' : group.items.length - 1 < 5 ? 'starší zprávy' : 'starších zpráv' }} ve vlákně
-            </button>
-            <div v-if="expandedThreads.has(group.key)" class="space-y-2 pl-3 border-l-2 border-gray-100">
-              <NegotiationsEmailInteractionCard
-                v-for="i in group.items.slice(0, -1)"
-                :key="i.id"
-                :email="i"
-                :expanded="expandedEvents.has(i.id)"
-                :email-display-mode="emailDisplayMode"
-                @toggle="toggleEvent(i)"
-                @reply="openReply(i)"
-                @reply-all="openReply(i, true)"
-                @delete="deleteInteraction(i)"
-              />
-            </div>
-          </template>
-        </div>
-
-        <p v-if="!emailThreadGroups.length" class="text-center py-16 text-gray-300 text-sm select-none">
-          Žádná jednání tohoto typu
-        </p>
+        <NegotiationsEmailThreadList
+          :emails="emailInteractions"
+          :expanded-events="expandedEvents"
+          :email-display-mode="emailDisplayMode"
+          @toggle="toggleEvent"
+          @reply="openReply($event)"
+          @reply-all="openReply($event, true)"
+          @delete="deleteInteraction"
+        />
       </template>
 
       <!-- Notes -->
       <template v-else>
-        <div
-          v-for="i in noteInteractions"
-          :key="i.id"
-          class="border rounded-xl p-4 transition-colors border-gray-200 bg-white"
-        >
-          <!-- Header row -->
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <div class="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-              <span v-if="typeFilter === 'FULFILLMENT'" class="text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-50 text-violet-600 shrink-0">Poznámka</span>
-              <img v-if="i.creator.image" :src="i.creator.image" :alt="i.creator.name" :title="i.creator.name" class="w-4 h-4 rounded-full object-cover shrink-0" referrerpolicy="no-referrer" />
-              <div v-else :title="i.creator.name" class="w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ i.creator.name.charAt(0).toUpperCase() }}</div>
-              <template v-for="a in i.assignees" :key="a.userId">
-                <span class="text-gray-300">+</span>
-                <img v-if="a.user.image" :src="a.user.image" :alt="a.user.name" :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white object-cover shrink-0" referrerpolicy="no-referrer" />
-                <div v-else :title="a.user.name + ' (editoval/a)'" class="w-4 h-4 rounded-full ring-1 ring-white bg-indigo-400 flex items-center justify-center text-white text-[8px] font-medium shrink-0">{{ a.user.name.charAt(0).toUpperCase() }}</div>
-              </template>
-              <span class="truncate">{{ i.creator.name }}</span>
-              <span class="text-gray-300 shrink-0">&middot;</span>
-              <span class="text-gray-300 shrink-0">{{ fmtDate(i.createdAt) }}</span>
-              <span v-if="i.createdAt !== i.updatedAt" class="text-gray-300 shrink-0">(upraveno)</span>
-            </div>
-            <div v-if="i.canEdit" class="flex items-center gap-1 flex-shrink-0">
-              <button class="text-xs text-gray-300 hover:text-indigo-500 transition-colors" @click.stop="startEdit(i)">upravit</button>
-              <button title="Smazat" class="p-1 text-gray-300 hover:text-red-400 transition-colors" @click.stop="deleteInteraction(i)">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
-            </div>
-          </div>
-
-          <div v-if="editingId === i.id">
-            <textarea v-model="editingContent" rows="3" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 resize-none" />
-            <div class="flex gap-2 mt-2">
-              <button class="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" @click="saveEdit">Uložit</button>
-              <button class="text-xs px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors" @click="editingId = null">Zrušit</button>
-            </div>
-          </div>
-          <p v-else-if="i.content" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ i.content }}</p>
-        </div>
-
-        <p v-if="!noteInteractions.length" class="text-center py-16 text-gray-300 text-sm select-none">
-          Žádná jednání tohoto typu
-        </p>
+        <NegotiationsNoteList
+          :notes="noteInteractions"
+          :show-type-badge="typeFilter === 'FULFILLMENT'"
+          :editing-id="editingId"
+          :editing-content="editingContent"
+          @start-edit="startEdit"
+          @update:editing-content="editingContent = $event"
+          @save="saveEdit"
+          @cancel="editingId = null"
+          @delete="deleteInteraction"
+        />
       </template>
     </div>
 
@@ -1326,123 +552,15 @@ const TYPE_COLORS: Record<string, string> = {
     </div>
 
     <!-- ── Email contact management ── -->
-    <div v-if="typeFilter === 'EMAIL'" class="mt-8 space-y-4">
-
-      <!-- Auto-include domain toggle -->
-      <div v-if="detectedDomain" class="flex items-center justify-between gap-4 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-        <div class="flex items-center gap-3 min-w-0">
-          <div>
-            <p class="text-xs font-medium text-gray-700">Automaticky zahrnout doménu</p>
-            <p class="text-[11px] text-gray-400 mt-0.5">Sledovat emaily s doménou <span class="font-mono text-indigo-600">@{{ detectedDomain }}</span></p>
-          </div>
-        </div>
-        <button
-          :class="[
-            'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-            autoIncludeDomain ? 'bg-indigo-600' : 'bg-gray-200'
-          ]"
-          role="switch"
-          :aria-checked="autoIncludeDomain"
-          @click="toggleAutoIncludeDomain"
-        >
-          <span
-            :class="[
-              'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200',
-              autoIncludeDomain ? 'translate-x-4' : 'translate-x-0'
-            ]"
-          />
-        </button>
-      </div>
-
-      <!-- Blacklist + Additional addresses side by side -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        <!-- Blacklist -->
-        <div>
-          <button
-            class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-2"
-            @click="showBlacklist = !showBlacklist"
-          >
-            <span>{{ showBlacklist ? '▾' : '▸' }}</span>
-            <span>Blacklist kontaktů{{ blacklist.length ? ` (${blacklist.length})` : '' }}</span>
-          </button>
-          <div v-if="showBlacklist" class="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <p class="text-[11px] text-gray-400 mb-3">Blokuje se vždy celá e-mailová adresa (ne jen doména nebo jméno před @).</p>
-            <div class="space-y-2 mb-4">
-              <div
-                v-for="email in blacklist"
-                :key="email"
-                class="flex items-center justify-between gap-2 text-sm"
-              >
-                <span class="font-mono text-gray-600 truncate">{{ email }}</span>
-                <button
-                  class="text-xs text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
-                  @click="removeFromBlacklist(email)"
-                >odebrat</button>
-              </div>
-              <p v-if="!blacklist.length" class="text-xs text-gray-400 italic">Žádné blokované adresy</p>
-            </div>
-            <p v-if="blacklistError" class="text-[11px] text-red-500 mb-2">{{ blacklistError }}</p>
-            <div class="flex items-center gap-2">
-              <input
-                v-model="newBlacklistEmail"
-                type="email"
-                list="partner-contacts-list"
-                placeholder="email@example.com"
-                class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-0"
-                @keydown.enter="addToBlacklist"
-              />
-              <button
-                class="text-sm px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex-shrink-0"
-                @click="addToBlacklist"
-              >Přidat</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Additional addresses -->
-        <div>
-          <button
-            class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-2"
-            @click="showAdditionalAddresses = !showAdditionalAddresses"
-          >
-            <span>{{ showAdditionalAddresses ? '▾' : '▸' }}</span>
-            <span>Přídavné adresy{{ additionalAddresses.length ? ` (${additionalAddresses.length})` : '' }}</span>
-          </button>
-          <div v-if="showAdditionalAddresses" class="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <p class="text-[11px] text-gray-400 mb-3">Emaily sledované v rámci tohoto projektu, ale nezapsané do globálního profilu partnera.</p>
-            <div class="space-y-2 mb-4">
-              <div
-                v-for="email in additionalAddresses"
-                :key="email"
-                class="flex items-center justify-between gap-2 text-sm"
-              >
-                <span class="font-mono text-gray-600 truncate">{{ email }}</span>
-                <button
-                  class="text-xs text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
-                  @click="removeAdditionalAddress(email)"
-                >odebrat</button>
-              </div>
-              <p v-if="!additionalAddresses.length" class="text-xs text-gray-400 italic">Žádné přídavné adresy</p>
-            </div>
-            <p v-if="additionalError" class="text-[11px] text-red-500 mb-2">{{ additionalError }}</p>
-            <div class="flex items-center gap-2">
-              <input
-                v-model="newAdditionalEmail"
-                type="email"
-                placeholder="email@example.com"
-                class="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-0"
-                @keydown.enter="addAdditionalAddress"
-              />
-              <button
-                class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
-                @click="addAdditionalAddress"
-              >Přidat</button>
-            </div>
-          </div>
-        </div>
-
-      </div>
+    <div v-if="typeFilter === 'EMAIL'" class="mt-8">
+      <NegotiationsContactManagementPanel
+        :global-record-id="id"
+        :detected-domain="detectedDomain"
+        :auto-include-domain="autoIncludeDomain"
+        :blacklist="blacklist"
+        :additional-addresses="additionalAddresses"
+        @changed="refreshBlacklist()"
+      />
     </div>
 
     <!-- ── Profile modal ── -->
