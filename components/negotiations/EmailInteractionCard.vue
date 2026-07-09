@@ -174,6 +174,19 @@ function fmtDate(d: string) {
 .email-html-preview :deep(p) {
   margin: 0.25rem 0;
 }
+.email-html-preview :deep(ul) {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.25rem 0;
+}
+.email-html-preview :deep(ol) {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.25rem 0;
+}
+.email-html-preview :deep(li) {
+  margin: 0.15rem 0;
+}
 .email-html-preview :deep(table) {
   max-width: 100%;
   border-collapse: collapse;

@@ -274,4 +274,17 @@ async function onDrop(bucket: SignatureItem[], targetId: string) {
 .signature-preview::-webkit-scrollbar { width: 4px; }
 .signature-preview::-webkit-scrollbar-track { background: transparent; }
 .signature-preview::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
+.signature-preview :deep(ul) {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.25rem 0;
+}
+.signature-preview :deep(ol) {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.25rem 0;
+}
+.signature-preview :deep(li) {
+  margin: 0.15rem 0;
+}
 </style>
