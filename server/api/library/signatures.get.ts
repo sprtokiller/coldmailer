@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     prisma.signature.findMany({
       where: { isTemplate: false, authorId: user.id, ...(groupId ? { groupId } : {}) },
       include: { group: { select: { id: true, name: true, color: true } } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
     }),
   ])
 

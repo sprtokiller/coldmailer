@@ -109,6 +109,7 @@ model Signature {
   name       String
   content    String
   isTemplate Boolean  @default(false)
+  order      Int      @default(0)
   groupId    String
   group      Group    @relation(fields: [groupId], references: [id])
   author     User     @relation(fields: [authorId], references: [id])

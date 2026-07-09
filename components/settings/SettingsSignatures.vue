@@ -96,6 +96,29 @@ const personalByGroup = computed(() => {
   }
   return [...map.values()]
 })
+
+// ── Reorder (drag & drop within a group bucket) ──────────────────────────
+const draggedSignatureId = ref<string | null>(null)
+
+function onDragStart(id: string) {
+  draggedSignatureId.value = id
+}
+
+async function onDrop(bucket: SignatureItem[], targetId: string) {
+  const draggedId = draggedSignatureId.value
+  draggedSignatureId.value = null
+  if (!draggedId || draggedId === targetId) return
+
+  const ids = bucket.map(s => s.id)
+  const fromIndex = ids.indexOf(draggedId)
+  const toIndex = ids.indexOf(targetId)
+  if (fromIndex === -1 || toIndex === -1) return
+  ids.splice(fromIndex, 1)
+  ids.splice(fromIndex < toIndex ? toIndex - 1 : toIndex, 0, draggedId)
+
+  await $fetch('/api/library/signatures/reorder', { method: 'POST', body: { ids } })
+  await refresh()
+}
 </script>
 
 <template>
@@ -210,11 +233,17 @@ const personalByGroup = computed(() => {
           <div
             v-for="s in bucket.sigs"
             :key="s.id"
+            draggable="true"
             class="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+            @dragstart="onDragStart(s.id)"
+            @dragover.prevent
+            @drop.prevent="onDrop(bucket.sigs, s.id)"
+            @dragend="draggedSignatureId = null"
           >
-            <div class="flex items-start justify-between mb-2">
-              <span class="text-sm font-medium text-gray-800">{{ s.name }}</span>
-              <div class="flex items-center gap-1">
+            <div class="flex items-start gap-1.5 mb-2">
+              <span class="text-gray-300 cursor-move shrink-0 leading-none select-none" title="Přetáhněte pro přeuspořádání">⠿</span>
+              <span class="text-sm font-medium text-gray-800 mr-auto">{{ s.name }}</span>
+              <div class="flex items-center gap-1 shrink-0">
                 <button
                   class="text-[10px] text-gray-400 hover:text-primary px-1.5 py-0.5 rounded transition-colors"
                   @click="startEdit(s)"
