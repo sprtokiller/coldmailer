@@ -8,11 +8,11 @@ const proxyOrigin = process.env.NUXT_GOOGLE_REDIRECT_URI?.replace(
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
-function getGitCommitHash(): string | null {
+function getGitCommitHash(): string | undefined {
   try {
     return execSync('git rev-parse --short HEAD').toString().trim()
   } catch {
-    return null
+    return undefined
   }
 }
 
