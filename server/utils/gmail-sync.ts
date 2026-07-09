@@ -555,11 +555,17 @@ async function processMessage(
   const subject = headers.subject ?? ''
   const date = headers.date ?? ''
 
+  // Google Calendar's "so-and-so accepted your invitation" notification rewrites From/To
+  // to the organizer's own address, so the partner's address is only findable inside the
+  // .ics ATTENDEE/ORGANIZER lines — fall back to those for address matching.
+  const calendarInfo = analyzeCalendarPart(headers, msg.payload)
+
   const allAddresses = new Set([
     ...extractEmailAddresses(from),
     ...extractEmailAddresses(to),
     ...extractEmailAddresses(cc),
     ...extractEmailAddresses(bcc),
+    ...calendarInfo.attendees.map(a => a.email),
   ])
 
   const matchedEntries: PartnerEmailEntry[] = []
@@ -618,7 +624,7 @@ async function processMessage(
   // Gmail's SENT label (not the From header) is authoritative for direction — some inbound
   // mail (e.g. Google Calendar confirmations) sets From to the recipient's own address.
   const direction = (msg.labelIds ?? []).includes('SENT') ? 'SENT' : 'RECEIVED'
-  const isCalendarBooking = isCalendarBookingConfirmation(headers, msg.payload)
+  const isCalendarBooking = calendarInfo.isBooking
 
   let htmlBody = extractHtmlBody(msg.payload)
   const attachments = extractAttachments(msg.payload)
@@ -788,23 +794,57 @@ function extractAttachments(payload: GmailMessagePart): { filename: string; mime
   return attachments
 }
 
-// Google Calendar sends a new/updated booking as a text/calendar body part with
-// method=REQUEST (cancellations use method=CANCEL, replies method=REPLY) alongside a
-// Sender header of calendar-notification@google.com — both checked to avoid false
-// positives from calendar .ics attachments forwarded by someone else.
-function isCalendarBookingConfirmation(headers: Record<string, string>, payload: GmailMessagePart): boolean {
-  const sender = (headers['sender'] ?? '').toLowerCase()
-  if (!sender.includes('calendar-notification@google.com')) return false
-
-  function hasRequestPart(part: GmailMessagePart): boolean {
-    if (part.mimeType === 'text/calendar') {
-      const contentType = part.headers?.find(h => h.name.toLowerCase() === 'content-type')?.value ?? ''
-      if (/method\s*=\s*request/i.test(contentType)) return true
-    }
-    return part.parts?.some(hasRequestPart) ?? false
+function findCalendarPart(part: GmailMessagePart): GmailMessagePart | null {
+  if (part.mimeType === 'text/calendar') return part
+  for (const child of part.parts ?? []) {
+    const found = findCalendarPart(child)
+    if (found) return found
   }
+  return null
+}
 
-  return hasRequestPart(payload)
+function getIcsMethod(part: GmailMessagePart): string {
+  const contentType = part.headers?.find(h => h.name.toLowerCase() === 'content-type')?.value ?? ''
+  return (contentType.match(/method\s*=\s*(\w+)/i)?.[1] ?? '').toUpperCase()
+}
+
+// ICS lines can be "folded" across multiple physical lines (continuation lines start
+// with a space/tab) — unfold before scanning for ATTENDEE/ORGANIZER entries.
+function parseIcsAttendees(icsText: string): { email: string; partstat: string }[] {
+  const unfolded = icsText.replace(/\r?\n[ \t]/g, '')
+  const results: { email: string; partstat: string }[] = []
+  for (const line of unfolded.split(/\r?\n/)) {
+    if (!/^(ATTENDEE|ORGANIZER)/i.test(line)) continue
+    const mailto = line.match(/mailto:([^\s;]+)/i)
+    if (!mailto) continue
+    const partstat = line.match(/PARTSTAT=([A-Z]+)/i)?.[1] ?? ''
+    results.push({ email: mailto[1].toLowerCase(), partstat: partstat.toUpperCase() })
+  }
+  return results
+}
+
+// Google Calendar sends a booking-relevant message as a text/calendar body part with
+// method=REQUEST (new/updated invite) or method=REPLY (an attendee accepting/declining
+// an invite we sent) — alongside a Sender header of calendar-notification@google.com,
+// checked first to avoid false positives from calendar .ics attachments forwarded by
+// someone else. A REPLY only counts as a booking once accepted — a decline or "maybe"
+// shouldn't flip the negotiation to "Před schůzkou".
+function analyzeCalendarPart(
+  headers: Record<string, string>,
+  payload: GmailMessagePart,
+): { isBooking: boolean; attendees: { email: string; partstat: string }[] } {
+  const sender = (headers['sender'] ?? '').toLowerCase()
+  if (!sender.includes('calendar-notification@google.com')) return { isBooking: false, attendees: [] }
+
+  const part = findCalendarPart(payload)
+  if (!part?.body.data) return { isBooking: false, attendees: [] }
+
+  const method = getIcsMethod(part)
+  const attendees = parseIcsAttendees(base64UrlDecode(part.body.data))
+
+  if (method === 'REQUEST') return { isBooking: true, attendees }
+  if (method === 'REPLY') return { isBooking: attendees.some(a => a.partstat === 'ACCEPTED'), attendees }
+  return { isBooking: false, attendees }
 }
 
 function base64UrlDecode(data: string): string {
