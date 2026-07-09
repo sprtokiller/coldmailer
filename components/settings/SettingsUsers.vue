@@ -75,7 +75,11 @@ async function saveBudget(userId: string) {
 // ── Last login badge ────────────────────────────────────────────────────
 function lastLoginDays(lastLoginAt: string | null): number | null {
   if (!lastLoginAt) return null
-  return Math.floor((Date.now() - new Date(lastLoginAt).getTime()) / (1000 * 60 * 60 * 24))
+  const then = new Date(lastLoginAt)
+  const now = new Date()
+  const thenDate = new Date(then.getFullYear(), then.getMonth(), then.getDate())
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((nowDate.getTime() - thenDate.getTime()) / (1000 * 60 * 60 * 24))
 }
 
 function lastLoginLabel(lastLoginAt: string | null): string {
