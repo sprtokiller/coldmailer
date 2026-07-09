@@ -129,6 +129,10 @@ async function seedGroups() {
       where: { googleId: { not: 'system' } },
     })
     for (const u of realUsers) {
+      const hasAnyRole = await prisma.userProjectRole.findFirst({
+        where: { userId: u.id, projectRole: { projectId: tda27.id } },
+      })
+      if (hasAnyRole) continue
       await prisma.userProjectRole.upsert({
         where: { userId_projectRoleId: { userId: u.id, projectRoleId: defaultRole.id } },
         create: { userId: u.id, projectRoleId: defaultRole.id },
