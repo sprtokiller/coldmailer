@@ -169,7 +169,15 @@ const personalByGroup = computed(() => {
               @click="startFromTemplate(t)"
             >Použít jako základ</button>
           </div>
-          <ClientOnly><div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(t.content)" /></ClientOnly>
+          <ClientOnly>
+            <div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(t.content)" />
+            <template #fallback>
+              <div class="animate-pulse space-y-1.5">
+                <div class="h-2.5 bg-amber-100/70 rounded w-5/6"></div>
+                <div class="h-2.5 bg-amber-100/70 rounded w-2/3"></div>
+              </div>
+            </template>
+          </ClientOnly>
         </div>
       </div>
     </div>
@@ -217,7 +225,15 @@ const personalByGroup = computed(() => {
                 >Smazat</button>
               </div>
             </div>
-            <ClientOnly><div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(s.content)" /></ClientOnly>
+            <ClientOnly>
+              <div class="signature-preview text-xs text-gray-600 leading-relaxed max-h-[195px] overflow-y-auto" v-html="sanitizeHtml(s.content)" />
+              <template #fallback>
+                <div class="animate-pulse space-y-1.5">
+                  <div class="h-2.5 bg-gray-100 rounded w-5/6"></div>
+                  <div class="h-2.5 bg-gray-100 rounded w-2/3"></div>
+                </div>
+              </template>
+            </ClientOnly>
           </div>
         </div>
       </div>

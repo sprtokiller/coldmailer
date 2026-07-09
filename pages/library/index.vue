@@ -725,7 +725,15 @@ function handleNew() {
                 <span class="text-gray-300">&middot;</span>
                 <span>{{ new Date(sig.createdAt).toLocaleDateString('cs-CZ') }}</span>
               </div>
-              <ClientOnly><div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" /></ClientOnly>
+              <ClientOnly>
+                <div class="text-xs text-gray-500 line-clamp-3 mb-3" v-html="safeHtml(sig.content)" />
+                <template #fallback>
+                  <div class="animate-pulse space-y-1.5 mb-3">
+                    <div class="h-2.5 bg-gray-100 rounded w-5/6"></div>
+                    <div class="h-2.5 bg-gray-100 rounded w-2/3"></div>
+                  </div>
+                </template>
+              </ClientOnly>
               <div class="flex items-center gap-2">
                 <button
                   class="text-xs text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg hover:bg-amber-50 transition-colors"
@@ -824,7 +832,15 @@ function handleNew() {
             </template>
           </div>
 
-          <ClientOnly><div class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" /></ClientOnly>
+          <ClientOnly>
+            <div class="text-xs text-gray-500 line-clamp-3 font-mono" v-html="highlightPlaceholders(item.content ?? item.subject ?? '')" />
+            <template #fallback>
+              <div class="animate-pulse space-y-1.5">
+                <div class="h-2.5 bg-gray-100 rounded w-5/6"></div>
+                <div class="h-2.5 bg-gray-100 rounded w-2/3"></div>
+              </div>
+            </template>
+          </ClientOnly>
           <div v-if="item.derivedFromId" class="mt-2 text-xs text-gray-400">
             ↗ odvozeno z jiného dokumentu
           </div>

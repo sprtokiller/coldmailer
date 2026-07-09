@@ -121,24 +121,33 @@ function fmtDate(d: string) {
 
     <!-- Body -->
     <div v-if="expanded && email.content" class="mt-2 pt-2 border-t border-gray-100">
-      <template v-if="emailDisplayMode === 'html'">
-        <div class="email-html-preview text-sm text-gray-700 leading-relaxed" v-html="htmlSplit.main" />
-        <div v-if="htmlSplit.quoted">
-          <button class="text-xs text-gray-400 hover:text-gray-600 mt-1 transition-colors" @click.stop="quotedExpanded = !quotedExpanded">
-            {{ quotedExpanded ? '▾ Skrýt citovaný text' : '••• Zobrazit citovaný text' }}
-          </button>
-          <div v-if="quotedExpanded" class="email-html-preview text-sm text-gray-700 leading-relaxed mt-1" v-html="htmlSplit.quoted" />
-        </div>
-      </template>
-      <template v-else>
-        <div class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{{ textSplit.main }}</div>
-        <div v-if="textSplit.quoted">
-          <button class="text-xs text-gray-400 hover:text-gray-600 mt-1 transition-colors" @click.stop="quotedExpanded = !quotedExpanded">
-            {{ quotedExpanded ? '▾ Skrýt citovaný text' : '••• Zobrazit citovaný text' }}
-          </button>
-          <div v-if="quotedExpanded" class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed mt-1">{{ textSplit.quoted }}</div>
-        </div>
-      </template>
+      <ClientOnly>
+        <template v-if="emailDisplayMode === 'html'">
+          <div class="email-html-preview text-sm text-gray-700 leading-relaxed" v-html="htmlSplit.main" />
+          <div v-if="htmlSplit.quoted">
+            <button class="text-xs text-gray-400 hover:text-gray-600 mt-1 transition-colors" @click.stop="quotedExpanded = !quotedExpanded">
+              {{ quotedExpanded ? '▾ Skrýt citovaný text' : '••• Zobrazit citovaný text' }}
+            </button>
+            <div v-if="quotedExpanded" class="email-html-preview text-sm text-gray-700 leading-relaxed mt-1" v-html="htmlSplit.quoted" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{{ textSplit.main }}</div>
+          <div v-if="textSplit.quoted">
+            <button class="text-xs text-gray-400 hover:text-gray-600 mt-1 transition-colors" @click.stop="quotedExpanded = !quotedExpanded">
+              {{ quotedExpanded ? '▾ Skrýt citovaný text' : '••• Zobrazit citovaný text' }}
+            </button>
+            <div v-if="quotedExpanded" class="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed mt-1">{{ textSplit.quoted }}</div>
+          </div>
+        </template>
+        <template #fallback>
+          <div class="animate-pulse space-y-1.5">
+            <div class="h-3 bg-gray-100 rounded w-11/12"></div>
+            <div class="h-3 bg-gray-100 rounded w-4/5"></div>
+            <div class="h-3 bg-gray-100 rounded w-3/5"></div>
+          </div>
+        </template>
+      </ClientOnly>
     </div>
   </div>
 </template>
