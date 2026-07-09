@@ -50,6 +50,40 @@ const cc = ref(props.editScheduled?.cc ?? props.prefilledCc ?? '')
 const bcc = ref(props.editScheduled?.bcc ?? '')
 const showCc = ref(!!cc.value)
 const showBcc = ref(!!bcc.value)
+
+// Custom-styled contact dropdown (replaces the native <datalist> autocomplete) for the
+// Komu/Cc/Bcc fields, which stay free-text comma-separated address lists.
+function contactLabel(c: Contact): string {
+  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address
+}
+
+function filterContacts(text: string): Contact[] {
+  const fragment = text.split(',').pop()!.trim().toLowerCase()
+  const existing = new Set(text.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))
+  return props.contacts.filter((c) => {
+    if (existing.has(c.address.toLowerCase())) return false
+    if (!fragment) return true
+    return c.address.toLowerCase().includes(fragment) || contactLabel(c).toLowerCase().includes(fragment)
+  })
+}
+
+function pickContact(field: 'to' | 'cc' | 'bcc', address: string) {
+  const fieldRef = field === 'to' ? to : field === 'cc' ? cc : bcc
+  const segments = fieldRef.value.split(',')
+  segments[segments.length - 1] = ` ${address}`
+  fieldRef.value = segments.map(s => s.trim()).filter(Boolean).join(', ')
+}
+
+const showToDropdown = ref(false)
+const showCcDropdown = ref(false)
+const showBccDropdown = ref(false)
+const toContactOptions = computed(() => filterContacts(to.value))
+const ccContactOptions = computed(() => filterContacts(cc.value))
+const bccContactOptions = computed(() => filterContacts(bcc.value))
+
+function hideDropdown(which: Ref<boolean>) {
+  setTimeout(() => { which.value = false }, 150)
+}
 const subject = ref(props.editScheduled?.subject ?? props.prefilledSubject ?? '')
 const body = ref(props.editScheduled?.body ?? '')
 const selectedSignatureId = ref('')
@@ -262,7 +296,7 @@ async function submitEmail(scheduled: boolean) {
 
 <template>
   <Teleport to="body">
-    <div class="composer-backdrop" @click.self="emit('close')">
+    <div class="composer-backdrop">
       <div class="composer-panel">
         <!-- Header -->
         <div class="composer-header">
@@ -278,46 +312,77 @@ async function submitEmail(scheduled: boolean) {
         <div class="composer-fields">
           <div class="composer-field-row">
             <span class="composer-field-label">Komu</span>
-            <input
-              v-model="to"
-              type="text"
-              autocomplete="off"
-              list="composer-contacts-list"
-              class="composer-field-input"
-              placeholder="Emailové adresy, odděl čárkou…"
-            />
+            <div class="composer-field-wrap">
+              <input
+                v-model="to"
+                type="text"
+                autocomplete="off"
+                class="composer-field-input"
+                placeholder="Emailové adresy, odděl čárkou…"
+                @focus="showToDropdown = true"
+                @blur="hideDropdown(showToDropdown)"
+              />
+              <div v-if="showToDropdown && toContactOptions.length" class="composer-contact-dropdown">
+                <button
+                  v-for="c in toContactOptions"
+                  :key="c.id"
+                  type="button"
+                  class="composer-contact-dropdown-item"
+                  @mousedown.prevent="pickContact('to', c.address)"
+                >{{ contactLabel(c) }}</button>
+              </div>
+            </div>
             <button v-if="!showCc" type="button" class="composer-cc-toggle" @click="showCc = true">Cc</button>
             <button v-if="!showBcc" type="button" class="composer-cc-toggle" @click="showBcc = true">Bcc</button>
-            <datalist id="composer-contacts-list">
-              <option v-for="c in contacts" :key="c.id" :value="c.address">
-                {{ [c.firstName, c.lastName].filter(Boolean).join(' ') || c.address }}
-              </option>
-            </datalist>
           </div>
           <div v-if="showCc" class="composer-field-row">
             <span class="composer-field-label">Cc</span>
-            <input
-              v-model="cc"
-              type="text"
-              autocomplete="off"
-              data-bwignore
-              list="composer-contacts-list"
-              class="composer-field-input"
-              placeholder="Emailové adresy, odděl čárkou…"
-            />
+            <div class="composer-field-wrap">
+              <input
+                v-model="cc"
+                type="text"
+                autocomplete="off"
+                data-bwignore
+                class="composer-field-input"
+                placeholder="Emailové adresy, odděl čárkou…"
+                @focus="showCcDropdown = true"
+                @blur="hideDropdown(showCcDropdown)"
+              />
+              <div v-if="showCcDropdown && ccContactOptions.length" class="composer-contact-dropdown">
+                <button
+                  v-for="c in ccContactOptions"
+                  :key="c.id"
+                  type="button"
+                  class="composer-contact-dropdown-item"
+                  @mousedown.prevent="pickContact('cc', c.address)"
+                >{{ contactLabel(c) }}</button>
+              </div>
+            </div>
             <button type="button" class="composer-cc-toggle" @click="showCc = false; cc = ''">✕</button>
           </div>
           <div v-if="showBcc" class="composer-field-row">
             <span class="composer-field-label">Bcc</span>
-            <input
-              v-model="bcc"
-              type="text"
-              autocomplete="off"
-              data-bwignore
-              list="composer-contacts-list"
-              class="composer-field-input"
-              placeholder="Emailové adresy, odděl čárkou…"
-            />
+            <div class="composer-field-wrap">
+              <input
+                v-model="bcc"
+                type="text"
+                autocomplete="off"
+                data-bwignore
+                class="composer-field-input"
+                placeholder="Emailové adresy, odděl čárkou…"
+                @focus="showBccDropdown = true"
+                @blur="hideDropdown(showBccDropdown)"
+              />
+              <div v-if="showBccDropdown && bccContactOptions.length" class="composer-contact-dropdown">
+                <button
+                  v-for="c in bccContactOptions"
+                  :key="c.id"
+                  type="button"
+                  class="composer-contact-dropdown-item"
+                  @mousedown.prevent="pickContact('bcc', c.address)"
+                >{{ contactLabel(c) }}</button>
+              </div>
+            </div>
             <button type="button" class="composer-cc-toggle" @click="showBcc = false; bcc = ''">✕</button>
           </div>
           <div class="composer-field-row">
@@ -502,6 +567,11 @@ async function submitEmail(scheduled: boolean) {
   flex-shrink: 0;
 }
 
+.composer-field-wrap {
+  position: relative;
+  flex: 1;
+}
+
 .composer-field-input {
   flex: 1;
   border: 1px solid #e5e7eb;
@@ -513,10 +583,44 @@ async function submitEmail(scheduled: boolean) {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.composer-field-wrap .composer-field-input {
+  width: 100%;
+}
+
 .composer-field-input:focus {
   border-color: #818cf8;
   box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
 }
+
+.composer-contact-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.composer-contact-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #374151;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.composer-contact-dropdown-item:hover { background: #eef2ff; color: #4338ca; }
 
 .composer-cc-toggle {
   flex-shrink: 0;
