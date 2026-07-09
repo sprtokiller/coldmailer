@@ -547,6 +547,55 @@ export interface QuotedSplit {
   quoted: string
 }
 
+// Legacy webmail clients (Seznam.cz/Email.cz "Původní e-mail", classic "-----Original
+// Message-----", etc.) prefix the quoted chain with a plain-text separator line instead of
+// wrapping it in a <blockquote>. Treat that line as an additional quote boundary alongside
+// <blockquote>.
+const QUOTE_SEPARATOR_RE = /^-{2,}\s*(Původní e-mail|Původní zpráva|Original Message|Forwarded message|Přeposlaná zpráva)\s*-{2,}$/i
+
+// DFS for the first node (in document order, at any depth) that marks the start of quoted
+// content: a <blockquote>, or a text node matching the separator convention above.
+function findQuoteBoundaryNode(container: Element): Node | null {
+  for (const child of Array.from(container.childNodes)) {
+    if (child.nodeType === 3) {
+      if (QUOTE_SEPARATOR_RE.test((child.textContent ?? '').trim())) return child
+      continue
+    }
+    if (!(child instanceof Element)) continue
+    if (child.tagName === 'BLOCKQUOTE') return child
+    const found = findQuoteBoundaryNode(child)
+    if (found) return found
+  }
+  return null
+}
+
+// Splits `container` in place at `boundary` (a descendant found by findQuoteBoundaryNode, not
+// necessarily a direct child): `container` is mutated down to just the content before the
+// boundary, and a mirror of the ancestor chain from boundary up to container is returned,
+// holding the boundary and everything after it at every level. Cloning each ancestor (instead of
+// just cutting sibling arrays) preserves wrapping tags/styles — e.g. a styled <blockquote> two
+// levels up — so the quoted half keeps its original indentation when rendered.
+function splitAtBoundary(container: Element, boundary: Node): Element {
+  let level: Node = boundary.parentNode!
+  const siblings = Array.from(level.childNodes)
+  const idx = siblings.indexOf(boundary)
+  let wrapper = (level as Element).cloneNode(false) as Element
+  for (const n of siblings.slice(idx)) wrapper.appendChild(n)
+
+  while (level !== container) {
+    const parent = level.parentNode!
+    const levelSiblings = Array.from(parent.childNodes)
+    const levelIdx = levelSiblings.indexOf(level)
+    const parentWrapper = (parent as Element).cloneNode(false) as Element
+    parentWrapper.appendChild(wrapper)
+    for (const n of levelSiblings.slice(levelIdx + 1)) parentWrapper.appendChild(n)
+    wrapper = parentWrapper
+    level = parent
+  }
+
+  return wrapper
+}
+
 export function splitQuotedHtml(html: string): QuotedSplit {
   if (!html || typeof DOMParser === 'undefined') return { main: html, quoted: '' }
 
@@ -567,30 +616,27 @@ export function splitQuotedHtml(html: string): QuotedSplit {
     )
     if (meaningfulKids.length !== 1 || !(meaningfulKids[0] instanceof Element)) break
     const only = meaningfulKids[0] as Element
-    if (only.tagName === 'BLOCKQUOTE' || !only.querySelector('blockquote')) break
+    if (only.tagName === 'BLOCKQUOTE' || !findQuoteBoundaryNode(only)) break
 
     const style = only.getAttribute('style')
     if (style) carriedStyle = carriedStyle ? `${carriedStyle}; ${style}` : style
     container = only
   }
 
-  const children = Array.from(container.childNodes)
-  const splitIndex = children.findIndex(
-    node => node instanceof Element && (node.tagName === 'BLOCKQUOTE' || !!node.querySelector('blockquote')),
-  )
-  if (splitIndex === -1) return { main: html, quoted: '' }
+  const boundary = findQuoteBoundaryNode(container)
+  if (!boundary) return { main: html, quoted: '' }
 
-  const mainDiv = doc.createElement('div')
-  const quotedDiv = doc.createElement('div')
-  children.forEach((node, i) => {
-    (i < splitIndex ? mainDiv : quotedDiv).appendChild(node)
-  })
+  const quotedWrapper = splitAtBoundary(container, boundary)
 
-  if (!carriedStyle) return { main: mainDiv.innerHTML, quoted: quotedDiv.innerHTML }
+  if (!carriedStyle) return { main: container.innerHTML, quoted: quotedWrapper.innerHTML }
 
-  mainDiv.setAttribute('style', carriedStyle)
-  quotedDiv.setAttribute('style', carriedStyle)
-  return { main: mainDiv.outerHTML, quoted: quotedDiv.outerHTML }
+  const mainWrapper = doc.createElement('div')
+  mainWrapper.setAttribute('style', carriedStyle)
+  mainWrapper.innerHTML = container.innerHTML
+  const quotedStyled = doc.createElement('div')
+  quotedStyled.setAttribute('style', carriedStyle)
+  quotedStyled.innerHTML = quotedWrapper.innerHTML
+  return { main: mainWrapper.outerHTML, quoted: quotedStyled.outerHTML }
 }
 
 export function htmlToText(html: string): string {
