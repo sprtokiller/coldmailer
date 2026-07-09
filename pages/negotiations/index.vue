@@ -19,6 +19,7 @@ interface Partner {
 }
 
 const search = ref('')
+const statusFilter = ref('')
 const { data: partnersData, pending, refresh: refreshPartners } = await useFetch<{ partners: Partner[]; canManageAll: boolean }>('/api/partners')
 const { data: meData } = await useFetch<{ user: { id: string; isAdmin: boolean } }>('/api/settings/me')
 
@@ -45,12 +46,65 @@ function sortByLastInteraction(list: Partner[]): Partner[] {
   })
 }
 
-/** Filtrovaný + seřazený seznam — přiřazení mně nahoře, ostatní dole */
+/** Stavy přítomné v aktuálních datech, pro nabídku filtru */
+const availableStatuses = computed(() => {
+  const set = new Set<string>()
+  for (const p of allPartners.value) {
+    if (p.negotiationStatus) set.add(p.negotiationStatus)
+  }
+  return Array.from(set)
+})
+
+type SortKey = 'name' | 'status' | 'assignees' | 'interactions' | 'unread' | 'lastContact'
+const sortKey = ref<SortKey | null>(null)
+const sortDir = ref<'asc' | 'desc'>('asc')
+
+function toggleSort(key: SortKey) {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  }
+}
+
+function sortByColumn(list: Partner[], key: SortKey, dir: 'asc' | 'desc'): Partner[] {
+  const mult = dir === 'asc' ? 1 : -1
+  return [...list].sort((a, b) => {
+    switch (key) {
+      case 'name':
+        return mult * a.canonicalName.localeCompare(b.canonicalName)
+      case 'status':
+        return mult * (NEGOTIATION_STATUS_LABELS[a.negotiationStatus ?? ''] ?? '').localeCompare(NEGOTIATION_STATUS_LABELS[b.negotiationStatus ?? ''] ?? '')
+      case 'assignees':
+        return mult * (a.assignees.length - b.assignees.length)
+      case 'interactions':
+        return mult * (a.interactionCount - b.interactionCount)
+      case 'unread':
+        return mult * (a.unreadEmailCount - b.unreadEmailCount)
+      case 'lastContact': {
+        const at = a.lastInteractionAt ? new Date(a.lastInteractionAt).getTime() : 0
+        const bt = b.lastInteractionAt ? new Date(b.lastInteractionAt).getTime() : 0
+        return mult * (at - bt)
+      }
+    }
+  })
+}
+
+/** Filtrovaný + seřazený seznam — bez explicitního řazení sloupce jsou přiřazení mně nahoře, ostatní dole */
 const sortedPartners = computed(() => {
   const q = search.value.toLowerCase().trim()
-  const filtered = (allPartners.value ?? []).filter(p =>
+  let filtered = (allPartners.value ?? []).filter(p =>
     !q || p.canonicalName.toLowerCase().includes(q),
   )
+  if (statusFilter.value) {
+    filtered = filtered.filter(p => p.negotiationStatus === statusFilter.value)
+  }
+
+  if (sortKey.value) {
+    return sortByColumn(filtered, sortKey.value, sortDir.value)
+  }
+
   const uid = currentUserId.value
   const mine = filtered.filter(p => uid && p.assignees.some(a => a.id === uid))
   const others = filtered.filter(p => !uid || !p.assignees.some(a => a.id === uid))
@@ -67,7 +121,7 @@ const pageSize = 25
 const totalPages = computed(() => Math.max(1, Math.ceil(sortedPartners.value.length / pageSize)))
 const pagedPartners = computed(() => sortedPartners.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 
-watch(search, () => { page.value = 1 })
+watch([search, statusFilter], () => { page.value = 1 })
 watch(totalPages, (tp) => { if (page.value > tp) page.value = tp })
 
 /** Vrátí true, pokud je partner READ-ONLY pro přihlášeného uživatele (není mu přiřazen, nebo je admin) */
@@ -112,13 +166,20 @@ function lastInteractionColor(p: Partner): string {
       >+ Přidat firmu</button>
     </div>
 
-    <div class="mb-4">
+    <div class="mb-4 flex items-center gap-3">
       <input
         v-model="search"
         type="text"
         placeholder="Hledat partnera..."
         class="w-full max-w-sm text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300"
       />
+      <select
+        v-model="statusFilter"
+        class="text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 text-gray-600"
+      >
+        <option value="">Všechny stavy</option>
+        <option v-for="s in availableStatuses" :key="s" :value="s">{{ NEGOTIATION_STATUS_LABELS[s] ?? s }}</option>
+      </select>
     </div>
 
     <PartnersPartnerSearchAssign v-if="showAssignModal" mode="negotiation" @close="showAssignModal = false" @assigned="onPartnerAdded" />
@@ -127,13 +188,25 @@ function lastInteractionColor(p: Partner): string {
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50 text-left">
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Název</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Stav jednání</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs cursor-pointer select-none hover:text-gray-700" @click="toggleSort('name')">
+              Název<span v-if="sortKey === 'name'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs cursor-pointer select-none hover:text-gray-700" @click="toggleSort('status')">
+              Stav jednání<span v-if="sortKey === 'status'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
 
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Přiřazení</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Interakce</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center">Nepřečteno</th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs">Poslední kontakt</th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs cursor-pointer select-none hover:text-gray-700" @click="toggleSort('assignees')">
+              Přiřazení<span v-if="sortKey === 'assignees'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center cursor-pointer select-none hover:text-gray-700" @click="toggleSort('interactions')">
+              Interakce<span v-if="sortKey === 'interactions'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center cursor-pointer select-none hover:text-gray-700" @click="toggleSort('unread')">
+              Nepřečteno<span v-if="sortKey === 'unread'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs cursor-pointer select-none hover:text-gray-700" @click="toggleSort('lastContact')">
+              Poslední kontakt<span v-if="sortKey === 'lastContact'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
@@ -149,7 +222,7 @@ function lastInteractionColor(p: Partner): string {
           </tr>
           <tr v-else-if="!sortedPartners?.length">
             <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
-              {{ search ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
+              {{ search || statusFilter ? 'Žádný partner nenalezen' : 'Zatím žádní oslovení partneři' }}
             </td>
           </tr>
           <tr
