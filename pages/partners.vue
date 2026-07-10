@@ -125,6 +125,7 @@ function toggleExpand(id: string) {
 
 const editingPartner = ref<GlobalRecord | null>(null)
 const partnerToAssign = ref<GlobalRecord | null>(null)
+const partnerToAssignPeople = ref<GlobalRecord | null>(null)
 
 function isInActiveProject(rec: GlobalRecord): boolean {
   return rec.negotiations.some(pr => pr.project.id === activeProject.value?.id)
@@ -346,6 +347,16 @@ function onImportClose() {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                       </button>
+                      <button
+                        v-if="canManageAll && isInActiveProject(rec)"
+                        class="text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Přiřadit jednatele / oslovovatele"
+                        @click.stop="partnerToAssignPeople = rec"
+                      >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-5.197-3.795M9 20H4v-2a4 4 0 015.197-3.795M15 7a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
                       <button class="text-gray-400 hover:text-gray-600 transition-colors" title="Upravit partnera" @click.stop="editingPartner = rec">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -475,6 +486,12 @@ function onImportClose() {
       @assigned="partnerToAssign = null; fetchRecords()"
     />
     <PartnersPartnerImportModal v-if="showImportModal" :prefill="importPrefill" @close="onImportClose" @saved="onImportSaved" />
+    <PartnersPartnerAssigneesModal
+      v-if="partnerToAssignPeople"
+      :partner="{ id: partnerToAssignPeople.id, canonicalName: partnerToAssignPeople.canonicalName }"
+      @close="partnerToAssignPeople = null"
+      @changed="fetchRecords()"
+    />
 
   </div>
 </template>

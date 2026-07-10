@@ -16,6 +16,10 @@ export default defineEventHandler(async (event) => {
         where: projectId ? { projectId } : undefined,
         include: { user: { select: { id: true, name: true, image: true } } },
       },
+      outreachAssignments: {
+        where: projectId ? { projectId } : undefined,
+        include: { assignee: { select: { id: true, name: true, image: true } } },
+      },
       negotiations: {
         where: projectId ? { projectId } : undefined,
         select: { negotiationStatus: true },
@@ -27,11 +31,13 @@ export default defineEventHandler(async (event) => {
 
   const negotiation = record.negotiations[0] ?? null
   const assignees = record.negotiationAssignees.map(a => a.user)
-  const { negotiations: _, negotiationAssignees: __, ...rest } = record
+  const outreachAssignment = record.outreachAssignments[0]?.assignee ?? null
+  const { negotiations: _, negotiationAssignees: __, outreachAssignments: ___, ...rest } = record
 
   return {
     ...rest,
     negotiationStatus: negotiation?.negotiationStatus ?? null,
     assignees,
+    outreachAssignment,
   }
 })

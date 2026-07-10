@@ -57,6 +57,15 @@ export default defineEventHandler(async (event) => {
 
   if (purpose === 'negotiation') {
     await upsertNegotiationAssignees(projectId, globalRecordId, assigneeIds, session.id)
+    // upsertNegotiationAssignees no-ops when assigneeIds is empty (nothing to upsert), which
+    // would otherwise leave negotiationStatus at PRED_OSLOVENIM — invisible in Jednání (filtered
+    // out by status) yet still stuck in the Oslovování queue, contradicting the chosen purpose.
+    if (assigneeIds.length === 0) {
+      await prisma.negotiation.updateMany({
+        where: { projectId, globalRecordId, OR: [{ negotiationStatus: null }, { negotiationStatus: 'PRED_OSLOVENIM' }] },
+        data: { negotiationStatus: 'V_JEDNANI' },
+      })
+    }
   } else if (assigneeIds.length === 1) {
     await prisma.outreachAssignment.upsert({
       where: { projectId_globalRecordId_assigneeId: { projectId, globalRecordId, assigneeId: assigneeIds[0] } },

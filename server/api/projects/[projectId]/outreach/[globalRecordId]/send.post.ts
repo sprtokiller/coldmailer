@@ -18,7 +18,7 @@ import { trackCustomRecipientAddress } from '~/server/utils/project-additional-a
 import { assignNegotiationOnSend } from '~/server/utils/negotiation-assignment'
 
 const GRACE_PERIOD_MS = 20_000
-const SIGNATURE_SEPARATOR = '<br><br><hr><br>'
+const SIGNATURE_SEPARATOR = '<br><br>'
 
 interface SendBody {
   toAddress: string

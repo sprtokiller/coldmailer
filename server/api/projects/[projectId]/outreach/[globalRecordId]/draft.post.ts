@@ -47,9 +47,10 @@ export default defineEventHandler(async (event) => {
   const { over, limitUsd } = await isOverBudget(user.id)
   if (over) throw createError({ statusCode: 402, message: `Překročen budget limit ($${limitUsd!.toFixed(2)} USD)` })
 
-  const [globalRecord, alignment] = await Promise.all([
+  const [globalRecord, alignment, existingDraft] = await Promise.all([
     prisma.globalRecord.findUnique({ where: { id: globalRecordId } }),
     prisma.partnerAlignment.findUnique({ where: { projectId_globalRecordId: { projectId, globalRecordId } } }),
+    prisma.partnerOutreachDraft.findUnique({ where: { projectId_globalRecordId: { projectId, globalRecordId } }, select: { config: true } }),
   ])
   if (!globalRecord) throw createError({ statusCode: 404, message: 'Partner nenalezen.' })
   if (!alignment) throw createError({ statusCode: 400, message: 'Nejprve spusťte Value Alignment pro tohoto partnera.' })
@@ -179,10 +180,15 @@ export default defineEventHandler(async (event) => {
           const bodyHtml = String(emailData.body ?? output)
           const recommendations = Array.isArray(emailData.recommendations) ? emailData.recommendations.map(String) : []
 
+          // Preserve fields like signatureId from the previously saved config —
+          // regenerating the email body shouldn't reset the chosen signature.
+          const existingConfig = (existingDraft?.config as Record<string, unknown> | null) ?? {}
+          const config = { ...existingConfig, selectedArgumentIds: body.selectedArgumentIds ?? [] }
+
           const saved = await prisma.partnerOutreachDraft.upsert({
             where: { projectId_globalRecordId: { projectId, globalRecordId } },
-            create: { projectId, globalRecordId, toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id },
-            update: { toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config: { selectedArgumentIds: body.selectedArgumentIds ?? [] }, savedById: user.id, savedAt: new Date(), sentAt: null, sendError: null },
+            create: { projectId, globalRecordId, toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config, savedById: user.id },
+            update: { toAddress, subject, body: bodyHtml, recommendations, systemPromptId: body.systemPromptId ?? null, emailDraftId: body.emailDraftId ?? null, config, savedById: user.id, savedAt: new Date(), sentAt: null, sendError: null },
           })
 
           write({ done: true, draft: { id: saved.id, toAddress: saved.toAddress, subject: saved.subject, body: saved.body, recommendations: saved.recommendations } })

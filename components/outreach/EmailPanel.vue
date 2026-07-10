@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { projectOutreachKey, type OutreachPartner } from '~/composables/useProjectOutreach'
 import { GROUP_FONTS } from '~/config/pipeline'
+import { sanitizeHtml } from '~/utils/html-normalize'
 
 type ContactWithAddress = OutreachPartner['contacts'][number] & { address: string }
 
@@ -34,6 +35,8 @@ const emailBody = ref('')
 const selectedContactIdx = ref<number | null>(null)
 const selectedArgumentIds = ref<Set<string>>(new Set())
 const selectedSignatureId = ref('')
+const savedSignatureId = ref('')
+const externalSignature = ref<{ id: string; name: string; content: string } | null>(null)
 const saving = ref(false)
 const configCollapsed = ref(false)
 const recsCollapsed = ref(true)
@@ -68,6 +71,13 @@ const topArguments = computed(() => {
 const opPrompts = computed(() => ctx.promptsForStep('OUTREACH_PREPARATION'))
 const opDrafts = computed(() => ctx.emailDrafts.value)
 const sigs = computed(() => ctx.signatures.value)
+const allSigs = computed(() => {
+  if (externalSignature.value && !sigs.value.some(s => s.id === externalSignature.value!.id)) {
+    return [externalSignature.value, ...sigs.value]
+  }
+  return sigs.value
+})
+const selectedSignature = computed(() => allSigs.value.find(s => s.id === selectedSignatureId.value) ?? null)
 const isExecuting = computed(() => ctx.executing.value !== null)
 const isExecutingHere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value === ctx.selectedPartnerId.value)
 const isExecutingElsewhere = computed(() => ctx.executing.value !== null && ctx.executingPartnerId.value !== ctx.selectedPartnerId.value)
@@ -119,6 +129,10 @@ watch(() => ctx.partnerDetail.value, (detail) => {
   const restored = savedIds.filter(id => availableIds.has(id))
   selectedArgumentIds.value = new Set(restored.length > 0 ? restored : availableIds)
 
+  externalSignature.value = null
+  savedSignatureId.value = typeof savedConfig?.signatureId === 'string' ? savedConfig.signatureId : ''
+  resolveSignatureSelection()
+
   const hasContent = !!emailBody.value.trim()
   configCollapsed.value = hasContent
   recsCollapsed.value = !hasContent
@@ -128,9 +142,37 @@ watch(selectedContactIdx, () => {
   if (selectedContact.value) emailTo.value = selectedContact.value.address
 })
 
-watch(sigs, (val) => {
-  if (!selectedSignatureId.value && val.length > 0) selectedSignatureId.value = val[0]?.id ?? ''
-}, { immediate: true })
+// Resolves selectedSignatureId whenever the partner's own signatures load or
+// the draft's saved signature changes: prefers the saved id (fetching it as
+// `externalSignature` if it belongs to another user, so the dropdown shows
+// whose signature it is), falling back to the viewer's own first signature.
+watch(sigs, () => resolveSignatureSelection(), { immediate: true })
+
+async function resolveSignatureSelection() {
+  const wanted = savedSignatureId.value
+  if (!wanted) {
+    if (!selectedSignatureId.value || !allSigs.value.some(s => s.id === selectedSignatureId.value)) {
+      selectedSignatureId.value = sigs.value[0]?.id ?? ''
+    }
+    return
+  }
+  if (sigs.value.some(s => s.id === wanted)) {
+    selectedSignatureId.value = wanted
+    return
+  }
+  selectedSignatureId.value = wanted
+  if (externalSignature.value?.id === wanted) return
+  const pid = ctx.projectId.value
+  if (!pid) return
+  try {
+    const res = await $fetch<{ external: { id: string; name: string; content: string; author: { name: string } } | null }>(
+      '/api/library/signatures', { query: { projectId: pid, signatureId: wanted } },
+    )
+    if (res.external && savedSignatureId.value === wanted) {
+      externalSignature.value = { id: res.external.id, name: `${res.external.author.name} (jejich podpis)`, content: res.external.content }
+    }
+  } catch { /* signature may have been deleted since the draft was saved */ }
+}
 
 watch(() => ctx.streamOutput.value, async () => {
   await nextTick()
@@ -306,7 +348,7 @@ async function doSend() {
   const scheduledForIso = pendingScheduleIso.value
   pendingScheduleIso.value = null
   try {
-    const sig = sigs.value.find(s => s.id === selectedSignatureId.value)
+    const sig = allSigs.value.find(s => s.id === selectedSignatureId.value)
     const res = await ctx.sendDraft({
       toAddress: emailTo.value,
       subject: emailSubject.value,
@@ -442,14 +484,14 @@ function relTime(iso: string | null | undefined) {
             <div class="field-group">
               <label class="field-label">Podpis</label>
               <select
-                v-if="sigs.length > 0"
+                v-if="allSigs.length > 0"
                 v-model="selectedSignatureId"
                 class="field-select"
                 :class="selectedSignatureId ? '' : 'field-select--warn'"
                 :disabled="isExecutingHere"
               >
                 <option value="">— vyberte —</option>
-                <option v-for="sig in sigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
+                <option v-for="sig in allSigs" :key="sig.id" :value="sig.id">{{ sig.name }}</option>
               </select>
               <div v-else class="no-sig">
                 Nemáte podpis pro tento typ projektu.
@@ -565,6 +607,12 @@ function relTime(iso: string | null | undefined) {
       <!-- ── Rich text editor ─────────────────────────────────── -->
       <div class="editor-area">
         <RichTextEditor v-model="emailBody" placeholder="Vygenerovaný e-mail se zobrazí zde..." :default-font="defaultFont" :editable="!isExecutingHere" />
+
+        <!-- Live signature preview: always shown as a confirmation of what will be sent, independent of body/draft state -->
+        <div v-if="selectedSignature" class="signature-preview">
+          <div class="signature-preview-label">Podpis (náhled)</div>
+          <div class="signature-preview-body" v-html="sanitizeHtml(selectedSignature.content)" />
+        </div>
       </div>
 
       <!-- ── Recommendations ───────────────────────────────────── -->
@@ -1157,6 +1205,25 @@ function relTime(iso: string | null | undefined) {
   min-height: 0;
   padding: 16px;
   overflow-y: auto;
+}
+
+.signature-preview {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.signature-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.signature-preview-body {
+  font-size: 13px;
+  color: #374151;
 }
 
 /* ── Recommendations ────────────────────────────────────── */
