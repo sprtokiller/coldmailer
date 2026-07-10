@@ -103,17 +103,63 @@ const editor = useEditor({
       return sanitizeHtml(html)
     },
     transformPasted(slice) {
-      if (!props.defaultFont || !editor.value) return slice
-      const markType = editor.value.schema.marks.textStyle
-      if (!markType) return slice
+      if (!editor.value) return slice
+      const { state, schema } = editor.value
+      const textStyleType = schema.marks.textStyle
+
+      // A "paste without formatting" (Ctrl+Shift+V) hands the browser only text/plain, so
+      // ProseMirror builds the slice from bare lines of text with zero marks anywhere — unlike
+      // typing, paste doesn't pick up the cursor's active formatting on its own. Detect that case
+      // and re-apply every mark active at the cursor, so the pasted text matches its surroundings
+      // exactly as if it had been typed there instead of falling back to the browser's default look.
+      function fragmentHasMarks(fragment: Fragment): boolean {
+        let found = false
+        fragment.forEach((node) => {
+          if (found) return
+          if (node.isText) {
+            if (node.marks.length > 0) found = true
+          } else if (fragmentHasMarks(node.content)) {
+            found = true
+          }
+        })
+        return found
+      }
+
+      if (!fragmentHasMarks(slice.content)) {
+        let activeMarks = state.storedMarks ?? state.selection.$from.marks()
+        if (props.defaultFont && textStyleType && !activeMarks.some((m) => m.type === textStyleType && m.attrs.fontFamily)) {
+          activeMarks = [...activeMarks, textStyleType.create({ fontFamily: props.defaultFont })]
+        }
+        if (activeMarks.length === 0) return slice
+
+        function applyActiveMarks(fragment: Fragment): Fragment {
+          const nodes: import('@tiptap/pm/model').Node[] = []
+          fragment.forEach((node) => {
+            if (node.isText) {
+              let marked = node
+              for (const mark of activeMarks) marked = marked.mark(mark.addToSet(marked.marks))
+              nodes.push(marked)
+            } else {
+              nodes.push(node.copy(applyActiveMarks(node.content)))
+            }
+          })
+          return Fragment.from(nodes)
+        }
+
+        return new Slice(applyActiveMarks(slice.content), slice.openStart, slice.openEnd)
+      }
+
+      // Rich HTML paste: keep the source's own formatting intact, only backfill the app-wide
+      // default font where the source didn't specify one.
+      if (!props.defaultFont || !textStyleType) return slice
 
       function addFontMark(fragment: Fragment): Fragment {
         const nodes: import('@tiptap/pm/model').Node[] = []
         fragment.forEach((node) => {
           if (node.isText) {
-            const hasFont = node.marks.some((m) => m.type === markType && m.attrs.fontFamily)
+            const hasFont = node.marks.some((m) => m.type === textStyleType && m.attrs.fontFamily)
             if (!hasFont) {
-              const mark = markType.create({ fontFamily: props.defaultFont })
+              const mark = textStyleType.create({ fontFamily: props.defaultFont })
               nodes.push(node.mark(mark.addToSet(node.marks)))
             } else {
               nodes.push(node)
