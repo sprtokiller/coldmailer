@@ -12,7 +12,7 @@ import { getInteractionAccess } from '~/server/utils/projectPermissions'
 import { streamStepAI } from '~/server/utils/ai'
 import { trackAIUsage, isOverBudget } from '~/server/utils/usage-tracker'
 import { parseAIOutput } from '~/server/utils/parse-ai-output'
-import { libraryScopeForProject } from '~/server/utils/libraryScope'
+import { libraryScopeForProject, contextPartAccessFilter } from '~/server/utils/libraryScope'
 import { STEP_OUTPUT_SCHEMAS, formatSchemaForPrompt, getMissingPlaceholders, renderPromptTemplate, MODELS } from '~/config/pipeline'
 
 interface AlignmentBody {
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
 
   const [contextParts, customPrompt, dbSystemPrompt, sellingPoint] = await Promise.all([
     body.contextPartIds?.length
-      ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds }, ...scopeFilter } })
+      ? prisma.contextPart.findMany({ where: { id: { in: body.contextPartIds }, ...contextPartAccessFilter(project, user.id) } })
       : Promise.resolve([]),
     body.systemPromptId
       ? prisma.systemPrompt.findFirst({ where: { id: body.systemPromptId, stepType: STEP as never, OR: [{ isSystem: true }, scopeFilter] } })

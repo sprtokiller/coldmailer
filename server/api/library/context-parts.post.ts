@@ -12,8 +12,10 @@ export default defineEventHandler(async (event) => {
     derivedFromId?: string
     projectId?: string | null
     groupId?: string | null
+    isPrivate?: boolean
   }>(event)
-  const scope = await resolveLibraryScope(event, body)
+  const isPrivate = body.isPrivate === true
+  const scope = isPrivate ? { projectId: null, groupId: null } : await resolveLibraryScope(event, body)
   const stepKeys = (body.stepKeys ?? ['VALUE_ALIGNMENT']).filter(k => REASONING_STEP_TYPES.includes(k as never))
 
   const maxOrder = await prisma.contextPart.aggregate({ _max: { order: true } })
@@ -25,6 +27,7 @@ export default defineEventHandler(async (event) => {
       stepKeys: stepKeys.length ? stepKeys : ['VALUE_ALIGNMENT'],
       order: (maxOrder._max.order ?? -1) + 1,
       authorId: user.id,
+      isPrivate,
       ...scope,
       derivedFromId: body.derivedFromId ?? null,
     },

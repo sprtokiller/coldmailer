@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
     stepKeys?: string[]
     projectId?: string | null
     groupId?: string | null
+    isPrivate?: boolean
   }>(event)
 
   const part = await prisma.contextPart.findUnique({ where: { id } })
@@ -21,16 +22,21 @@ export default defineEventHandler(async (event) => {
   if (part.authorId !== user.id) {
     await requireAdmin(event)
   }
-  await requireResourceScopeAccess(event, part)
-  const scope = ('projectId' in body || 'groupId' in body)
-    ? await resolveLibraryScope(event, body)
-    : {}
+  if (!part.isPrivate) await requireResourceScopeAccess(event, part)
+
+  const isPrivate = body.isPrivate ?? part.isPrivate
+  const scope = isPrivate
+    ? { projectId: null, groupId: null }
+    : ('projectId' in body || 'groupId' in body)
+      ? await resolveLibraryScope(event, body)
+      : {}
 
   return prisma.contextPart.update({
     where: { id },
     data: {
       name: body.name ?? part.name,
       content: body.content ?? part.content,
+      isPrivate,
       ...(body.stepKeys !== undefined ? { stepKeys: body.stepKeys.filter(k => REASONING_STEP_TYPES.includes(k as never)) } : {}),
       ...scope,
     },

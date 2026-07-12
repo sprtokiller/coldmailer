@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     if (part.authorId !== user.id) {
       await requireAdmin(event)
     }
-    await requireResourceScopeAccess(event, part)
+    if (!part.isPrivate) await requireResourceScopeAccess(event, part)
   }
 
   await prisma.$transaction(

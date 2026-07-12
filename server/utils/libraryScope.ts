@@ -96,3 +96,15 @@ export function libraryScopeForProject(project: { id: string; groupId: string })
   }
 }
 
+// Context parts can additionally be private (user-scoped, no project/group) —
+// those are only usable by their own author, regardless of active project.
+export function contextPartAccessFilter(project: { id: string; groupId: string }, userId: string) {
+  return {
+    OR: [
+      { projectId: project.id },
+      { groupId: project.groupId },
+      { authorId: userId, isPrivate: true },
+    ],
+  }
+}
+
