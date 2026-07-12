@@ -15,6 +15,7 @@ type LibraryItem = {
   stepKeys?: string[]
   isTemplate?: boolean
   isSystem?: boolean
+  isPrivate?: boolean
   authorId?: string
   author?: Author
   groupId?: string | null
@@ -143,6 +144,7 @@ const form = ref({
   signatureContent: '',
   signatureGroupId: '',
   scope: '',
+  isPrivate: false,
 })
 
 const showNewSignatureMenu = ref(false)
@@ -158,6 +160,7 @@ function resetForm() {
     signatureContent: '',
     signatureGroupId: activeProject.value?.groupId ?? groups.value[0]?.id ?? '',
     scope: activeProject.value ? `project:${activeProject.value.id}` : '',
+    isPrivate: false,
   }
   editingId.value = null
   editingIsSystem.value = false
@@ -200,6 +203,7 @@ function startEdit(item: LibraryItem) {
   form.value.stepKeys = liveStepKeys.length ? liveStepKeys : ['VALUE_ALIGNMENT']
   form.value.signatureContent = item.content ?? ''
   form.value.signatureGroupId = (item as unknown as SignatureItem).groupId ?? ''
+  form.value.isPrivate = item.isPrivate ?? false
   form.value.scope = item.projectId
     ? `project:${item.projectId}`
     : item.groupId
@@ -248,7 +252,8 @@ async function save() {
   saving.value = true
   try {
     const [scopeType, scopeId] = form.value.scope.split(':')
-    const scope = editingIsSystem.value
+    const isPrivateContext = tab.value === 'context' && form.value.isPrivate
+    const scope = (editingIsSystem.value || isPrivateContext)
       ? {}
       : {
           projectId: scopeType === 'project' ? scopeId : null,
@@ -264,9 +269,9 @@ async function save() {
       await refreshPrompts()
     } else if (tab.value === 'context') {
       if (editingId.value) {
-        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, ...scope } })
+        await $fetch(`/api/library/context-parts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, isPrivate: form.value.isPrivate, ...scope } })
       } else {
-        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, ...scope } })
+        await $fetch('/api/library/context-parts', { method: 'POST', body: { name: form.value.name, content: form.value.content, stepKeys: form.value.stepKeys, isPrivate: form.value.isPrivate, ...scope } })
       }
       await refreshContext()
     } else if (tab.value === 'selling') {
@@ -511,7 +516,14 @@ function handleNew() {
           <input v-model="form.name" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
 
-        <div v-if="tab !== 'signatures' && !editingIsSystem">
+        <div v-if="tab === 'context' && !editingIsSystem">
+          <label class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+            <input v-model="form.isPrivate" type="checkbox" class="accent-primary" />
+            Soukromé (vidím jen já, nesdílí se s ostatními)
+          </label>
+        </div>
+
+        <div v-if="tab !== 'signatures' && !editingIsSystem && !(tab === 'context' && form.isPrivate)">
           <label class="block text-xs font-medium text-gray-500 mb-1">Platnost položky</label>
           <select
             v-model="form.scope"
@@ -646,7 +658,7 @@ function handleNew() {
         <div class="flex gap-2 pt-1">
           <button
             type="submit"
-            :disabled="saving || !!placeholderError || (tab !== 'signatures' && !editingIsSystem && !form.scope)"
+            :disabled="saving || !!placeholderError || (tab !== 'signatures' && !editingIsSystem && !(tab === 'context' && form.isPrivate) && !form.scope)"
             class="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {{ saving ? 'Ukládám…' : 'Uložit' }}
@@ -809,6 +821,12 @@ function handleNew() {
               }"
             >
               {{ item.group.name }}
+            </span>
+            <span
+              v-else-if="item.isPrivate"
+              class="text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0 border border-gray-300 text-gray-500 bg-gray-50"
+            >
+              Soukromé
             </span>
             <span v-if="item.stepType" class="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
               {{ item.stepType.replace(/_/g, ' ') }}

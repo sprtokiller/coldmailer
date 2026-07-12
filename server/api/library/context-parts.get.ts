@@ -3,11 +3,16 @@ import { requireAuth } from '~/server/utils/requireAuth'
 import { getLibraryScopeFilter } from '~/server/utils/libraryScope'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const user = await requireAuth(event)
   const scopeFilter = await getLibraryScopeFilter(event)
 
   return prisma.contextPart.findMany({
-    where: scopeFilter,
+    where: {
+      OR: [
+        { ...scopeFilter, isPrivate: false },
+        { authorId: user.id, isPrivate: true },
+      ],
+    },
     include: {
       author: { select: { id: true, name: true, image: true } },
       group: true,

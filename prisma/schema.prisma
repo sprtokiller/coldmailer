@@ -160,6 +160,7 @@ model ContextPart {
   group         Group?        @relation(fields: [groupId], references: [id], onDelete: Restrict)
   projectId     String?
   project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  isPrivate     Boolean       @default(false)
   createdAt     DateTime      @default(now())
   derivedFromId String?
   derivedFrom   ContextPart?  @relation("ContextLineage", fields: [derivedFromId], references: [id])
