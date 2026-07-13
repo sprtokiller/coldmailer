@@ -338,6 +338,19 @@ function editScheduledEmail(se: ScheduledEmailItem) {
 }
 
 const scheduledActionLoading = ref<string | null>(null)
+const returningToOutreach = ref(false)
+
+async function returnToOutreach() {
+  returningToOutreach.value = true
+  try {
+    const res = await $fetch<{ success: boolean; projectId: string }>(`/api/partners/${id}/return-to-outreach`, { method: 'POST' })
+    await navigateTo(`/outreach/${res.projectId}`)
+  } catch (err) {
+    toast.show(err instanceof Error ? err.message : 'Vrácení k oslovení selhalo', 'error')
+  } finally {
+    returningToOutreach.value = false
+  }
+}
 
 async function sendScheduledNow(se: ScheduledEmailItem) {
   if (!confirm(`Odeslat tento e-mail hned partnerovi na ${se.toAddress}?`)) return
@@ -507,10 +520,13 @@ const TYPE_LABELS: Record<string, string> = {
           :emails="emailInteractions"
           :expanded-events="expandedEvents"
           :email-display-mode="emailDisplayMode"
+          :can-edit="canEdit"
+          :returning-to-outreach="returningToOutreach"
           @toggle="toggleEvent"
           @reply="openReply($event)"
           @reply-all="openReply($event, true)"
           @delete="deleteInteraction"
+          @return-to-outreach="returnToOutreach"
         />
       </template>
 

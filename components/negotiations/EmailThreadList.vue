@@ -29,6 +29,8 @@ const props = defineProps<{
   emails: EmailItem[] // newest-first
   expandedEvents: Set<string>
   emailDisplayMode: string
+  canEdit: boolean
+  returningToOutreach: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +38,7 @@ const emit = defineEmits<{
   reply: [EmailItem]
   'reply-all': [EmailItem]
   delete: [EmailItem]
+  'return-to-outreach': []
 }>()
 </script>
 
@@ -52,7 +55,16 @@ const emit = defineEmits<{
     />
   </div>
 
-  <p v-if="!props.emails.length" class="text-center py-16 text-gray-300 text-sm select-none">
-    Žádná jednání tohoto typu
-  </p>
+  <div v-if="!props.emails.length" class="flex flex-col items-center gap-3 py-16 text-center">
+    <p class="text-gray-300 text-sm select-none">Žádná komunikace neprobíhá</p>
+    <button
+      v-if="props.canEdit"
+      type="button"
+      :disabled="props.returningToOutreach"
+      class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+      @click="emit('return-to-outreach')"
+    >
+      {{ props.returningToOutreach ? 'Vracím...' : 'Vrátit se k oslovení' }}
+    </button>
+  </div>
 </template>
