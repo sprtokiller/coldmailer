@@ -139,6 +139,25 @@ function encodeRfc2047(text: string): string {
   return `=?UTF-8?B?${Buffer.from(text).toString('base64')}?=`
 }
 
+// Header fields must be US-ASCII (RFC 5322); a display name like "Vilém Sládek <x@y.cz>"
+// embedded raw causes mojibake once Gmail parses the header. Encode just the name part.
+function encodeAddressHeader(addr: string): string {
+  return addr
+    .split(',')
+    .map(a => a.trim())
+    .filter(Boolean)
+    .map((a) => {
+      const match = a.match(/^(.*?)<([^>]+)>$/)
+      if (!match) return a
+      const name = match[1].trim().replace(/^"|"$/g, '')
+      const email = match[2].trim()
+      if (!name) return `<${email}>`
+      if (!/[^\x00-\x7F]/.test(name)) return `${name} <${email}>`
+      return `${encodeRfc2047(name)} <${email}>`
+    })
+    .join(', ')
+}
+
 export async function createGmailDraft(
   accessToken: string,
   to: string,
@@ -147,7 +166,7 @@ export async function createGmailDraft(
 ): Promise<{ id: string; threadId: string }> {
   const raw = Buffer.from(
     [
-      `To: ${to}`,
+      `To: ${encodeAddressHeader(to)}`,
       `Subject: ${encodeRfc2047(subject)}`,
       'Content-Type: text/html; charset=UTF-8',
       '',
@@ -176,9 +195,9 @@ export async function sendGmailMessage(
   bcc?: string,
 ): Promise<{ id: string; threadId: string }> {
   const headerLines = [
-    `To: ${to}`,
-    ...(cc ? [`Cc: ${cc}`] : []),
-    ...(bcc ? [`Bcc: ${bcc}`] : []),
+    `To: ${encodeAddressHeader(to)}`,
+    ...(cc ? [`Cc: ${encodeAddressHeader(cc)}`] : []),
+    ...(bcc ? [`Bcc: ${encodeAddressHeader(bcc)}`] : []),
     `Subject: ${encodeRfc2047(subject)}`,
     'Content-Type: text/html; charset=UTF-8',
     'MIME-Version: 1.0',
