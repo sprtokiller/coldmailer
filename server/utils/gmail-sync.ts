@@ -56,6 +56,7 @@ async function buildDomainContext(
           blacklistedAddresses: { select: { address: true } },
           additionalAddresses: { select: { address: true } },
           autoIncludeDomain: true,
+          domainOverride: true,
         },
       },
     },
@@ -95,6 +96,15 @@ async function buildDomainContext(
       for (const a of neg.additionalAddresses) {
         knownEmails.add(a.address.toLowerCase())
       }
+    }
+
+    // Ruční přepis domény má přednost před auto-detekcí – nahradí celou množinu.
+    const overrides = rec.negotiations
+      .map(neg => neg.domainOverride?.trim().toLowerCase())
+      .filter((d): d is string => !!d)
+    if (overrides.length > 0) {
+      domains.clear()
+      for (const d of overrides) domains.add(d)
     }
 
     const hasCompanyDomain = domains.size > 0

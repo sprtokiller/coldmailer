@@ -2,9 +2,12 @@
 const props = defineProps<{
   globalRecordId: string
   detectedDomain: string | null
+  domainOverride: string | null
+  domainIsManual: boolean
   autoIncludeDomain: boolean
   blacklist: string[]
   additionalAddresses: string[]
+  canEdit: boolean
 }>()
 
 const emit = defineEmits<{ changed: [] }>()
@@ -17,7 +20,30 @@ async function patchSettings(body: Record<string, unknown>) {
 }
 
 async function toggleAutoIncludeDomain() {
+  if (!props.canEdit) return
   await patchSettings({ autoIncludeDomain: !props.autoIncludeDomain })
+}
+
+// ── Manual domain override ────────────────────────────────────────────────────
+
+const editingDomain = ref(false)
+const domainInput = ref('')
+
+function startEditDomain() {
+  domainInput.value = props.domainOverride ?? props.detectedDomain ?? ''
+  editingDomain.value = true
+}
+
+async function saveDomain() {
+  editingDomain.value = false
+  const value = domainInput.value.trim()
+  await patchSettings({ domainOverride: value || null })
+  toast.show(value ? 'Doména přepsána' : 'Doména vrácena na automatickou', 'success')
+}
+
+async function clearDomainOverride() {
+  await patchSettings({ domainOverride: null })
+  toast.show('Doména vrácena na automatickou', 'success')
 }
 
 // ── Blacklist ────────────────────────────────────────────────────────────────
@@ -81,21 +107,45 @@ async function removeAdditionalAddress(email: string) {
 
 <template>
   <div class="space-y-4">
-    <!-- Auto-include domain toggle -->
-    <div v-if="detectedDomain" class="flex items-center justify-between gap-4 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-      <div class="flex items-center gap-3 min-w-0">
-        <div>
+    <!-- Auto-include domain toggle + manuální přepis domény -->
+    <div v-if="detectedDomain || canEdit" class="flex items-center justify-between gap-4 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="min-w-0 flex-1">
           <p class="text-xs font-medium text-gray-700">Automaticky zahrnout doménu</p>
-          <p class="text-[11px] text-gray-400 mt-0.5">Sledovat emaily s doménou <span class="font-mono text-indigo-600">@{{ detectedDomain }}</span></p>
+          <template v-if="editingDomain">
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-[11px] text-gray-400">Sledovat emaily s doménou @</span>
+              <input
+                v-model="domainInput"
+                type="text"
+                placeholder="example.com"
+                class="text-xs font-mono px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-300 flex-1 min-w-0"
+                @keydown.enter="saveDomain"
+                @keydown.escape="editingDomain = false"
+              />
+              <button class="text-xs px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0" @click="saveDomain">Uložit</button>
+              <button class="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0" @click="editingDomain = false">Zrušit</button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>Sledovat emaily s doménou <span class="font-mono text-indigo-600">@{{ detectedDomain ?? '—' }}</span></span>
+              <span v-if="domainIsManual" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">ručně</span>
+              <button v-if="canEdit" class="text-[10px] text-gray-400 hover:text-indigo-600 transition-colors" @click="startEditDomain">✏️ přepsat</button>
+              <button v-if="canEdit && domainIsManual" class="text-[10px] text-gray-400 hover:text-red-500 transition-colors" @click="clearDomainOverride">↺ auto</button>
+            </p>
+          </template>
         </div>
       </div>
       <button
         :class="[
-          'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-          autoIncludeDomain ? 'bg-indigo-600' : 'bg-gray-200'
+          'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200',
+          autoIncludeDomain ? 'bg-indigo-600' : 'bg-gray-200',
+          canEdit ? 'cursor-pointer' : 'cursor-default opacity-60',
         ]"
         role="switch"
         :aria-checked="autoIncludeDomain"
+        :disabled="!canEdit"
         @click="toggleAutoIncludeDomain"
       >
         <span
@@ -129,6 +179,7 @@ async function removeAdditionalAddress(email: string) {
             >
               <span class="font-mono text-gray-600 truncate">{{ email }}</span>
               <button
+                v-if="canEdit"
                 class="text-xs text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
                 @click="removeFromBlacklist(email)"
               >odebrat</button>
@@ -136,7 +187,7 @@ async function removeAdditionalAddress(email: string) {
             <p v-if="!blacklist.length" class="text-xs text-gray-400 italic">Žádné blokované adresy</p>
           </div>
           <p v-if="blacklistError" class="text-[11px] text-red-500 mb-2">{{ blacklistError }}</p>
-          <div class="flex items-center gap-2">
+          <div v-if="canEdit" class="flex items-center gap-2">
             <input
               v-model="newBlacklistEmail"
               type="email"
@@ -171,6 +222,7 @@ async function removeAdditionalAddress(email: string) {
             >
               <span class="font-mono text-gray-600 truncate">{{ email }}</span>
               <button
+                v-if="canEdit"
                 class="text-xs text-gray-300 hover:text-red-400 transition-colors flex-shrink-0"
                 @click="removeAdditionalAddress(email)"
               >odebrat</button>
@@ -178,7 +230,7 @@ async function removeAdditionalAddress(email: string) {
             <p v-if="!additionalAddresses.length" class="text-xs text-gray-400 italic">Žádné přídavné adresy</p>
           </div>
           <p v-if="additionalError" class="text-[11px] text-red-500 mb-2">{{ additionalError }}</p>
-          <div class="flex items-center gap-2">
+          <div v-if="canEdit" class="flex items-center gap-2">
             <input
               v-model="newAdditionalEmail"
               type="email"

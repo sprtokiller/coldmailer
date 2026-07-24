@@ -1,7 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
-import { getInteractionAccess, canEditNegotiation } from '~/server/utils/projectPermissions'
+import { canEditNegotiation } from '~/server/utils/projectPermissions'
 import { upsertNegotiationAssignees } from '~/server/utils/negotiation-assignment'
 
 export default defineEventHandler(async (event) => {
@@ -33,9 +33,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (addAssigneeId !== undefined || (removeAssigneeId !== undefined && removeAssigneeId !== session.id)) {
-    const access = await getInteractionAccess(session.id, projectId)
-    if (!access.canEditAll && !access.isAdmin) {
-      throw createError({ statusCode: 403, message: 'Přiřazování partnerů je vyhrazeno pro vedení obchodu.' })
+    const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+    if (!canEdit) {
+      throw createError({ statusCode: 403, message: 'Přiřazovat lidi k jednání může kdokoli k němu přiřazený nebo vedení obchodu.' })
     }
   }
 

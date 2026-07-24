@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS } from '~/utils/negotiationStatus'
+import { todoUrgency, todoColorClass, formatTodoDate } from '~/utils/checklist'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -14,6 +15,10 @@ interface Partner {
   lastInteractionAt: string | null
   interactionCount: number
   unreadEmailCount: number
+  openTasks: number
+  nearestDueDate: string | null
+  nearestTaskText: string | null
+  taskOverdue: boolean
   negotiationStatus: string | null
   inProject: boolean
 }
@@ -55,7 +60,7 @@ const availableStatuses = computed(() => {
   return Array.from(set)
 })
 
-type SortKey = 'name' | 'status' | 'assignees' | 'interactions' | 'unread' | 'lastContact'
+type SortKey = 'name' | 'status' | 'assignees' | 'interactions' | 'tasks' | 'lastContact'
 const sortKey = ref<SortKey | null>(null)
 const sortDir = ref<'asc' | 'desc'>('asc')
 
@@ -80,8 +85,8 @@ function sortByColumn(list: Partner[], key: SortKey, dir: 'asc' | 'desc'): Partn
         return mult * (a.assignees.length - b.assignees.length)
       case 'interactions':
         return mult * (a.interactionCount - b.interactionCount)
-      case 'unread':
-        return mult * (a.unreadEmailCount - b.unreadEmailCount)
+      case 'tasks':
+        return mult * (a.openTasks - b.openTasks)
       case 'lastContact': {
         const at = a.lastInteractionAt ? new Date(a.lastInteractionAt).getTime() : 0
         const bt = b.lastInteractionAt ? new Date(b.lastInteractionAt).getTime() : 0
@@ -150,6 +155,23 @@ function lastInteractionColor(p: Partner): string {
   return 'bg-red-100 text-red-700'
 }
 
+// Barva sloupce Úkoly dle blízkosti nejnaléhavějšího termínu (po termínu / dnes = červená + "!").
+function todoColor(p: Partner): string {
+  if (isReadOnly(p) || p.openTasks === 0 || !p.nearestDueDate) return ''
+  return todoColorClass(todoUrgency(new Date(p.nearestDueDate)))
+}
+
+// Tooltip pro sloupec Úkoly — nejvíce po termínu, jinak nejbližší úkol.
+function taskTooltip(p: Partner): string {
+  if (p.openTasks === 0) return 'Žádné nesplněné úkoly'
+  if (!p.nearestDueDate || !p.nearestTaskText) {
+    return `Nesplněných úkolů: ${p.openTasks} (bez termínu)`
+  }
+  const dateStr = formatTodoDate(new Date(p.nearestDueDate))
+  const prefix = p.taskOverdue ? 'Po termínu' : 'Nejbližší'
+  return `${prefix}: ${dateStr} – ${p.nearestTaskText}`
+}
+
 </script>
 
 <template>
@@ -201,8 +223,8 @@ function lastInteractionColor(p: Partner): string {
             <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center cursor-pointer select-none hover:text-gray-700" @click="toggleSort('interactions')">
               Interakce<span v-if="sortKey === 'interactions'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
             </th>
-            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center cursor-pointer select-none hover:text-gray-700" @click="toggleSort('unread')">
-              Nepřečteno<span v-if="sortKey === 'unread'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
+            <th class="px-4 py-3 font-medium text-gray-500 text-xs text-center cursor-pointer select-none hover:text-gray-700" @click="toggleSort('tasks')">
+              Úkoly<span v-if="sortKey === 'tasks'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
             </th>
             <th class="px-4 py-3 font-medium text-gray-500 text-xs cursor-pointer select-none hover:text-gray-700" @click="toggleSort('lastContact')">
               Poslední kontakt<span v-if="sortKey === 'lastContact'">{{ sortDir === 'asc' ? ' ▲' : ' ▼' }}</span>
@@ -290,13 +312,25 @@ function lastInteractionColor(p: Partner): string {
             </td>
             <td class="px-4 py-3 text-center">
               <span class="text-xs font-medium" :class="isReadOnly(p) ? 'text-gray-400' : 'text-gray-700'">{{ p.interactionCount }}</span>
-            </td>
-            <td class="px-4 py-3 text-center">
               <span
                 v-if="p.unreadEmailCount > 0"
-                class="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                :class="isReadOnly(p) ? 'bg-gray-100 text-gray-400' : 'bg-red-50 text-red-600 border border-red-200'"
-              >{{ p.unreadEmailCount }}</span>
+                :title="`${p.unreadEmailCount} nepřečtených e-mailů`"
+                class="text-xs font-bold ml-0.5"
+                :class="isReadOnly(p) ? 'text-gray-400' : 'text-red-600'"
+              >({{ p.unreadEmailCount }})</span>
+            </td>
+            <td
+              class="px-4 py-3 text-center"
+              :title="taskTooltip(p)"
+            >
+              <span
+                v-if="p.openTasks > 0"
+                class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                :class="isReadOnly(p) ? 'text-gray-400' : (todoColor(p) || 'text-gray-600')"
+              >
+                <span v-if="!isReadOnly(p) && p.taskOverdue" class="font-bold">!</span>
+                {{ p.openTasks }}
+              </span>
               <span v-else class="text-xs text-gray-300">—</span>
             </td>
             <td

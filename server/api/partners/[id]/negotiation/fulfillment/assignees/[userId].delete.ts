@@ -1,7 +1,7 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
-import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { canEditNegotiation } from '~/server/utils/projectPermissions'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuth(event)
@@ -14,9 +14,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Není vybrán žádný projekt.' })
   }
 
-  const access = await getInteractionAccess(session.id, projectId)
-  if (!access.canEditAll && !access.isAdmin) {
-    throw createError({ statusCode: 403, message: 'Správu přiřazených uživatelů k záznamu smí provádět pouze vedení obchodu.' })
+  const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+  if (!canEdit) {
+    throw createError({ statusCode: 403, message: 'Správu přiřazených uživatelů smí provádět kdokoli přiřazený k jednání nebo vedení obchodu.' })
   }
 
   const negotiation = await prisma.negotiation.findUnique({

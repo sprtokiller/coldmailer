@@ -62,6 +62,7 @@ export default defineEventHandler(async (event) => {
     select: {
       myToThem: true,
       themToUs: true,
+      todoList: true,
       emails: { select: EMAIL_SELECT },
       notes: { select: NOTE_SELECT },
     },
@@ -95,6 +96,8 @@ export default defineEventHandler(async (event) => {
   const fulfillment = canViewFull
     ? { myToThem: negotiation?.myToThem ?? null, themToUs: negotiation?.themToUs ?? null }
     : { myToThem: null, themToUs: null }
+
+  const todoList = canViewFull ? (negotiation?.todoList ?? null) : null
 
   // Cross-visibility: metadata from other projects where user is assignee on
   // at least one email/note/fulfillment for this same partner.
@@ -166,12 +169,13 @@ export default defineEventHandler(async (event) => {
   return {
     items,
     fulfillment,
+    todoList,
     crossProjectSummary,
     access: {
       canViewAll: access.canViewAll || access.isAdmin,
       canEditAll: access.canEditAll || access.isAdmin,
       canEdit: effectiveCanEdit,
-      canManageAssignees: access.canEditAll || access.isAdmin,
+      canManageAssignees: effectiveCanEdit,
     },
   }
 })
