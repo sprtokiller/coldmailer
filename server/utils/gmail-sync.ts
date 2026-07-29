@@ -10,6 +10,9 @@ import { appendProjectAdditionalAddress } from '~/server/utils/project-additiona
 
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 200
+// Refresh the access token this long before it actually expires, so background
+// syncs keep tokens fresh instead of only reacting once they've already lapsed.
+const TOKEN_REFRESH_BUFFER_MS = 10 * 60 * 1000
 
 export const FREE_EMAIL_DOMAINS = new Set([
   'gmail.com', 'googlemail.com', 'seznam.cz', 'email.cz', 'post.cz',
@@ -145,6 +148,11 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   const partnerEmailMap = await collectPartnerEmails(user.id, user.isAdmin)
 
   if (partnerEmailMap.size === 0) {
+    // Token was already refreshed above via ensureFreshToken; advance the sync
+    // watermark so the staggered background sweep (which picks the oldest
+    // lastGmailSync first) rotates past users with no assigned partners instead
+    // of getting stuck on them forever.
+    await prisma.user.update({ where: { id: userId }, data: { lastGmailSync: new Date() } })
     return { synced: 0, assigned: false }
   }
 
@@ -158,7 +166,7 @@ export async function syncGmailForUser(userId: string, options?: { forceLookback
   }
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
-  const query = `after:${afterTimestamp} -in:draft`
+  const query = `after:${afterTimestamp} -in:draft -in:trash`
 
   let synced = 0
   let pageToken: string | undefined
@@ -201,7 +209,10 @@ async function ensureFreshToken(user: {
 }): Promise<string> {
   if (!user.accessToken) throw new Error('No access token')
 
-  if (user.tokenExpiry && user.tokenExpiry < new Date() && user.refreshToken) {
+  // Refresh proactively, before the access token actually expires, so the
+  // background sync keeps users' tokens alive (and the refresh token exercised)
+  // even while they are not logged in.
+  if (user.tokenExpiry && user.tokenExpiry.getTime() < Date.now() + TOKEN_REFRESH_BUFFER_MS && user.refreshToken) {
     const config = useRuntimeConfig()
     const refreshed = await refreshAccessToken(
       user.refreshToken,
@@ -310,7 +321,7 @@ export async function syncGmailForPartnerEmail(
   const afterDate = lookbackDate < oneYearAgo ? oneYearAgo : lookbackDate
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
-  const query = `(from:${normalizedEmail} OR to:${normalizedEmail}) after:${afterTimestamp} -in:draft`
+  const query = `(from:${normalizedEmail} OR to:${normalizedEmail}) after:${afterTimestamp} -in:draft -in:trash`
 
   let synced = 0
   let pageToken: string | undefined
@@ -424,7 +435,7 @@ export async function syncGmailForNegotiationRecord(
   const afterDate = lookbackDate < oneYearAgo ? oneYearAgo : lookbackDate
 
   const afterTimestamp = Math.floor(afterDate.getTime() / 1000)
-  const query = `(${queryParts.join(' OR ')}) after:${afterTimestamp} -in:draft`
+  const query = `(${queryParts.join(' OR ')}) after:${afterTimestamp} -in:draft -in:trash`
 
   let synced = 0
   let pageToken: string | undefined

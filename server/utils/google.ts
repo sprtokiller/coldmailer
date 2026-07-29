@@ -105,7 +105,7 @@ export async function listGmailMessages(
   query: string,
   pageToken?: string,
 ): Promise<{ messages?: { id: string }[]; nextPageToken?: string }> {
-  const params = new URLSearchParams({ q: query, maxResults: '100' })
+  const params = new URLSearchParams({ q: query, maxResults: '100', includeSpamTrash: 'true' })
   if (pageToken) params.set('pageToken', pageToken)
 
   return $fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, {
