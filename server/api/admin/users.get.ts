@@ -28,6 +28,9 @@ export default defineEventHandler(async (event) => {
     isAdmin: u.isAdmin,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt,
+    lastGmailSync: u.lastGmailSync,
+    tokenExpiry: u.tokenExpiry,
+    hasRefreshToken: !!u.refreshToken,
     projectRoles: u.projectRoles.map(upr => ({
       id: upr.projectRole.id,
       name: upr.projectRole.name,

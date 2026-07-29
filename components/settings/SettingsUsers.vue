@@ -101,6 +101,24 @@ function lastLoginColor(lastLoginAt: string | null): string {
   return 'bg-red-50 text-red-600 border-red-200'
 }
 
+// ── Token status ──────────────────────────────────────────────────────────
+function tokenLabel(tokenExpiry: string | null): string {
+  if (!tokenExpiry) return 'Neznámý'
+  const ms = new Date(tokenExpiry).getTime() - Date.now()
+  if (ms <= 0) return 'Vypršel'
+  const mins = Math.round(ms / 60000)
+  if (mins < 60) return `Vyprší za ${mins} min`
+  return `Platný (${new Date(tokenExpiry).toLocaleString('cs-CZ')})`
+}
+
+function tokenColor(tokenExpiry: string | null): string {
+  if (!tokenExpiry) return 'bg-gray-100 text-gray-400 border-gray-200'
+  const ms = new Date(tokenExpiry).getTime() - Date.now()
+  if (ms <= 0) return 'bg-red-50 text-red-600 border-red-200'
+  if (ms < 60 * 60 * 1000) return 'bg-amber-50 text-amber-700 border-amber-200'
+  return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+}
+
 // ── Admin toggle ──────────────────────────────────────────────────────────
 const adminCount = computed(() => props.adminUsers?.filter(u => u.isAdmin).length ?? 0)
 
@@ -357,6 +375,32 @@ function availableProjectRoles(user: AdminUser) {
                       {{ new Date(u.lastLoginAt).toLocaleString('cs-CZ') }}
                     </span>
                     <span v-else class="text-xs text-gray-400 italic">Uživatel ještě nebyl v aplikaci.</span>
+                  </div>
+
+                  <!-- Token status -->
+                  <div class="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-3">
+                    <span
+                      class="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full border"
+                      :class="tokenColor(u.tokenExpiry)"
+                    >
+                      <span>🔑</span>
+                      <span>Platnost tokenu: {{ tokenLabel(u.tokenExpiry) }}</span>
+                    </span>
+                    <span
+                      v-if="u.hasRefreshToken"
+                      class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600"
+                    >
+                      ♻️ Automatické obnovení: aktivní
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-red-50 text-red-600 border-red-200"
+                    >
+                      ⚠️ Chybí refresh token — nutné nové přihlášení
+                    </span>
+                    <span v-if="u.lastGmailSync" class="text-xs text-gray-400">
+                      Poslední synchronizace: {{ new Date(u.lastGmailSync).toLocaleString('cs-CZ') }}
+                    </span>
                   </div>
                 </div>
 

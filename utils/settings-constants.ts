@@ -35,6 +35,9 @@ export type ProjectRoleAssignment = {
 export type AdminUser = {
   id: string; email: string; name: string; image: string | null
   isAdmin: boolean; createdAt: string; lastLoginAt: string | null
+  lastGmailSync: string | null
+  tokenExpiry: string | null
+  hasRefreshToken: boolean
   projectRoles: ProjectRoleAssignment[]
   budget: Budget | null
   unreadEmailCount: number
