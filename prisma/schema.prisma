@@ -464,12 +464,16 @@ model Negotiation {
   negotiationStatus NegotiationStatus?
   emailDisplayMode  String             @default("text")
   autoIncludeDomain Boolean? // null = auto-detect from contacts; true/false = explicit user override
+  domainOverride    String? // ručně zadaná outmatch doména; má přednost před auto-detekcí
   removedAt         DateTime? // partner odebrán z projektu; řádek (a historie) zůstává, jen se skryje z Jednání/Oslovování
   manuallyAddedAt   DateTime? // ručně přidáno do Jednání (Vedení obchodu/admin) bez nutnosti mít e-mail/poznámku
 
   // Obsah plnění – 1:1 s jednáním, prosté sloupce, žádný typový enum
   myToThem String?
   themToUs String?
+
+  // To-Do seznam – 1:1 s jednáním, markdown checklist s volitelným datem deadline
+  todoList String?
 
   additionalAddresses  NegotiationAddress[]
   blacklistedAddresses NegotiationBlacklistedAddress[]

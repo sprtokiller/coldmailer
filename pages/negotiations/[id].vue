@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { normalizeChecklist } from '~/utils/checklist'
+import { normalizeChecklist, normalizeTodo, toggleChecklistLine } from '~/utils/checklist'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -55,6 +55,7 @@ interface CrossProjectMeta {
 interface TimelineResponse {
   items: Interaction[]
   fulfillment: { myToThem: string | null; themToUs: string | null }
+  todoList: string | null
   crossProjectSummary: CrossProjectMeta[]
   access: { canViewAll: boolean; canEditAll: boolean; canEdit: boolean; canManageAssignees: boolean }
 }
@@ -77,6 +78,8 @@ const { data: blacklistData, refresh: refreshBlacklist } = await useFetch<{
   additionalAddresses: string[]
   autoIncludeDomain: boolean
   detectedDomain: string | null
+  domainOverride: string | null
+  domainIsManual: boolean
 }>(`/api/partners/${id}/blacklist`)
 const { data: allUsers } = await useFetch<AppUser[]>('/api/users')
 const { user: me } = useUserSession()
@@ -156,6 +159,8 @@ const blacklist = computed(() => blacklistData.value?.blacklist ?? [])
 const additionalAddresses = computed(() => blacklistData.value?.additionalAddresses ?? [])
 const autoIncludeDomain = computed(() => blacklistData.value?.autoIncludeDomain ?? false)
 const detectedDomain = computed(() => blacklistData.value?.detectedDomain ?? null)
+const domainOverride = computed(() => blacklistData.value?.domainOverride ?? null)
+const domainIsManual = computed(() => blacklistData.value?.domainIsManual ?? false)
 
 // ── Email display mode ───────────────────────────────────────────────────────
 
@@ -172,14 +177,18 @@ async function toggleEmailDisplayMode() {
 
 // ── Filter ───────────────────────────────────────────────────────────────────
 
-type TypeFilter = 'NOTE' | 'EMAIL' | 'FULFILLMENT'
+type TypeFilter = 'NOTE' | 'EMAIL' | 'FULFILLMENT' | 'TODO'
 const typeFilter = ref<TypeFilter>('EMAIL')
 
 const filteredInteractions = computed(() => {
-  if (typeFilter.value === 'FULFILLMENT') {
+  if (typeFilter.value === 'NOTE') {
     return interactions.value.filter(i => i.type === 'NOTE')
   }
-  return interactions.value.filter(i => i.type === typeFilter.value && !(i.type === 'EMAIL' && i.isUnknownContact))
+  if (typeFilter.value === 'EMAIL') {
+    return interactions.value.filter(i => i.type === 'EMAIL' && !i.isUnknownContact)
+  }
+  // FULFILLMENT a TODO mají vlastní obsah (checklisty), ne seznam interakcí.
+  return []
 })
 
 const emailInteractions = computed<EmailItem[]>(() => filteredInteractions.value.filter((i): i is EmailItem => i.type === 'EMAIL'))
@@ -250,6 +259,48 @@ async function toggleCheckItem(field: 'myToThem' | 'themToUs', lineIndex: number
     await refreshInteractions()
   } finally {
     togglingItem.value = null
+  }
+}
+
+// ── To-Do list ────────────────────────────────────────────────────────────────
+
+const todoContent = computed(() => interactionsData.value?.todoList ?? null)
+const todoEditing = ref(false)
+const todoEditingValue = ref('')
+const togglingTodoLine = ref<number | null>(null)
+
+function startTodoEdit() {
+  todoEditingValue.value = todoContent.value ?? ''
+  todoEditing.value = true
+}
+
+async function saveTodo() {
+  if (!todoEditing.value) return
+  todoEditing.value = false
+  const normalized = todoEditingValue.value.trim() ? normalizeTodo(todoEditingValue.value) : null
+  await $fetch(`/api/partners/${id}/negotiation/todo`, {
+    method: 'PATCH',
+    body: { todoList: normalized },
+  })
+  toast.show('To-Do uloženo', 'success')
+  await refreshInteractions()
+}
+
+async function toggleTodoLine(lineIndex: number) {
+  const current = todoContent.value ?? ''
+  const next = toggleChecklistLine(current, lineIndex)
+  togglingTodoLine.value = lineIndex
+  // Optimistický update
+  if (interactionsData.value) interactionsData.value.todoList = next
+  try {
+    await $fetch(`/api/partners/${id}/negotiation/todo`, {
+      method: 'PATCH',
+      body: { todoList: next },
+    })
+  } catch {
+    await refreshInteractions()
+  } finally {
+    togglingTodoLine.value = null
   }
 }
 
@@ -390,6 +441,7 @@ const TYPE_LABELS: Record<string, string> = {
   NOTE: 'Poznámky',
   EMAIL: 'Email',
   FULFILLMENT: 'Obsah plnění',
+  TODO: 'To-Do',
 }
 </script>
 
@@ -411,7 +463,7 @@ const TYPE_LABELS: Record<string, string> = {
     <div class="flex items-center justify-between gap-4 mb-6">
       <div class="flex gap-1">
         <button
-          v-for="f in (['EMAIL', 'NOTE', 'FULFILLMENT'] as TypeFilter[])"
+          v-for="f in (['EMAIL', 'NOTE', 'FULFILLMENT', 'TODO'] as TypeFilter[])"
           :key="f"
           :class="['px-3 py-1.5 text-xs font-medium rounded-lg transition-colors', typeFilter === f ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100']"
           @click="typeFilter = f"
@@ -513,6 +565,22 @@ const TYPE_LABELS: Record<string, string> = {
       />
     </div>
 
+    <!-- ── To-Do list (jeden na jednání, mimo seznam interakcí) ── -->
+    <div v-if="typeFilter === 'TODO'" class="mb-6">
+      <NegotiationsTodoChecklist
+        :content="todoContent"
+        :can-edit="canEdit"
+        :editing="todoEditing"
+        :editing-value="todoEditingValue"
+        :toggling-line-index="togglingTodoLine"
+        @start-edit="startTodoEdit"
+        @update:editing-value="v => todoEditingValue = v"
+        @save="saveTodo"
+        @cancel-edit="todoEditing = false"
+        @toggle-line="toggleTodoLine"
+      />
+    </div>
+
     <!-- ── Interaction List ── -->
     <div class="space-y-3">
       <template v-if="typeFilter === 'EMAIL'">
@@ -531,10 +599,10 @@ const TYPE_LABELS: Record<string, string> = {
       </template>
 
       <!-- Notes -->
-      <template v-else>
+      <template v-else-if="typeFilter === 'NOTE'">
         <NegotiationsNoteList
           :notes="noteInteractions"
-          :show-type-badge="typeFilter === 'FULFILLMENT'"
+          :show-type-badge="false"
           :editing-id="editingId"
           :editing-content="editingContent"
           @start-edit="startEdit"
@@ -578,9 +646,12 @@ const TYPE_LABELS: Record<string, string> = {
       <NegotiationsContactManagementPanel
         :global-record-id="id"
         :detected-domain="detectedDomain"
+        :domain-override="domainOverride"
+        :domain-is-manual="domainIsManual"
         :auto-include-domain="autoIncludeDomain"
         :blacklist="blacklist"
         :additional-addresses="additionalAddresses"
+        :can-edit="canEdit"
         @changed="refreshBlacklist()"
       />
     </div>

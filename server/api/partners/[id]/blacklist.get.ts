@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   const globalRecordId = getRouterParam(event, 'id')!
   const projectId = await getActiveProjectId(event)
 
-  if (!projectId) return { blacklist: [], emailDisplayMode: 'text', domains: [], additionalAddresses: [], autoIncludeDomain: false, detectedDomain: null }
+  if (!projectId) return { blacklist: [], emailDisplayMode: 'text', domains: [], additionalAddresses: [], autoIncludeDomain: false, detectedDomain: null, domainOverride: null, domainIsManual: false }
 
   const record = await prisma.globalRecord.findUnique({
     where: { id: globalRecordId },
@@ -46,6 +46,7 @@ export default defineEventHandler(async (event) => {
         select: {
           emailDisplayMode: true,
           autoIncludeDomain: true,
+          domainOverride: true,
           blacklistedAddresses: { select: { address: true } },
           additionalAddresses: { select: { address: true } },
         },
@@ -75,9 +76,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const detectedDomain = record
+  const domainOverride = negotiation?.domainOverride?.trim() || null
+  const autoDetectedDomain = record
     ? detectCompanyDomain(record.contacts, record.payload as Record<string, unknown> | null)
     : null
+
+  // Ruční přepis má přednost před auto-detekcí (jak pro zobrazení, tak pro sledovanou množinu domén).
+  const detectedDomain = domainOverride ?? autoDetectedDomain
+  const effectiveDomains = domainOverride ? [domainOverride] : Array.from(domains)
 
   // null stored value → default to true if a company domain was detected
   const autoIncludeDomain = negotiation?.autoIncludeDomain ?? (detectedDomain !== null)
@@ -85,9 +91,11 @@ export default defineEventHandler(async (event) => {
   return {
     blacklist: negotiation?.blacklistedAddresses.map(a => a.address) ?? [],
     emailDisplayMode: negotiation?.emailDisplayMode ?? 'text',
-    domains: Array.from(domains),
+    domains: effectiveDomains,
     additionalAddresses: negotiation?.additionalAddresses.map(a => a.address) ?? [],
     autoIncludeDomain,
     detectedDomain,
+    domainOverride,
+    domainIsManual: !!domainOverride,
   }
 })

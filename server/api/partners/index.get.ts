@@ -2,6 +2,7 @@ import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveScope } from '~/server/utils/activeProject'
 import { getInteractionAccess } from '~/server/utils/projectPermissions'
+import { parseTodoLines, todoUrgency } from '~/utils/checklist'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAuth(event)
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event) => {
         where: negotiationWhere,
         select: {
           negotiationStatus: true,
+          todoList: true,
           emails: { select: { sentAt: true, isRead: true }, orderBy: { sentAt: 'desc' } },
           notes: { select: { updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
           _count: { select: { emails: true } },
@@ -53,6 +55,15 @@ export default defineEventHandler(async (event) => {
       ? (lastEmailAt > lastNoteAt ? lastEmailAt : lastNoteAt)
       : (lastEmailAt ?? lastNoteAt ?? null)
 
+    // To-Do agregace: nesplněné úkoly + nejnaléhavější (nejdřívější termín = nejvíc po termínu / nejbližší).
+    const openTodos = negotiation?.todoList
+      ? parseTodoLines(negotiation.todoList).filter(l => !l.checked)
+      : []
+    const datedOpen = openTodos
+      .filter(l => l.dueDate)
+      .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime())
+    const nearest = datedOpen[0] ?? null
+
     return {
       id: r.id,
       type: r.type,
@@ -64,6 +75,10 @@ export default defineEventHandler(async (event) => {
       lastInteractionAt,
       interactionCount: negotiation?._count.emails ?? 0,
       unreadEmailCount: negotiation?.emails.filter(e => !e.isRead).length ?? 0,
+      openTasks: openTodos.length,
+      nearestDueDate: nearest?.dueDate ?? null,
+      nearestTaskText: nearest?.label ?? null,
+      taskOverdue: nearest ? (todoUrgency(nearest.dueDate) === 'overdue' || todoUrgency(nearest.dueDate) === 'today') : false,
       negotiationStatus: negotiation?.negotiationStatus ?? null,
       inProject: !!negotiation,
     }

@@ -15,22 +15,19 @@ export default defineEventHandler(async (event) => {
 
   const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
   if (!canEdit) {
-    throw createError({ statusCode: 403, message: 'Správu přiřazených uživatelů smí provádět kdokoli přiřazený k jednání nebo vedení obchodu.' })
+    throw createError({ statusCode: 403, message: 'Nemáte oprávnění editovat toto jednání. Nejste přiřazeni k tomuto partnerovi.' })
   }
 
-  const { userId } = await readBody<{ userId: string }>(event)
-  if (!userId) throw createError({ statusCode: 400, message: 'userId je povinné' })
+  const body = await readBody<{ todoList?: string | null }>(event)
+  if (body.todoList === undefined) {
+    return { ok: true }
+  }
 
   const negotiation = await prisma.negotiation.upsert({
     where: { projectId_globalRecordId: { projectId, globalRecordId } },
-    create: { projectId, globalRecordId },
-    update: {},
+    create: { projectId, globalRecordId, todoList: body.todoList },
+    update: { todoList: body.todoList },
   })
 
-  return prisma.fulfillmentAssignee.upsert({
-    where: { negotiationId_userId: { negotiationId: negotiation.id, userId } },
-    create: { negotiationId: negotiation.id, userId },
-    update: {},
-    include: { user: { select: { id: true, name: true, image: true } } },
-  })
+  return { id: negotiation.id, todoList: negotiation.todoList }
 })

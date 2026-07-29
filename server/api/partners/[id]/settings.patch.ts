@@ -1,9 +1,22 @@
 import { prisma } from '~/server/utils/prisma'
 import { requireAuth } from '~/server/utils/requireAuth'
 import { getActiveProjectId } from '~/server/utils/activeProject'
+import { canEditNegotiation } from '~/server/utils/projectPermissions'
+import { getDomainFromUrl } from '~/server/utils/gmail-sync'
+
+// Normalizuje vstup na holou doménu (podporuje i vloženou URL). Prázdné → null.
+function normalizeDomain(input: string): string | null {
+  const trimmed = input.trim().toLowerCase()
+  if (!trimmed) return null
+  if (trimmed.includes('/') || trimmed.includes('://')) {
+    const withProto = /:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`
+    return getDomainFromUrl(withProto) || null
+  }
+  return trimmed.replace(/^www\./, '').replace(/^@/, '')
+}
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  const session = await requireAuth(event)
   const globalRecordId = getRouterParam(event, 'id')!
   const projectId = await getActiveProjectId(event)
 
@@ -14,11 +27,29 @@ export default defineEventHandler(async (event) => {
     emailDisplayMode?: string
     additionalAddresses?: string[]
     autoIncludeDomain?: boolean
+    domainOverride?: string | null
   }>(event)
+
+  // emailDisplayMode je jen zobrazovací přepínač (Text/HTML náhled) dostupný i divákům –
+  // historicky bez kontroly. Citlivá nastavení (doména, blacklist, přídavné adresy) smí
+  // měnit jen kdokoli s právem editace jednání (přiřazený nebo vedení obchodu).
+  const changesSensitive = body.contactBlacklist !== undefined
+    || body.additionalAddresses !== undefined
+    || body.autoIncludeDomain !== undefined
+    || body.domainOverride !== undefined
+  if (changesSensitive) {
+    const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+    if (!canEdit) {
+      throw createError({ statusCode: 403, message: 'Nemáte oprávnění upravovat nastavení tohoto jednání. Nejste přiřazeni k tomuto partnerovi.' })
+    }
+  }
 
   const scalarData: Record<string, unknown> = {}
   if (body.emailDisplayMode !== undefined) scalarData.emailDisplayMode = body.emailDisplayMode
   if (body.autoIncludeDomain !== undefined) scalarData.autoIncludeDomain = body.autoIncludeDomain
+  if (body.domainOverride !== undefined) {
+    scalarData.domainOverride = body.domainOverride ? normalizeDomain(body.domainOverride) : null
+  }
 
   const newBlacklist = body.contactBlacklist !== undefined ? [...new Set(body.contactBlacklist)] : undefined
   const newAddresses = body.additionalAddresses !== undefined ? [...new Set(body.additionalAddresses)] : undefined

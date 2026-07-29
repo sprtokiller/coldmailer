@@ -51,10 +51,11 @@ export async function getInteractionAccess(userId: string, projectId: string) {
   }
 }
 
-// Returns true if the user is personally the OutreachAssignment holder (oslovení) or a
-// NegotiationAssignee (jednání) for this partner — independent of admin/role-based permissions.
+// Returns true if the user is personally the OutreachAssignment holder (oslovení), a
+// NegotiationAssignee (jednání), or a FulfillmentAssignee (plnitel) for this partner —
+// independent of admin/role-based permissions.
 export async function isAssignedToNegotiation(userId: string, projectId: string, globalRecordId: string): Promise<boolean> {
-  const [outreachAssignment, negotiationAssignee] = await Promise.all([
+  const [outreachAssignment, negotiationAssignee, fulfillmentAssignee] = await Promise.all([
     prisma.outreachAssignment.findFirst({
       where: { projectId, globalRecordId, assigneeId: userId },
       select: { id: true },
@@ -63,8 +64,13 @@ export async function isAssignedToNegotiation(userId: string, projectId: string,
       where: { projectId, globalRecordId, userId },
       select: { id: true },
     }),
+    // FulfillmentAssignee je klíčovaný negotiationId, takže join přes Negotiation (projectId + globalRecordId).
+    prisma.fulfillmentAssignee.findFirst({
+      where: { userId, negotiation: { projectId, globalRecordId } },
+      select: { negotiationId: true },
+    }),
   ])
-  return !!outreachAssignment || !!negotiationAssignee
+  return !!outreachAssignment || !!negotiationAssignee || !!fulfillmentAssignee
 }
 
 // Returns true if user can create/edit interactions and update status for this partner.
