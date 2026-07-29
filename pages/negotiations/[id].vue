@@ -340,6 +340,8 @@ const composerPrefilledSubject = ref('')
 const composerReplyToGmailId = ref<string | null>(null)
 const composerReplyContext = ref<{ content: string; sentAt: string; fromAddress: string } | null>(null)
 const composerEditScheduled = ref<(ScheduledEmailItem & { scheduledFor: string }) | null>(null)
+const composerAiBodyPrefix = ref('')
+const composerRecommendations = ref<string[]>([])
 
 function openNewEmail() {
   composerPrefilledTo.value = firstContact.value?.address ?? ''
@@ -348,6 +350,8 @@ function openNewEmail() {
   composerReplyToGmailId.value = null
   composerReplyContext.value = null
   composerEditScheduled.value = null
+  composerAiBodyPrefix.value = ''
+  composerRecommendations.value = []
   composerOpen.value = true
 }
 
@@ -378,7 +382,59 @@ function openReply(i: EmailItem, replyAll = false) {
     ? { content: i.content, sentAt: i.sentAt ?? i.createdAt, fromAddress: i.fromAddress ?? '' }
     : null
   composerEditScheduled.value = null
+  composerAiBodyPrefix.value = ''
+  composerRecommendations.value = []
   composerOpen.value = true
+}
+
+// ── Reminder (AI follow-up) ─────────────────────────────────────────────────
+interface ReminderTemplate { id: string; name: string }
+const { data: reminderTemplates } = await useFetch<ReminderTemplate[]>('/api/library/email-drafts', {
+  query: { usage: 'REMINDER' },
+})
+
+const lastActivityAt = computed<string | null>(() => {
+  let latest: number | null = null
+  for (const i of interactions.value) {
+    const d = i.type === 'EMAIL' ? (i.sentAt ?? i.createdAt) : i.updatedAt
+    const t = new Date(d).getTime()
+    if (!Number.isNaN(t) && (latest === null || t > latest)) latest = t
+  }
+  return latest === null ? null : new Date(latest).toISOString()
+})
+
+const reminderGenerating = ref(false)
+
+async function onRemind(emailDraftId: string | null) {
+  reminderGenerating.value = true
+  try {
+    const res = await $fetch<{
+      recipients: string[]
+      body: string
+      recommendations: string[]
+      previousEmail: { gmailId: string; subject: string; content: string; sentAt: string | null; fromAddress: string }
+    }>(`/api/partners/${id}/reminder-draft`, {
+      method: 'POST',
+      body: { emailDraftId: emailDraftId ?? undefined },
+    })
+
+    const prev = res.previousEmail
+    composerPrefilledTo.value = res.recipients.join(', ')
+    composerPrefilledCc.value = ''
+    composerPrefilledSubject.value = /^re:/i.test(prev.subject) ? prev.subject : `Re: ${prev.subject}`
+    composerReplyToGmailId.value = prev.gmailId
+    composerReplyContext.value = prev.content
+      ? { content: prev.content, sentAt: prev.sentAt ?? new Date().toISOString(), fromAddress: prev.fromAddress }
+      : null
+    composerEditScheduled.value = null
+    composerAiBodyPrefix.value = res.body
+    composerRecommendations.value = res.recommendations
+    composerOpen.value = true
+  } catch (err) {
+    toast.show(err instanceof Error ? err.message : 'Vygenerování připomínky selhalo', 'error')
+  } finally {
+    reminderGenerating.value = false
+  }
 }
 
 function editScheduledEmail(se: ScheduledEmailItem) {
@@ -457,6 +513,16 @@ const TYPE_LABELS: Record<string, string> = {
       @partner-changed="refreshPartner()"
       @open-profile="showProfileModal = true"
       @open-edit="showEditModal = true"
+    />
+
+    <!-- ── Last activity + reminder ── -->
+    <NegotiationsReminderBox
+      :negotiation-status="partner.negotiationStatus"
+      :last-activity-at="lastActivityAt"
+      :reminder-templates="reminderTemplates ?? []"
+      :can-edit="canEdit"
+      :generating="reminderGenerating"
+      @remind="onRemind"
     />
 
     <!-- ── Toolbar ── -->
@@ -691,6 +757,8 @@ const TYPE_LABELS: Record<string, string> = {
     :reply-context="composerReplyContext"
     :edit-scheduled="composerEditScheduled"
     :has-prior-communication="hasSentEmail"
+    :ai-body-prefix="composerAiBodyPrefix"
+    :recommendations="composerRecommendations"
     @close="composerOpen = false"
     @sent="composerOpen = false; refreshInteractions(); refreshScheduledEmails()"
   />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS } from '~/utils/negotiationStatus'
+import { NEGOTIATION_STATUS_LABELS, NEGOTIATION_STATUS_COLORS, lastActivityColor } from '~/utils/negotiationStatus'
 import { todoUrgency, todoColorClass, formatTodoDate } from '~/utils/checklist'
 
 definePageMeta({ middleware: 'auth' })
@@ -146,13 +146,7 @@ const CLOSED_STATUSES = new Set(['NOT_INTERESTED', 'NOT_THIS_TIME'])
 
 function lastInteractionColor(p: Partner): string {
   if (isReadOnly(p)) return ''
-  if (CLOSED_STATUSES.has(p.negotiationStatus ?? '')) return 'bg-gray-100 text-gray-400'
-  if (!p.lastInteractionAt) return 'bg-gray-100 text-gray-400'
-  const days = (Date.now() - new Date(p.lastInteractionAt).getTime()) / 86_400_000
-  if (days < 3) return ''
-  if (days < 7) return 'bg-yellow-100 text-yellow-700'
-  if (days < 14) return 'bg-orange-100 text-orange-700'
-  return 'bg-red-100 text-red-700'
+  return lastActivityColor(p.negotiationStatus, p.lastInteractionAt)
 }
 
 // Barva sloupce Úkoly dle blízkosti nejnaléhavějšího termínu (po termínu / dnes = červená + "!").

@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
     name: string
     subject: string
     body: string
+    usageTypes?: string[]
     derivedFromId?: string
     projectId?: string | null
     groupId?: string | null
@@ -21,6 +22,7 @@ export default defineEventHandler(async (event) => {
       name: body.name,
       subject: body.subject,
       body: body.body,
+      usageTypes: body.usageTypes ?? [],
       order: (maxOrder._max.order ?? -1) + 1,
       authorId: user.id,
       ...scope,

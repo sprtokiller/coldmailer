@@ -247,12 +247,35 @@ async function seedTdaContent() {
       name: 'Tour de App – základní šablona',
       subject: emailSubject,
       body: emailBody,
+      usageTypes: ['OUTREACH'],
       authorId: kriz.id,
       groupId: tdaGroup.id,
     },
-    update: {},
+    update: { usageTypes: ['OUTREACH'] },
   })
   console.log('  ✓ EmailDraft: Tour de App – základní šablona')
+
+  // ── EmailDraft: připomínková šablona ──────────────────────────────────────
+  const reminderBody = [
+    '<p><span>Dobrý den {oslovení},</span></p>',
+    '<p><span>rád/ráda bych se připomněl/a ohledně možného partnerství s Tour de App (viz předchozí e-mail).</span></p>',
+    '<p><span>Pokud tuto oblast ve firmě řeší někdo jiný, budu rád/ráda za tip na správný kontakt.</span></p>',
+    '<p><span>Děkuji a přeji pěkný den,</span></p>',
+  ].join('\n')
+  await prisma.emailDraft.upsert({
+    where: { id: 'tda-reminder-template' },
+    create: {
+      id: 'tda-reminder-template',
+      name: 'Tour de App – připomínka',
+      subject: 'Připomenutí – Tour de App',
+      body: reminderBody,
+      usageTypes: ['REMINDER'],
+      authorId: kriz.id,
+      groupId: tdaGroup.id,
+    },
+    update: { usageTypes: ['REMINDER'] },
+  })
+  console.log('  ✓ EmailDraft: Tour de App – připomínka')
 
   // ── SellingPoint ──────────────────────────────────────────────────────────
   const spContent = readTdaFile('Tour de App - Arguments.txt')

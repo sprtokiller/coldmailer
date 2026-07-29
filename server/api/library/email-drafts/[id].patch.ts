@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
     name?: string
     subject?: string
     body?: string
+    usageTypes?: string[]
     projectId?: string | null
     groupId?: string | null
   }>(event)
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.subject !== undefined ? { subject: body.subject } : {}),
       ...(body.body !== undefined ? { body: body.body } : {}),
+      ...(body.usageTypes !== undefined ? { usageTypes: body.usageTypes } : {}),
       ...scope,
     },
     include: {

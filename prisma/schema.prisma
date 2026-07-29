@@ -126,6 +126,7 @@ enum StepType {
   PARTNER_PROFILING
   VALUE_ALIGNMENT
   OUTREACH_PREPARATION
+  REMINDER_PREPARATION
 }
 
 model SystemPrompt {
@@ -189,6 +190,7 @@ model EmailDraft {
   name          String
   subject       String
   body          String
+  usageTypes    String[]     @default([])
   order         Int          @default(0)
   authorId      String
   author        User         @relation(fields: [authorId], references: [id])
