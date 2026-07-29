@@ -139,6 +139,7 @@ const form = ref({
   content: '',
   stepType: 'VALUE_ALIGNMENT',
   stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as string[],
+  usageTypes: ['OUTREACH'] as string[],
   subject: '',
   body: '',
   signatureContent: '',
@@ -155,6 +156,7 @@ function resetForm() {
     content: '',
     stepType: 'VALUE_ALIGNMENT',
     stepKeys: ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'],
+    usageTypes: ['OUTREACH'],
     subject: '',
     body: '',
     signatureContent: '',
@@ -201,6 +203,8 @@ function startEdit(item: LibraryItem) {
   form.value.stepType = item.stepType ?? 'VALUE_ALIGNMENT'
   const liveStepKeys = item.stepKeys?.filter(k => STEP_TYPES.includes(k)) ?? []
   form.value.stepKeys = liveStepKeys.length ? liveStepKeys : ['VALUE_ALIGNMENT']
+  const itemUsage = (item as LibraryItem & { usageTypes?: string[] }).usageTypes ?? []
+  form.value.usageTypes = itemUsage.length ? itemUsage : ['OUTREACH']
   form.value.signatureContent = item.content ?? ''
   form.value.signatureGroupId = (item as unknown as SignatureItem).groupId ?? ''
   form.value.isPrivate = item.isPrivate ?? false
@@ -229,6 +233,17 @@ function toggleStepKey(key: string) {
     if (form.value.stepKeys.length > 1) form.value.stepKeys.splice(idx, 1)
   } else {
     form.value.stepKeys.push(key)
+  }
+}
+
+const USAGE_TYPE_LABELS: Record<string, string> = { OUTREACH: 'Oslovení', REMINDER: 'Připomínka' }
+
+function toggleUsageType(key: string) {
+  const idx = form.value.usageTypes.indexOf(key)
+  if (idx >= 0) {
+    if (form.value.usageTypes.length > 1) form.value.usageTypes.splice(idx, 1)
+  } else {
+    form.value.usageTypes.push(key)
   }
 }
 
@@ -284,9 +299,9 @@ async function save() {
     } else if (tab.value === 'drafts') {
       const cleanBody = sanitizeAndNormalizeHtml(form.value.body)
       if (editingId.value) {
-        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, ...scope } })
+        await $fetch(`/api/library/email-drafts/${editingId.value}`, { method: 'PATCH', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, usageTypes: form.value.usageTypes, ...scope } })
       } else {
-        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, ...scope } })
+        await $fetch('/api/library/email-drafts', { method: 'POST', body: { name: form.value.name, subject: form.value.subject, body: cleanBody, usageTypes: form.value.usageTypes, ...scope } })
       }
       await refreshDrafts()
     } else {
@@ -588,6 +603,15 @@ function handleNew() {
 
         <template v-else-if="tab === 'drafts'">
           <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Typ šablony</label>
+            <div class="flex flex-wrap gap-x-4 gap-y-1.5 mt-1">
+              <label v-for="u in ['OUTREACH', 'REMINDER']" :key="u" class="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" :checked="form.usageTypes.includes(u)" class="accent-primary" @change="toggleUsageType(u)" />
+                {{ USAGE_TYPE_LABELS[u] }}
+              </label>
+            </div>
+          </div>
+          <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Šablona předmětu</label>
             <input v-model="form.subject" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
@@ -838,6 +862,13 @@ function handleNew() {
               :key="sk"
               class="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-100 whitespace-nowrap"
             >{{ sk.replace(/_/g, ' ') }}</span>
+          </div>
+          <div v-if="tab === 'drafts' && (item as { usageTypes?: string[] }).usageTypes?.length" class="flex flex-wrap gap-1 mb-2">
+            <span
+              v-for="u in (item as { usageTypes?: string[] }).usageTypes"
+              :key="u"
+              class="text-[10px] text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-full border border-violet-100 whitespace-nowrap"
+            >{{ USAGE_TYPE_LABELS[u] ?? u }}</span>
           </div>
 
           <div class="flex items-center gap-1.5 text-xs text-gray-400 mb-2">

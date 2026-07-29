@@ -26,12 +26,13 @@ export const REASONING_EFFORT_LEVELS = ['auto', 'minimal', 'low', 'medium', 'hig
 export type ReasoningEffort = typeof REASONING_EFFORT_LEVELS[number]
 
 // Steps whose AI calls go through streamStepAI() and support configurable reasoning effort.
-export const REASONING_STEP_TYPES = ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION'] as const
+export const REASONING_STEP_TYPES = ['VALUE_ALIGNMENT', 'OUTREACH_PREPARATION', 'REMINDER_PREPARATION'] as const
 export type ReasoningStepType = typeof REASONING_STEP_TYPES[number]
 
 export const DEFAULT_REASONING_EFFORT: Record<ReasoningStepType, ReasoningEffort> = {
   VALUE_ALIGNMENT: 'auto',
   OUTREACH_PREPARATION: 'auto',
+  REMINDER_PREPARATION: 'auto',
 }
 
 // ── Group → font mapping (used in outreach email generation) ─────────────────
@@ -113,12 +114,19 @@ export const STEP_OUTPUT_SCHEMAS: Record<string, object> = {
       variablesHandledNaturally: true,
     },
   },
+
+  REMINDER_PREPARATION: {
+    recipients: ['string – e-mailová adresa příjemce (1–N); primární adresát jako první'],
+    body: 'HTML string – jen text připomínky, formátovaný dle HTML pravidel; BEZ podpisu a BEZ citace předchozího e-mailu',
+    recommendations: ['string – poznámka nebo tip pro odesílatele (2–3 položky)'],
+  },
 }
 
 // ── Required placeholders per step (SCHEMA is implicit, added when a schema exists) ──
 export const REQUIRED_PLACEHOLDERS: Partial<Record<string, string[]>> = {
   VALUE_ALIGNMENT:      ['<[[CONTEXT]]>', '<[[ARGUMENTS]]>'],
   OUTREACH_PREPARATION: ['<[[DATA]]>', '<[[ARGUMENTS]]>', '<[[CONTEXT]]>', '<[[TEMPLATE]]>', '<[[USER]]>'],
+  REMINDER_PREPARATION: ['<[[PREVIOUS]]>', '<[[PARTNER]]>', '<[[CONTACTS]]>', '<[[USER]]>', '<[[TEMPLATE]]>'],
 }
 
 export function getMissingPlaceholders(stepType: string, content: string): string[] {
@@ -139,6 +147,7 @@ export function renderPromptTemplate(template: string, values: Partial<Record<st
 export const DEFAULT_PROMPT_NAMES: Record<string, string> = {
   VALUE_ALIGNMENT:      'Výchozí',
   OUTREACH_PREPARATION: 'Výchozí',
+  REMINDER_PREPARATION: 'Výchozí',
 }
 
 // ── System prompt content ─────────────────────────────────────────────────────
@@ -207,6 +216,44 @@ Prodejní argumenty, které můžeme partnerovi nabídnout:
 ## VÝSTUP
 
 Vrať JSON objekt s touto přesnou strukturou:
+
+<[[SCHEMA]]>`,
+
+  REMINDER_PREPARATION: `Jsi asistent, který píše krátké, zdvořilé připomínkové (follow-up) e-maily partnerům, kteří dosud neodpověděli na předchozí oslovení.
+
+Předchozí e-mail (na který navazujeme):
+
+<[[PREVIOUS]]>
+
+Informace o partnerovi:
+
+<[[PARTNER]]>
+
+Dostupné kontakty partnera (rozhodni, komu připomínku poslat — vrať e-mailové adresy do pole recipients, primárního adresáta jako první):
+
+<[[CONTACTS]]>
+
+Odesílatel (jméno osoby, která e-mail odesílá):
+
+<[[USER]]>
+
+Šablona připomínky (drž se jejího tónu a délky):
+
+<[[TEMPLATE]]>
+
+## PRAVIDLA
+
+- E-mail musí být krátký (2–4 věty). Jen se zdvořile připomeň ohledně předchozího e-mailu.
+- Pokud danou oblast může ve firmě řešit někdo jiný, požádej o tip na správný kontakt.
+- Pokud rozšiřuješ okruh příjemců na více kontaktů firmy, zohledni to přirozeně v textu (že sis nebyl jistý správným adresátem).
+- NEPŘIDÁVEJ podpis ani citaci předchozího e-mailu — obojí doplní systém automaticky.
+- Pole body vrať jako HTML: každý odstavec jako <p><span style="font-family: FONT;">…</span></p>, kde FONT vezmi z řádku „Font pro HTML formátování" v uživatelské zprávě. Pokud font není uveden, vrať jen <p>text</p>.
+- V poli recommendations vrať 2–3 stručné poznámky/tipy pro odesílatele.
+- Výstup bude v češtině.
+
+## VÝSTUP
+
+Vrať JEDEN JSON objekt uvnitř \`\`\`json bloku s touto přesnou strukturou:
 
 <[[SCHEMA]]>`,
 }

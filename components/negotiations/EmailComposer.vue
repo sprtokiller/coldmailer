@@ -35,6 +35,8 @@ interface Props {
   replyContext?: { content: string; sentAt: string; fromAddress: string } | null
   editScheduled?: EditScheduled | null
   hasPriorCommunication?: boolean
+  aiBodyPrefix?: string
+  recommendations?: string[]
 }
 
 const props = defineProps<Props>()
@@ -209,8 +211,11 @@ function composeAutoBody(): string | null {
   const extras: string[] = []
   if (sig) extras.push(sig.content)
   if (props.replyContext) extras.push(buildQuoteHtml(props.replyContext))
-  if (extras.length === 0) return null
-  return '<p></p>' + extras.join('')
+  // For an AI-generated reminder the written text goes on top; signature + quote
+  // follow programmatically. Otherwise start with an empty paragraph for the cursor.
+  const prefix = props.aiBodyPrefix?.trim() ?? ''
+  if (!prefix && extras.length === 0) return null
+  return (prefix || '<p></p>') + extras.join('')
 }
 
 // Keeps the auto-composed part in sync with the signature picker, but only while the
@@ -418,6 +423,14 @@ async function submitEmail(scheduled: boolean) {
               :class="{ 'composer-field-input--error': scheduledFor && !scheduleValid }"
             />
           </div>
+        </div>
+
+        <!-- AI notes for the sender (reminder flow) -->
+        <div v-if="recommendations?.length" class="composer-recs">
+          <div class="composer-recs-title">Poznámky pro odesílatele</div>
+          <ul class="composer-recs-list">
+            <li v-for="(rec, idx) in recommendations" :key="idx" class="composer-recs-item">{{ rec }}</li>
+          </ul>
         </div>
 
         <!-- Editor -->
@@ -794,6 +807,36 @@ async function submitEmail(scheduled: boolean) {
   background-size: 16px;
   padding-right: 28px;
   cursor: pointer;
+}
+
+.composer-recs {
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.composer-recs-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.composer-recs-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.composer-recs-item {
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.5;
 }
 
 .composer-editor {
