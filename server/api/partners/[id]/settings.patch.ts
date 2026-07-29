@@ -22,11 +22,6 @@ export default defineEventHandler(async (event) => {
 
   if (!projectId) return { ok: true }
 
-  const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
-  if (!canEdit) {
-    throw createError({ statusCode: 403, message: 'Nemáte oprávnění upravovat nastavení tohoto jednání. Nejste přiřazeni k tomuto partnerovi.' })
-  }
-
   const body = await readBody<{
     contactBlacklist?: string[]
     emailDisplayMode?: string
@@ -34,6 +29,20 @@ export default defineEventHandler(async (event) => {
     autoIncludeDomain?: boolean
     domainOverride?: string | null
   }>(event)
+
+  // emailDisplayMode je jen zobrazovací přepínač (Text/HTML náhled) dostupný i divákům –
+  // historicky bez kontroly. Citlivá nastavení (doména, blacklist, přídavné adresy) smí
+  // měnit jen kdokoli s právem editace jednání (přiřazený nebo vedení obchodu).
+  const changesSensitive = body.contactBlacklist !== undefined
+    || body.additionalAddresses !== undefined
+    || body.autoIncludeDomain !== undefined
+    || body.domainOverride !== undefined
+  if (changesSensitive) {
+    const canEdit = await canEditNegotiation(session.id, projectId, globalRecordId)
+    if (!canEdit) {
+      throw createError({ statusCode: 403, message: 'Nemáte oprávnění upravovat nastavení tohoto jednání. Nejste přiřazeni k tomuto partnerovi.' })
+    }
+  }
 
   const scalarData: Record<string, unknown> = {}
   if (body.emailDisplayMode !== undefined) scalarData.emailDisplayMode = body.emailDisplayMode
