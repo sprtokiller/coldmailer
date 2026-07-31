@@ -161,7 +161,7 @@ function resetForm() {
     body: '',
     signatureContent: '',
     signatureGroupId: activeProject.value?.groupId ?? groups.value[0]?.id ?? '',
-    scope: activeProject.value ? `project:${activeProject.value.id}` : '',
+    scope: activeProject.value ? `group:${activeProject.value.groupId}` : '',
     isPrivate: false,
   }
   editingId.value = null
@@ -464,7 +464,7 @@ const scopeOptions = computed(() => {
 })
 
 watch(activeProject, (project) => {
-  if (!editingId.value && project) form.value.scope = `project:${project.id}`
+  if (!editingId.value && project) form.value.scope = `group:${project.groupId}`
 }, { immediate: true })
 
 const tabs: { key: Tab; label: string }[] = [
