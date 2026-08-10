@@ -108,6 +108,18 @@ async function refresh() {
 
 const toast = useToast()
 
+// ── Live sync ─────────────────────────────────────────────────────────────────
+// Poll the timeline so notes/emails added by other users while this page is
+// open show up without a manual refresh. Local edit state (editingContent,
+// todoEditingValue, ...) lives in separate refs untouched by this refresh.
+let interactionsSyncInterval: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  interactionsSyncInterval = setInterval(refreshInteractions, 10_000)
+})
+onUnmounted(() => {
+  if (interactionsSyncInterval) clearInterval(interactionsSyncInterval)
+})
+
 // ── UI state ──────────────────────────────────────────────────────────────────
 
 const showProfileModal = ref(false)
