@@ -110,11 +110,22 @@ const toast = useToast()
 
 // ── Live sync ─────────────────────────────────────────────────────────────────
 // Poll the timeline so notes/emails added by other users while this page is
-// open show up without a manual refresh. Local edit state (editingContent,
-// todoEditingValue, ...) lives in separate refs untouched by this refresh.
+// open show up without a manual refresh. Optimistic local mutations
+// (toggleCheckItem, toggleTodoLine, toggleEvent) bump mutationInFlight around
+// their request so an in-flight poll never overwrites interactionsData with
+// stale pre-mutation data — the result is simply dropped and picked up by the
+// next tick instead.
+const mutationInFlight = ref(0)
 let interactionsSyncInterval: ReturnType<typeof setInterval> | undefined
+
+async function pollInteractions() {
+  if (document.hidden || mutationInFlight.value > 0) return
+  const fresh = await $fetch<TimelineResponse>(`/api/partners/${id}/timeline`).catch(() => null)
+  if (fresh && mutationInFlight.value === 0) interactionsData.value = fresh
+}
+
 onMounted(() => {
-  interactionsSyncInterval = setInterval(refreshInteractions, 10_000)
+  interactionsSyncInterval = setInterval(pollInteractions, 10_000)
 })
 onUnmounted(() => {
   if (interactionsSyncInterval) clearInterval(interactionsSyncInterval)
@@ -258,6 +269,7 @@ const togglingItem = ref<{ field: string; lineIndex: number } | null>(null)
 
 async function toggleCheckItem(field: 'myToThem' | 'themToUs', lineIndex: number) {
   togglingItem.value = { field, lineIndex }
+  mutationInFlight.value++
   try {
     const result = await $fetch<{ id: string; myToThem: string | null; themToUs: string | null }>(
       `/api/partners/${id}/negotiation/fulfillment/toggle-check`,
@@ -271,6 +283,7 @@ async function toggleCheckItem(field: 'myToThem' | 'themToUs', lineIndex: number
     await refreshInteractions()
   } finally {
     togglingItem.value = null
+    mutationInFlight.value--
   }
 }
 
@@ -302,6 +315,7 @@ async function toggleTodoLine(lineIndex: number) {
   const current = todoContent.value ?? ''
   const next = toggleChecklistLine(current, lineIndex)
   togglingTodoLine.value = lineIndex
+  mutationInFlight.value++
   // Optimistický update
   if (interactionsData.value) interactionsData.value.todoList = next
   try {
@@ -313,6 +327,7 @@ async function toggleTodoLine(lineIndex: number) {
     await refreshInteractions()
   } finally {
     togglingTodoLine.value = null
+    mutationInFlight.value--
   }
 }
 
@@ -334,11 +349,17 @@ async function toggleEvent(i: Interaction) {
   // Přečtení = rozbalení. Server rozhoduje, jestli čtení počítá (kontrola bez přiřazení
   // nezapočítává, ale přiřazený oslovovatel/řešitel ano, i když je zároveň Vedení obchodu/admin).
   if (opening && !i.isRead) {
+    mutationInFlight.value++
     try {
       const res = await $fetch<{ isRead: boolean }>(`/api/partners/${id}/emails/${i.id}/read`, { method: 'PATCH' })
-      i.isRead = res.isRead
+      // Look up the live item rather than mutate the closed-over `i` — a
+      // concurrent poll may have already replaced interactionsData.value.items.
+      const target = interactionsData.value?.items.find(x => x.id === i.id)
+      if (target && target.type === 'EMAIL') target.isRead = res.isRead
     } catch {
       // ponecháme beze změny
+    } finally {
+      mutationInFlight.value--
     }
   }
 }
