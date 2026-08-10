@@ -178,7 +178,7 @@ export function useProjectOutreach(projectIdRef: Ref<string | null>) {
       $fetch<typeof prompts.value>('/api/library/prompts', { query: { projectId: pid } }),
       $fetch<typeof contextParts.value>('/api/library/context-parts', { query: { projectId: pid } }),
       $fetch<typeof sellingPoints.value>('/api/library/selling-points', { query: { projectId: pid } }),
-      $fetch<typeof emailDrafts.value>('/api/library/email-drafts', { query: { projectId: pid } }),
+      $fetch<typeof emailDrafts.value>('/api/library/email-drafts', { query: { projectId: pid, usage: 'OUTREACH' } }),
       $fetch<{ templates: unknown[]; personal: typeof signatures.value }>('/api/library/signatures', { query: { projectId: pid } }),
     ])
     prompts.value = p; contextParts.value = cp; sellingPoints.value = sp; emailDrafts.value = ed; signatures.value = sig.personal
